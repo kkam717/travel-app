@@ -24,7 +24,8 @@ class SupabaseService {
   static Future<void> updateProfile(String userId, Map<String, dynamic> data) async {
     try {
       data['updated_at'] = DateTime.now().toIso8601String();
-      await _client.from('profiles').update(data).eq('id', userId);
+      data['id'] = userId;
+      await _client.from('profiles').upsert(data, onConflict: 'id');
     } catch (e) {
       Analytics.logEvent('profile_update_error', {'error': e.toString()});
       rethrow;
@@ -270,6 +271,88 @@ class SupabaseService {
       return (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
       Analytics.logEvent('user_itineraries_fetch_error', {'error': e.toString()});
+      rethrow;
+    }
+  }
+
+  // --- Follows & Feed ---
+  static Future<void> followUser(String followerId, String followingId) async {
+    if (followerId == followingId) return;
+    try {
+      await _client.from('follows').upsert({'follower_id': followerId, 'following_id': followingId}, onConflict: 'follower_id,following_id');
+    } catch (e) {
+      Analytics.logEvent('follow_error', {'error': e.toString()});
+      rethrow;
+    }
+  }
+
+  static Future<void> unfollowUser(String followerId, String followingId) async {
+    try {
+      await _client.from('follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
+    } catch (e) {
+      Analytics.logEvent('unfollow_error', {'error': e.toString()});
+      rethrow;
+    }
+  }
+
+  static Future<bool> isFollowing(String followerId, String followingId) async {
+    try {
+      final res = await _client.from('follows').select().eq('follower_id', followerId).eq('following_id', followingId).maybeSingle();
+      return res != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<List<String>> getFollowedIds(String userId) async {
+    try {
+      final res = await _client.from('follows').select('following_id').eq('follower_id', userId);
+      return (res as List).map((e) => (e as Map)['following_id'] as String).toList();
+    } catch (e) {
+      Analytics.logEvent('follows_fetch_error', {'error': e.toString()});
+      return [];
+    }
+  }
+
+  static Future<int> getFollowerCount(String userId) async {
+    try {
+      final res = await _client.from('follows').select('follower_id').eq('following_id', userId);
+      return (res as List).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  static Future<int> getTripsCount(String userId) async {
+    try {
+      final res = await _client.from('itineraries').select('id').eq('author_id', userId);
+      return (res as List).length;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  static Future<List<Itinerary>> getFeedItineraries(String userId, {int limit = 50}) async {
+    try {
+      final followedIds = await getFollowedIds(userId);
+      final authorIds = [...followedIds, userId];
+      if (authorIds.isEmpty) return [];
+
+      final res = await _client
+          .from('itineraries')
+          .select('*, profiles(name)')
+          .inFilter('author_id', authorIds)
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      var itineraries = (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
+      for (var i = 0; i < itineraries.length; i++) {
+        final stops = await _client.from('itinerary_stops').select('id').eq('itinerary_id', itineraries[i].id);
+        itineraries[i] = itineraries[i].copyWith(stopsCount: (stops as List).length);
+      }
+      return itineraries;
+    } catch (e) {
+      Analytics.logEvent('feed_fetch_error', {'error': e.toString()});
       rethrow;
     }
   }

@@ -100,7 +100,11 @@ class _SearchScreenState extends State<SearchScreen> {
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
                 itemCount: _results.length,
-                itemBuilder: (_, i) => _ItineraryCard(itinerary: _results[i], onTap: () => context.push('/itinerary/${_results[i].id}')),
+                itemBuilder: (_, i) => _ItineraryCard(
+                  itinerary: _results[i],
+                  onTap: () => context.push('/itinerary/${_results[i].id}'),
+                  onAuthorTap: () => context.push('/author/${_results[i].authorId}'),
+                ),
               ),
             ),
         ],
@@ -197,8 +201,9 @@ class _SearchScreenState extends State<SearchScreen> {
 class _ItineraryCard extends StatelessWidget {
   final Itinerary itinerary;
   final VoidCallback onTap;
+  final VoidCallback? onAuthorTap;
 
-  const _ItineraryCard({required this.itinerary, required this.onTap});
+  const _ItineraryCard({required this.itinerary, required this.onTap, this.onAuthorTap});
 
   @override
   Widget build(BuildContext context) {
@@ -230,7 +235,12 @@ class _ItineraryCard extends StatelessWidget {
                       child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 12, color: Colors.blue.shade700)),
                     ),
                   const Spacer(),
-                  if (it.authorName != null) Text('by ${it.authorName}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  if (it.authorName != null)
+                    InkWell(
+                      onTap: onAuthorTap,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Text('by ${it.authorName}', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    ),
                 ],
               ),
               if (it.styleTags.isNotEmpty) ...[

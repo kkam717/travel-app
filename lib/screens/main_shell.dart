@@ -23,6 +23,7 @@ class MainShell extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
+                _NavItem(icon: Icons.home_outlined, label: 'Home', path: '/home'),
                 _NavItem(icon: Icons.search_rounded, label: 'Search', path: '/search'),
                 _NavItem(icon: Icons.add_circle_outline_rounded, label: 'Create', path: '/create'),
                 _NavItem(icon: Icons.bookmark_outline_rounded, label: 'Saved', path: '/saved'),

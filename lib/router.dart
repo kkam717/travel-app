@@ -6,6 +6,7 @@ import 'screens/welcome_screen.dart';
 import 'screens/email_auth_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/main_shell.dart';
+import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/create_itinerary_screen.dart';
@@ -40,10 +41,10 @@ GoRouter createRouter() {
         return '/onboarding';
       }
       if (!needsOnboarding && isOnboardingRoute) {
-        return '/search';
+        return '/home';
       }
       if (!needsOnboarding && state.matchedLocation == '/') {
-        return '/search';
+        return '/home';
       }
       return null;
     },
@@ -66,7 +67,7 @@ GoRouter createRouter() {
         routes: [
           GoRoute(
             path: '/home',
-            pageBuilder: (_, state) => const NoTransitionPage(child: _RedirectToSearch()),
+            pageBuilder: (_, state) => const NoTransitionPage(child: HomeScreen()),
           ),
           GoRoute(
             path: '/search',
@@ -102,16 +103,4 @@ GoRouter createRouter() {
       ),
     ],
   );
-}
-
-class _RedirectToSearch extends StatelessWidget {
-  const _RedirectToSearch();
-
-  @override
-  Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.mounted) context.go('/search');
-    });
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-  }
 }

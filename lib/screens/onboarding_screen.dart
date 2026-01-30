@@ -36,30 +36,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _completeOnboarding() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
+    final email = Supabase.instance.client.auth.currentUser?.email;
     if (userId == null) return;
     setState(() => _isLoading = true);
     try {
       await SupabaseService.updateProfile(userId, {
+        'name': email ?? 'User',
         'visited_countries': _selectedCountries.toList(),
         'travel_styles': _selectedStyles.map((s) => s.toLowerCase()).toList(),
         'travel_mode': _selectedMode?.toLowerCase(),
         'onboarding_complete': true,
       });
       Analytics.logEvent('onboarding_complete');
-      if (mounted) context.go('/search');
+      if (mounted) {
+        // Brief delay so router redirect sees the updated profile
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (mounted) context.go('/home');
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  Future<void> _signOut() async {
+    await Supabase.instance.client.auth.signOut();
+    if (mounted) context.go('/');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_step == 0 ? 'Countries visited' : 'Travel preferences')),
+      appBar: AppBar(
+        title: Text(_step == 0 ? 'Countries visited' : 'Travel preferences'),
+        actions: [
+          TextButton(
+            onPressed: _signOut,
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: _step == 0 ? _buildCountriesStep() : _buildStylesStep(),
       ),
@@ -146,7 +167,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             }).toList(),
           ),
           const SizedBox(height: 24),
-          Text('Travel mode (single)', style: Theme.of(context).textTheme.titleMedium),
+          Text('Travel mode (optional)', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -164,9 +185,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: _selectedMode == null || _isLoading
-                  ? null
-                  : _completeOnboarding,
+              onPressed: _isLoading ? null : _completeOnboarding,
               child: _isLoading ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save & Continue'),
             ),
           ),
