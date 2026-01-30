@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../data/countries.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
@@ -16,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   Profile? _profile;
+  List<Itinerary> _myItineraries = [];
   int _tripsCount = 0;
   int _followersCount = 0;
   List<Itinerary> _feed = [];
@@ -32,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _load() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -41,17 +44,22 @@ class _HomeScreenState extends State<HomeScreen> {
       final trips = SupabaseService.getTripsCount(userId);
       final followers = SupabaseService.getFollowerCount(userId);
       final feed = SupabaseService.getFeedItineraries(userId);
-      final results = await Future.wait([trips, followers, feed]);
+      final myItineraries = SupabaseService.getUserItineraries(userId, publicOnly: false);
+      final results = await Future.wait([trips, followers, feed, myItineraries]);
+      if (!mounted) return;
       final tripsCount = results[0] as int;
       final followersCount = results[1] as int;
       final feedList = results[2] as List<Itinerary>;
+      final myItinerariesList = results[3] as List<Itinerary>;
       final bookmarkChecks = await Future.wait(feedList.map((it) => SupabaseService.isBookmarked(userId, it.id)));
+      if (!mounted) return;
       final bookmarkedMap = <String, bool>{};
       for (var i = 0; i < feedList.length; i++) {
         bookmarkedMap[feedList[i].id] = bookmarkChecks[i] as bool;
       }
       setState(() {
         _profile = profile;
+        _myItineraries = myItinerariesList;
         _tripsCount = tripsCount;
         _followersCount = followersCount;
         _feed = feedList;
@@ -60,8 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       Analytics.logScreenView('home');
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = 'Something went wrong. Pull down to retry.';
         _isLoading = false;
       });
     }
@@ -71,6 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
     final wasBookmarked = _bookmarked[itineraryId] ?? false;
+    if (!mounted) return;
     setState(() => _bookmarked[itineraryId] = !wasBookmarked);
     try {
       if (wasBookmarked) {
@@ -79,8 +89,8 @@ class _HomeScreenState extends State<HomeScreen> {
         await SupabaseService.addBookmark(userId, itineraryId);
       }
     } catch (e) {
-      setState(() => _bookmarked[itineraryId] = wasBookmarked);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) setState(() => _bookmarked[itineraryId] = wasBookmarked);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update bookmark. Please try again.')));
     }
   }
 
@@ -131,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(height: AppTheme.spacingLg),
                                 Row(
                                   children: [
-                                    Expanded(child: _StatCard(icon: Icons.location_on_outlined, value: '${_profile?.visitedCountries.length ?? 0}', label: 'Countries', color: Colors.blue.shade50, iconColor: Colors.blue.shade700)),
+                                    Expanded(child: _StatCard(icon: Icons.location_on_outlined, value: '${mergedVisitedCountriesCount(_profile?.visitedCountries ?? [], _myItineraries.map((i) => i.destination).toList())}', label: 'Countries', color: Colors.blue.shade50, iconColor: Colors.blue.shade700)),
                                     const SizedBox(width: 12),
                                     Expanded(child: _StatCard(icon: Icons.trending_up, value: '$_tripsCount', label: 'Trips', color: Colors.purple.shade50, iconColor: Colors.purple.shade700)),
                                     const SizedBox(width: 12),

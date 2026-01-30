@@ -36,6 +36,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   Future<void> _load() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -45,6 +46,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
         SupabaseService.getBookmarkedItineraries(userId),
         SupabaseService.getPlanningItineraries(userId),
       ]);
+      if (!mounted) return;
       final bookmarked = results[0] as List<Itinerary>;
       final planning = results[1] as List<Itinerary>;
       setState(() {
@@ -53,8 +55,9 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = 'Something went wrong. Please try again.';
         _isLoading = false;
       });
     }

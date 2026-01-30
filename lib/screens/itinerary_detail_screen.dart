@@ -1,10 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
+import '../core/constants.dart';
 import '../core/analytics.dart';
 import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
+import '../widgets/itinerary_map.dart';
 
 class ItineraryDetailScreen extends StatefulWidget {
   final String itineraryId;
@@ -28,20 +32,24 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final it = await SupabaseService.getItinerary(widget.itineraryId);
+      if (!mounted) return;
       final userId = Supabase.instance.client.auth.currentUser?.id;
       bool bookmarked = false;
       if (userId != null) bookmarked = await SupabaseService.isBookmarked(userId, widget.itineraryId);
+      if (!mounted) return;
       setState(() {
         _itinerary = it;
         _isBookmarked = bookmarked;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = 'Could not load itinerary. Please try again.';
         _isLoading = false;
       });
     }
@@ -50,7 +58,8 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   Future<void> _toggleBookmark() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
-    setState(() => _isBookmarked = !_isBookmarked); // Optimistic
+    if (!mounted) return;
+    setState(() => _isBookmarked = !_isBookmarked);
     try {
       if (_isBookmarked) {
         await SupabaseService.addBookmark(userId, widget.itineraryId);
@@ -59,8 +68,42 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       }
       Analytics.logEvent('bookmark_toggled', {'itinerary_id': widget.itineraryId, 'bookmarked': _isBookmarked});
     } catch (e) {
-      setState(() => _isBookmarked = !_isBookmarked); // Revert
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        setState(() => _isBookmarked = !_isBookmarked);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update bookmark. Please try again.')));
+      }
+    }
+  }
+
+  Future<void> _openInMaps(ItineraryStop stop) async {
+    final Uri uri;
+    if (stop.lat != null && stop.lng != null) {
+      final lat = stop.lat!;
+      final lng = stop.lng!;
+      uri = defaultTargetPlatform == TargetPlatform.iOS
+          ? Uri.parse('https://maps.apple.com/?ll=$lat,$lng')
+          : Uri.parse('geo:$lat,$lng');
+    } else {
+      final query = Uri.encodeComponent(stop.name);
+      uri = defaultTargetPlatform == TargetPlatform.iOS
+          ? Uri.parse('https://maps.apple.com/?q=$query')
+          : Uri.parse('geo:0,0?q=$query');
+    }
+    try {
+      // Prefer native Maps app over browser
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalNonBrowserApplication,
+      );
+      if (!launched && await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Maps')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Maps')));
+      }
     }
   }
 
@@ -70,21 +113,34 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     if (userId == null || it == null) return;
     setState(() => _isLoading = true);
     try {
+      var pos = 0;
+      final stopsData = it.stops.map((s) {
+        final m = <String, dynamic>{
+          'name': s.name,
+          'category': s.category,
+          'stop_type': s.stopType,
+          'lat': s.lat,
+          'lng': s.lng,
+          'day': s.day,
+          'position': pos++,
+        };
+        return m;
+      }).toList();
       final forked = await SupabaseService.createItinerary(
         authorId: userId,
         title: '${it.title} (copy)',
         destination: it.destination,
         daysCount: it.daysCount,
         styleTags: it.styleTags,
-        mode: it.mode ?? 'standard',
-        visibility: 'private',
+        mode: it.mode ?? modeStandard,
+        visibility: visibilityPrivate,
         forkedFromId: it.id,
-        stopsData: it.stops.map((s) => {'name': s.name, 'category': s.category, 'external_url': s.externalUrl, 'lat': s.lat, 'lng': s.lng, 'place_id': s.placeId}).toList(),
+        stopsData: stopsData,
       );
       Analytics.logEvent('itinerary_forked', {'from': it.id, 'to': forked.id});
-      if (mounted) context.go('/create'); // TODO: Open edit mode for forked itinerary
+      if (mounted) context.go('/itinerary/${forked.id}');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not fork itinerary. Please try again.')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -103,8 +159,21 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       );
     }
     final it = _itinerary!;
+    final stopsByDay = <int, List<ItineraryStop>>{};
+    for (final s in it.stops) {
+      stopsByDay.putIfAbsent(s.day, () => []).add(s);
+    }
+    for (final list in stopsByDay.values) {
+      list.sort((a, b) => a.position.compareTo(b.position));
+    }
+    final sortedDays = stopsByDay.keys.toList()..sort();
+
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/home'),
+        ),
         title: Text(it.title),
         actions: [
           IconButton(
@@ -126,18 +195,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         children: [
-          if (it.hasMapStops)
-            Container(
-              height: 200,
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(12)),
-              child: Center(child: Text('Map placeholder\n(integrate map SDK in Phase 2)', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey[600]))),
-            )
-          else
-            Container(
-              height: 120,
-              decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(12)),
-              child: Center(child: Icon(Icons.map, size: 48, color: Colors.grey[400])),
-            ),
+          ItineraryMap(stops: it.stops, height: 280),
           const SizedBox(height: 16),
           Text(it.destination, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
@@ -163,22 +221,75 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          Text('Stops', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Text('Places', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          ...it.stops.asMap().entries.map((e) {
-            final i = e.key + 1;
-            final s = e.value;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: CircleAvatar(child: Text('$i')),
-                title: Text(s.name),
-                subtitle: s.category != null ? Text(s.category!) : null,
-                trailing: s.externalUrl != null ? IconButton(icon: const Icon(Icons.open_in_new), onPressed: () {}) : null,
-              ),
+          ...sortedDays.map((day) {
+            final dayStops = stopsByDay[day]!;
+            final locations = dayStops.where((s) => s.isLocation).toList();
+            final venues = dayStops.where((s) => s.isVenue).toList();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Day $day', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey[700], fontWeight: FontWeight.bold)),
+                    if (locations.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: locations.map((loc) => InkWell(
+                            onTap: () => _openInMaps(loc),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.location_city, size: 14, color: Colors.grey[700]),
+                                  const SizedBox(width: 4),
+                                  Text(loc.name, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+                                  const SizedBox(width: 4),
+                                  Icon(Icons.open_in_new, size: 12, color: Colors.grey[600]),
+                                ],
+                              ),
+                            ),
+                          )).toList(),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                ...venues.map((s) => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          child: Icon(Icons.place, size: 20, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                        ),
+                        title: Text(s.name),
+                        subtitle: s.category != null && s.category != 'location' ? Text(s.category!) : null,
+                        trailing: Icon(Icons.open_in_new, size: 18, color: Colors.grey[600]),
+                        onTap: () => _openInMaps(s),
+                      ),
+                    )),
+                if (locations.isNotEmpty && venues.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text('No places added', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                  ),
+                const SizedBox(height: 12),
+              ],
             );
           }),
-          if (it.stops.isEmpty) Text('No stops', style: TextStyle(color: Colors.grey[600])),
+          if (it.stops.isEmpty) Text('No places', style: TextStyle(color: Colors.grey[600])),
         ],
       ),
     );

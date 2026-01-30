@@ -35,6 +35,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _search() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -46,14 +47,16 @@ class _SearchScreenState extends State<SearchScreen> {
         styles: _filterStyles.isEmpty ? null : _filterStyles,
         mode: _filterMode,
       );
+      if (!mounted) return;
       setState(() {
         _results = results;
         _isLoading = false;
       });
       Analytics.logEvent('search_performed', {'result_count': results.length});
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = 'Something went wrong. Please try again.';
         _isLoading = false;
       });
     }

@@ -29,6 +29,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -36,14 +37,16 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         SupabaseService.getUserItineraries(widget.authorId, publicOnly: true),
         userId != null && !_isOwnProfile ? SupabaseService.isFollowing(userId, widget.authorId) : Future.value(false),
       ]);
+      if (!mounted) return;
       setState(() {
         _itineraries = results[0] as List<Itinerary>;
         _isFollowing = results[1] as bool;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = 'Something went wrong. Please try again.';
         _isLoading = false;
       });
     }
@@ -52,6 +55,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   Future<void> _toggleFollow() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null || _isOwnProfile) return;
+    if (!mounted) return;
     setState(() => _isFollowing = !_isFollowing);
     try {
       if (_isFollowing) {
@@ -60,8 +64,10 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         await SupabaseService.unfollowUser(userId, widget.authorId);
       }
     } catch (e) {
-      setState(() => _isFollowing = !_isFollowing);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        setState(() => _isFollowing = !_isFollowing);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update follow status. Please try again.')));
+      }
     }
   }
 

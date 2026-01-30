@@ -32,48 +32,6 @@ class SupabaseService {
     }
   }
 
-  // --- Places (autocomplete) ---
-  static Future<List<Place>> searchPlaces(String query, {int limit = 10}) async {
-    if (query.length < 3) return [];
-    try {
-      final res = await _client
-          .from('places')
-          .select()
-          .ilike('name', '%$query%')
-          .limit(limit);
-      return (res as List).map((e) => Place.fromJson(e as Map<String, dynamic>)).toList();
-    } catch (e) {
-      Analytics.logEvent('places_search_error', {'error': e.toString()});
-      return [];
-    }
-  }
-
-  static Future<Place?> insertPlace({
-    required String name,
-    String? country,
-    String? city,
-    double? lat,
-    double? lng,
-    String? category,
-    String? externalUrl,
-  }) async {
-    try {
-      final res = await _client.from('places').insert({
-        'name': name,
-        'country': country,
-        'city': city,
-        'lat': lat,
-        'lng': lng,
-        'category': category,
-        'external_url': externalUrl,
-      }).select().single();
-      return Place.fromJson(res as Map<String, dynamic>);
-    } catch (e) {
-      Analytics.logEvent('place_insert_error', {'error': e.toString()});
-      rethrow;
-    }
-  }
-
   // --- Itineraries ---
   static Future<List<Itinerary>> searchItineraries({
     String? query,
@@ -88,7 +46,7 @@ class SupabaseService {
       if (daysCount != null && mode != null && styles != null && styles.isNotEmpty) {
         res = await _client
             .from('itineraries')
-            .select('*, profiles(name)')
+            .select('*, profiles!itineraries_author_id_fkey(name)')
             .eq('visibility', 'public')
             .eq('days_count', daysCount!)
             .eq('mode', mode!)
@@ -96,7 +54,7 @@ class SupabaseService {
             .order('created_at', ascending: false)
             .limit(query != null && query.isNotEmpty ? limit * 3 : limit);
       } else {
-        var q = _client.from('itineraries').select('*, profiles(name)').eq('visibility', 'public');
+        var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').eq('visibility', 'public');
         if (daysCount != null) q = q.eq('days_count', daysCount);
         if (mode != null) q = q.eq('mode', mode.toLowerCase());
         if (styles != null && styles.isNotEmpty) {
@@ -110,9 +68,15 @@ class SupabaseService {
         itineraries = itineraries.where((it) =>
             it.title.toLowerCase().contains(qLower) || it.destination.toLowerCase().contains(qLower)).take(limit).toList();
       }
-      for (var i = 0; i < itineraries.length; i++) {
-        final stops = await _client.from('itinerary_stops').select('id').eq('itinerary_id', itineraries[i].id);
-        itineraries[i] = itineraries[i].copyWith(stopsCount: (stops as List).length);
+      if (itineraries.isNotEmpty) {
+        final ids = itineraries.map((i) => i.id).toList();
+        final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
+        final counts = <String, int>{};
+        for (final row in stopsRes as List) {
+          final itId = (row as Map)['itinerary_id'] as String;
+          counts[itId] = (counts[itId] ?? 0) + 1;
+        }
+        itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
       }
       return itineraries;
     } catch (e) {
@@ -123,13 +87,13 @@ class SupabaseService {
 
   static Future<Itinerary?> getItinerary(String id, {bool checkAccess = true}) async {
     try {
-      final res = await _client.from('itineraries').select('*, profiles(name)').eq('id', id).maybeSingle();
+      final res = await _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').eq('id', id).maybeSingle();
       if (res == null) return null;
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);
       if (checkAccess && it.visibility == 'private' && it.authorId != currentUserId) return null;
 
-      final stopsRes = await _client.from('itinerary_stops').select().eq('itinerary_id', id).order('position');
+      final stopsRes = await _client.from('itinerary_stops').select().eq('itinerary_id', id).order('day').order('position');
       final stops = (stopsRes as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
 
       return it.copyWith(stops: stops);
@@ -164,11 +128,15 @@ class SupabaseService {
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);
       for (var i = 0; i < stopsData.length; i++) {
-        await _client.from('itinerary_stops').insert({
-          ...stopsData[i],
-          'itinerary_id': it.id,
-          'position': i,
-        });
+        final stop = Map<String, dynamic>.from(stopsData[i]);
+        stop['itinerary_id'] = it.id;
+        stop['position'] = stop['position'] ?? i;
+        // place_id in schema is UUID; Google returns string - omit non-UUID
+        final pid = stop['place_id'];
+        if (pid == null || pid is! String || !RegExp(r'^[0-9a-f-]{36}$', caseSensitive: false).hasMatch(pid)) {
+          stop.remove('place_id');
+        }
+        await _client.from('itinerary_stops').insert(stop);
       }
       return (await getItinerary(it.id, checkAccess: false)) ?? it;
     } catch (e) {
@@ -236,12 +204,15 @@ class SupabaseService {
       final res = await _client
           .from('bookmarks')
           .select('itinerary_id')
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
       final ids = (res as List).map((e) => (e as Map)['itinerary_id'] as String).toList();
       if (ids.isEmpty) return [];
 
-      final itRes = await _client.from('itineraries').select('*, profiles(name)').inFilter('id', ids);
-      return (itRes as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
+      final itRes = await _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').inFilter('id', ids);
+      final itList = (itRes as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
+      final byId = {for (final i in itList) i.id: i};
+      return ids.map((id) => byId[id]).whereType<Itinerary>().toList();
     } catch (e) {
       Analytics.logEvent('bookmarks_fetch_error', {'error': e.toString()});
       rethrow;
@@ -252,7 +223,7 @@ class SupabaseService {
     try {
       final res = await _client
           .from('itineraries')
-          .select('*, profiles(name)')
+          .select('*, profiles!itineraries_author_id_fkey(name)')
           .eq('author_id', userId)
           .not('forked_from_itinerary_id', 'is', null)
           .order('updated_at', ascending: false);
@@ -265,7 +236,7 @@ class SupabaseService {
 
   static Future<List<Itinerary>> getUserItineraries(String userId, {bool publicOnly = false}) async {
     try {
-      var q = _client.from('itineraries').select('*, profiles(name)').eq('author_id', userId);
+      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').eq('author_id', userId);
       if (publicOnly) q = q.eq('visibility', 'public');
       final res = await q.order('created_at', ascending: false);
       return (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
@@ -340,15 +311,21 @@ class SupabaseService {
 
       final res = await _client
           .from('itineraries')
-          .select('*, profiles(name)')
+          .select('*, profiles!itineraries_author_id_fkey(name)')
           .inFilter('author_id', authorIds)
           .order('created_at', ascending: false)
           .limit(limit);
 
       var itineraries = (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
-      for (var i = 0; i < itineraries.length; i++) {
-        final stops = await _client.from('itinerary_stops').select('id').eq('itinerary_id', itineraries[i].id);
-        itineraries[i] = itineraries[i].copyWith(stopsCount: (stops as List).length);
+      if (itineraries.isNotEmpty) {
+        final ids = itineraries.map((i) => i.id).toList();
+        final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
+        final counts = <String, int>{};
+        for (final row in stopsRes as List) {
+          final itId = (row as Map)['itinerary_id'] as String;
+          counts[itId] = (counts[itId] ?? 0) + 1;
+        }
+        itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
       }
       return itineraries;
     } catch (e) {

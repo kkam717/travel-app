@@ -22,7 +22,7 @@ class WelcomeScreen extends StatelessWidget {
     try {
       await Supabase.instance.client.auth.signInWithPassword(email: email, password: password);
       Analytics.logEvent('auth_dev_signin_success');
-      if (context.mounted) context.go('/search');
+      if (context.mounted) context.go('/home');
     } on AuthException catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

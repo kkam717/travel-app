@@ -88,8 +88,10 @@ class ItineraryStop {
   final String id;
   final String itineraryId;
   final int position;
+  final int day;
   final String name;
   final String? category;
+  final String? stopType; // 'location' = city/town, 'venue' = restaurant/bar/hotel
   final String? externalUrl;
   final double? lat;
   final double? lng;
@@ -99,21 +101,28 @@ class ItineraryStop {
     required this.id,
     required this.itineraryId,
     required this.position,
+    this.day = 1,
     required this.name,
     this.category,
+    this.stopType,
     this.externalUrl,
     this.lat,
     this.lng,
     this.placeId,
   });
 
+  bool get isLocation => stopType == 'location';
+  bool get isVenue => stopType != 'location';
+
   factory ItineraryStop.fromJson(Map<String, dynamic> json) {
     return ItineraryStop(
       id: json['id'] as String,
       itineraryId: json['itinerary_id'] as String,
       position: json['position'] as int,
+      day: json['day'] as int? ?? 1,
       name: json['name'] as String,
       category: json['category'] as String?,
+      stopType: json['stop_type'] as String?,
       externalUrl: json['external_url'] as String?,
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
@@ -125,8 +134,10 @@ class ItineraryStop {
     return {
       'itinerary_id': itineraryId,
       'position': position,
+      'day': day,
       'name': name,
       'category': category,
+      'stop_type': stopType,
       'external_url': externalUrl,
       'lat': lat,
       'lng': lng,

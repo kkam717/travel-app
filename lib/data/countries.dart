@@ -197,6 +197,33 @@ const Map<String, String> countries = {
   'ZW': 'Zimbabwe',
 };
 
+/// Merges profile visited countries with countries from itineraries.
+int mergedVisitedCountriesCount(List<String> profileCountries, List<String> itineraryDestinations) {
+  final fromProfile = profileCountries.toSet();
+  for (final dest in itineraryDestinations) {
+    for (final code in destinationToCountryCodes(dest)) {
+      fromProfile.add(code);
+    }
+  }
+  return fromProfile.length;
+}
+
+/// Extract country codes from a destination string like "Switzerland, Austria"
+List<String> destinationToCountryCodes(String destination) {
+  if (destination.isEmpty) return [];
+  final names = destination.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
+  final codes = <String>[];
+  for (final name in names) {
+    for (final e in countries.entries) {
+      if (e.value.toLowerCase() == name.toLowerCase()) {
+        codes.add(e.key);
+        break;
+      }
+    }
+  }
+  return codes;
+}
+
 const List<String> travelStyles = ['Adventure', 'Nature', 'Food', 'Culture', 'Relax', 'Nightlife'];
 const List<String> travelModes = ['Budget', 'Standard', 'Luxury'];
 const List<String> stopCategories = ['restaurant', 'hotel', 'experience'];

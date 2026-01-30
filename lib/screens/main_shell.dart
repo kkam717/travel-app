@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../core/theme.dart';
 
 class MainShell extends StatelessWidget {
   final Widget child;
@@ -11,27 +10,55 @@ class MainShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: child,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, -4))],
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _NavItem(icon: Icons.home_outlined, label: 'Home', path: '/home'),
-                _NavItem(icon: Icons.search_rounded, label: 'Search', path: '/search'),
-                _NavItem(icon: Icons.add_circle_outline_rounded, label: 'Create', path: '/create'),
-                _NavItem(icon: Icons.bookmark_outline_rounded, label: 'Saved', path: '/saved'),
-                _NavItem(icon: Icons.person_outline_rounded, label: 'Profile', path: '/profile'),
-              ],
+      bottomNavigationBar: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.bottomCenter,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, -4))],
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _NavItem(icon: Icons.home_outlined, label: 'Home', path: '/home'),
+                    _NavItem(icon: Icons.search_rounded, label: 'Search', path: '/search'),
+                    const SizedBox(width: 56),
+                    _NavItem(icon: Icons.bookmark_outline_rounded, label: 'Saved', path: '/saved'),
+                    _NavItem(icon: Icons.person_outline_rounded, label: 'Profile', path: '/profile'),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
+          Positioned(
+            top: -20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Material(
+                elevation: 6,
+                shadowColor: Colors.black.withValues(alpha: 0.2),
+                shape: const CircleBorder(),
+                color: Theme.of(context).colorScheme.primary,
+                child: InkWell(
+                  onTap: () => context.go('/create'),
+                  customBorder: const CircleBorder(),
+                  child: const SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: Icon(Icons.add, color: Colors.white, size: 28),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
