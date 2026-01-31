@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show Supabase, FlutterAuthClientOptions, AuthFlowType;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
 import 'core/analytics.dart';
@@ -18,7 +19,14 @@ void main() {
         runApp(const SetupRequiredApp());
         return;
       }
-      await Supabase.initialize(url: url, anonKey: anonKey);
+      await Supabase.initialize(
+        url: url,
+        anonKey: anonKey,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+          detectSessionInUri: true,
+        ),
+      );
       Analytics.setUserId(Supabase.instance.client.auth.currentUser?.id);
       Supabase.instance.client.auth.onAuthStateChange.listen((data) {
         Analytics.setUserId(data.session?.user.id);
