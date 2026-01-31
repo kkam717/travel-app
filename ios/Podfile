@@ -40,4 +40,17 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
   end
+
+  # Generate GoogleMapsKeys.xcconfig from .env so Maps SDK gets a valid API key
+  env_path = File.join(File.dirname(__FILE__), '..', '.env')
+  xcconfig_path = File.join(File.dirname(__FILE__), 'Flutter', 'GoogleMapsKeys.xcconfig')
+  if File.exist?(env_path)
+    key_line = File.read(env_path).lines.find { |l| l.strip.start_with?('GOOGLE_API_KEY=') }
+    if key_line
+      api_key = key_line.strip.split('=', 2)[1].to_s.strip
+      unless api_key.empty?
+        File.write(xcconfig_path, "GOOGLE_MAPS_API_KEY=#{api_key}\n")
+      end
+    end
+  end
 end

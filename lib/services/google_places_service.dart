@@ -33,7 +33,7 @@ class GooglePlacesService {
         body['locationBias'] = {
           'circle': {
             'center': {'latitude': locationLatLng.$1, 'longitude': locationLatLng.$2},
-            'radius': 10000.0, // 10km around the day's location for venue search
+            'radius': 15000.0, // 15km around the city - filter to places in/near the city
           },
         };
       } else if (countryCodes != null && countryCodes.isNotEmpty) {
@@ -102,6 +102,33 @@ class GooglePlacesService {
       if (center != null) return center;
     }
     return (46.0, 8.0); // Default: central Europe
+  }
+
+  /// Geocode an address (e.g. city name) to lat/lng for location bias
+  static Future<(double, double)?> geocodeAddress(String address) async {
+    final key = _apiKey;
+    if (key == null || key.isEmpty || address.trim().isEmpty) return null;
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json'
+        '?address=${Uri.encodeComponent(address.trim())}'
+        '&key=$key',
+      );
+      final res = await http.get(url);
+      if (res.statusCode != 200) return null;
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      final results = json['results'] as List<dynamic>?;
+      if (results == null || results.isEmpty) return null;
+      final loc = (results.first as Map<String, dynamic>)['geometry']?['location'] as Map<String, dynamic>?;
+      if (loc == null) return null;
+      final lat = (loc['lat'] as num?)?.toDouble();
+      final lng = (loc['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) return null;
+      return (lat, lng);
+    } catch (e) {
+      debugPrint('GooglePlaces geocode exception: $e');
+      return null;
+    }
   }
 
   static Future<PlaceDetails?> getDetails(String placeId) async {

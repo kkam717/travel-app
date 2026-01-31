@@ -199,13 +199,18 @@ const Map<String, String> countries = {
 
 /// Merges profile visited countries with countries from itineraries.
 int mergedVisitedCountriesCount(List<String> profileCountries, List<String> itineraryDestinations) {
-  final fromProfile = profileCountries.toSet();
+  return mergedVisitedCountries(profileCountries, itineraryDestinations).length;
+}
+
+/// Returns the merged set of visited country codes (profile + itinerary destinations).
+List<String> mergedVisitedCountries(List<String> profileCountries, List<String> itineraryDestinations) {
+  final result = profileCountries.toSet();
   for (final dest in itineraryDestinations) {
     for (final code in destinationToCountryCodes(dest)) {
-      fromProfile.add(code);
+      result.add(code);
     }
   }
-  return fromProfile.length;
+  return result.toList()..sort();
 }
 
 /// Extract country codes from a destination string like "Switzerland, Austria"

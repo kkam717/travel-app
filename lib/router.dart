@@ -13,7 +13,10 @@ import 'screens/create_itinerary_screen.dart';
 import 'screens/saved_screen.dart';
 import 'screens/itinerary_detail_screen.dart';
 import 'screens/author_profile_screen.dart';
-import 'core/analytics.dart';
+import 'screens/city_detail_screen.dart';
+import 'screens/visited_countries_map_screen.dart';
+import 'screens/my_trips_screen.dart';
+import 'screens/followers_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -95,11 +98,46 @@ GoRouter createRouter() {
         },
       ),
       GoRoute(
+        path: '/itinerary/:id/edit',
+        builder: (_, state) {
+          final id = state.pathParameters['id']!;
+          return CreateItineraryScreen(itineraryId: id);
+        },
+      ),
+      GoRoute(
         path: '/author/:id',
         builder: (_, state) {
           final id = state.pathParameters['id']!;
           return AuthorProfileScreen(authorId: id);
         },
+      ),
+      GoRoute(
+        path: '/city/:cityName',
+        builder: (_, state) {
+          final cityName = Uri.decodeComponent(state.pathParameters['cityName']!);
+          final userId = state.uri.queryParameters['userId'] ?? Supabase.instance.client.auth.currentUser?.id ?? '';
+          final isOwn = Supabase.instance.client.auth.currentUser?.id == userId;
+          return CityDetailScreen(
+            userId: userId,
+            cityName: cityName,
+            isOwnProfile: isOwn,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/map/countries',
+        builder: (_, state) {
+          final codes = state.uri.queryParameters['codes']?.split(',').where((s) => s.isNotEmpty).toList() ?? [];
+          return VisitedCountriesMapScreen(visitedCountryCodes: codes);
+        },
+      ),
+      GoRoute(
+        path: '/profile/trips',
+        builder: (_, __) => const MyTripsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/followers',
+        builder: (_, __) => const FollowersScreen(),
       ),
     ],
   );

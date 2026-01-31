@@ -46,26 +46,50 @@ class WelcomeScreen extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingLg),
+          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingXl),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              Icon(Icons.explore_rounded, size: 80, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(height: AppTheme.spacingLg),
+              // Hero
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(28),
+                ),
+                child: Icon(
+                  Icons.explore_rounded,
+                  size: 52,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(height: AppTheme.spacingXl),
               Text(
                 'Travel App',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.5,
+                    ),
+              ),
+              const SizedBox(height: AppTheme.spacingSm),
+              Text(
+                'Plan trips, discover places, share adventures',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      height: 1.4,
+                    ),
+                textAlign: TextAlign.center,
               ),
               const Spacer(flex: 2),
+              // Auth buttons
               _AuthButton(
                 icon: Icons.apple_rounded,
                 label: 'Continue with Apple',
                 onPressed: () {
                   Analytics.logEvent('auth_apple_clicked');
-                  // TODO: Phase 2 - Sign in with Apple
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Apple Sign In coming in Phase 2')),
+                    const SnackBar(content: Text('Apple Sign In coming soon')),
                   );
                 },
               ),
@@ -75,9 +99,8 @@ class WelcomeScreen extends StatelessWidget {
                 label: 'Continue with Google',
                 onPressed: () {
                   Analytics.logEvent('auth_google_clicked');
-                  // TODO: Phase 2 - Sign in with Google
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Google Sign In coming in Phase 2')),
+                    const SnackBar(content: Text('Google Sign In coming soon')),
                   );
                 },
               ),
@@ -85,6 +108,7 @@ class WelcomeScreen extends StatelessWidget {
               _AuthButton(
                 icon: Icons.email_rounded,
                 label: 'Continue with Email',
+                filled: true,
                 onPressed: () {
                   Analytics.logEvent('auth_email_clicked');
                   context.push('/auth/email');
@@ -111,22 +135,33 @@ class _AuthButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final bool filled;
 
-  const _AuthButton({required this.icon, required this.label, required this.onPressed});
+  const _AuthButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 24),
-        label: Text(label),
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          side: BorderSide(color: Theme.of(context).colorScheme.outline),
-        ),
-      ),
+      child: filled
+          ? FilledButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, size: 22),
+              label: Text(label),
+            )
+          : OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: Icon(icon, size: 22),
+              label: Text(label),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: Theme.of(context).colorScheme.outline),
+              ),
+            ),
     );
   }
 }

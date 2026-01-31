@@ -13,6 +13,7 @@ class Itinerary {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final int? stopsCount;
+  final int? bookmarkCount;
 
   const Itinerary({
     required this.id,
@@ -29,6 +30,7 @@ class Itinerary {
     this.createdAt,
     this.updatedAt,
     this.stopsCount,
+    this.bookmarkCount,
   });
 
   factory Itinerary.fromJson(Map<String, dynamic> json, {List<ItineraryStop>? stops}) {
@@ -45,6 +47,7 @@ class Itinerary {
       forkedFromItineraryId: json['forked_from_itinerary_id'] as String?,
       stops: stops ?? [],
       stopsCount: json['stops_count'] as int?,
+      bookmarkCount: (json['bookmark_count'] as num?)?.toInt(),
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String) : null,
     );
@@ -66,7 +69,7 @@ class Itinerary {
 
   bool get hasMapStops => stops.any((s) => s.lat != null && s.lng != null);
 
-  Itinerary copyWith({List<ItineraryStop>? stops, int? stopsCount}) => Itinerary(
+  Itinerary copyWith({List<ItineraryStop>? stops, int? stopsCount, int? bookmarkCount}) => Itinerary(
         id: id,
         authorId: authorId,
         authorName: authorName,
@@ -81,6 +84,7 @@ class Itinerary {
         createdAt: createdAt,
         updatedAt: updatedAt,
         stopsCount: stopsCount ?? this.stopsCount,
+        bookmarkCount: bookmarkCount ?? this.bookmarkCount,
       );
 }
 
@@ -96,6 +100,7 @@ class ItineraryStop {
   final double? lat;
   final double? lng;
   final String? placeId;
+  final String? googlePlaceId;
 
   const ItineraryStop({
     required this.id,
@@ -109,6 +114,7 @@ class ItineraryStop {
     this.lat,
     this.lng,
     this.placeId,
+    this.googlePlaceId,
   });
 
   bool get isLocation => stopType == 'location';
@@ -127,6 +133,7 @@ class ItineraryStop {
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
       placeId: json['place_id'] as String?,
+      googlePlaceId: json['google_place_id'] as String?,
     );
   }
 
@@ -142,6 +149,7 @@ class ItineraryStop {
       'lat': lat,
       'lng': lng,
       'place_id': placeId,
+      'google_place_id': googlePlaceId,
     };
   }
 }

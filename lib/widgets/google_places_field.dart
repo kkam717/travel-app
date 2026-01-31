@@ -102,10 +102,11 @@ class _GooglePlacesFieldState extends State<GooglePlacesField> {
           controller: _controller,
           decoration: InputDecoration(
             hintText: widget.hint,
+            prefixIcon: const Icon(Icons.search_outlined),
             suffixIcon: _isLoading
-                ? const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                   )
                 : null,
           ),
@@ -113,11 +114,11 @@ class _GooglePlacesFieldState extends State<GooglePlacesField> {
         ),
         if (_predictions.isNotEmpty)
           Container(
-            margin: const EdgeInsets.only(top: 4),
+            margin: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 2))],
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4))],
             ),
             constraints: const BoxConstraints(maxHeight: 220),
             child: ListView.builder(
@@ -126,9 +127,9 @@ class _GooglePlacesFieldState extends State<GooglePlacesField> {
               itemBuilder: (_, i) {
                 final p = _predictions[i];
                 return ListTile(
-                  leading: const Icon(Icons.place, size: 20, color: Colors.grey),
-                  title: Text(p.mainText),
-                  subtitle: p.secondaryText != null ? Text(p.secondaryText!, style: const TextStyle(fontSize: 12)) : null,
+                  leading: Icon(Icons.place_outlined, size: 22, color: Theme.of(context).colorScheme.primary),
+                  title: Text(p.mainText, style: Theme.of(context).textTheme.bodyMedium),
+                  subtitle: p.secondaryText != null ? Text(p.secondaryText!, style: Theme.of(context).textTheme.bodySmall) : null,
                   onTap: () => _selectPrediction(p),
                 );
               },

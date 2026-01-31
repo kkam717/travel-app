@@ -71,27 +71,44 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
         title: const Text('Saved'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Bookmarked'), Tab(text: 'Planning')],
+          tabs: const [
+            Tab(icon: Icon(Icons.bookmark_outline), text: 'Bookmarked'),
+            Tab(icon: Icon(Icons.edit_road_outlined), text: 'Planning'),
+          ],
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
+                  const SizedBox(height: AppTheme.spacingLg),
+                  Text('Loading…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            )
           : _error != null
               ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(_error!, textAlign: TextAlign.center),
-                      const SizedBox(height: 16),
-                      FilledButton(onPressed: _load, child: const Text('Retry')),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingLg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.bookmark_remove_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+                      ],
+                    ),
                   ),
                 )
               : TabBarView(
                   controller: _tabController,
                   children: [
-                    _ItineraryList(itineraries: _bookmarked, emptyMessage: 'No bookmarked itineraries'),
-                    _ItineraryList(itineraries: _planning, emptyMessage: 'No itineraries in planning'),
+                    _ItineraryList(itineraries: _bookmarked, emptyMessage: 'No bookmarked itineraries', canEdit: false),
+                    _ItineraryList(itineraries: _planning, emptyMessage: 'No itineraries in planning', canEdit: true),
                   ],
                 ),
     );
@@ -101,13 +118,26 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
 class _ItineraryList extends StatelessWidget {
   final List<Itinerary> itineraries;
   final String emptyMessage;
+  final bool canEdit;
 
-  const _ItineraryList({required this.itineraries, required this.emptyMessage});
+  const _ItineraryList({required this.itineraries, required this.emptyMessage, this.canEdit = false});
 
   @override
   Widget build(BuildContext context) {
     if (itineraries.isEmpty) {
-      return Center(child: Text(emptyMessage, style: TextStyle(color: Colors.grey[600])));
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spacingLg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(canEdit ? Icons.edit_road_outlined : Icons.bookmark_outline, size: 64, color: Theme.of(context).colorScheme.outline),
+              const SizedBox(height: AppTheme.spacingLg),
+              Text(emptyMessage, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      );
     }
     return ListView.builder(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
@@ -117,8 +147,18 @@ class _ItineraryList extends StatelessWidget {
         return Card(
           margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
           child: ListTile(
-            title: Text(it.title),
-            subtitle: Text('${it.destination} • ${it.daysCount} days'),
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: Icon(Icons.route_outlined, color: Theme.of(context).colorScheme.onPrimaryContainer),
+            ),
+            title: Text(it.title, style: Theme.of(context).textTheme.titleSmall),
+            subtitle: Text('${it.destination} • ${it.daysCount} days', style: Theme.of(context).textTheme.bodySmall),
+            trailing: canEdit
+                ? IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => context.push('/itinerary/${it.id}/edit'),
+                  )
+                : Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
             onTap: () => context.push('/itinerary/${it.id}'),
           ),
         );
