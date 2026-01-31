@@ -6,9 +6,9 @@ import 'core/theme.dart';
 import 'core/analytics.dart';
 import 'router.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
   runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
     try {
       await dotenv.load(fileName: '.env').catchError((_) {});
       final url = dotenv.env['SUPABASE_URL'] ?? '';

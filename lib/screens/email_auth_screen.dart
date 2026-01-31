@@ -52,7 +52,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
           password: _passwordController.text,
         );
         Analytics.logEvent('auth_signin_success');
-        if (mounted) context.go('/search'); // Router redirect will send to onboarding if needed
+        if (mounted) context.go('/home'); // Router redirect will send to onboarding if needed
       }
     } on AuthException catch (e) {
       setState(() {

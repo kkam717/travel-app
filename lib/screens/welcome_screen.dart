@@ -1,14 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
+  Future<void> _developerSignIn(BuildContext context) async {
+    final email = dotenv.env['DEV_EMAIL']?.trim();
+    final password = dotenv.env['DEV_PASSWORD'];
+    if (email == null || email.isEmpty || password == null || password.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Add DEV_EMAIL and DEV_PASSWORD to .env')),
+        );
+      }
+      return;
+    }
+    try {
+      await Supabase.instance.client.auth.signInWithPassword(email: email, password: password);
+      Analytics.logEvent('auth_dev_signin_success');
+      if (context.mounted) context.go('/home');
+    } on AuthException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Dev sign in failed: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Dev sign in failed: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     Analytics.logScreenView('welcome');
+    final hasDevCredentials = (dotenv.env['DEV_EMAIL']?.trim().isNotEmpty ?? false) &&
+        (dotenv.env['DEV_PASSWORD']?.isNotEmpty ?? false);
     return Scaffold(
       body: SafeArea(
         child: Padding(
@@ -56,6 +90,14 @@ class WelcomeScreen extends StatelessWidget {
                   context.push('/auth/email');
                 },
               ),
+              if (hasDevCredentials) ...[
+                const SizedBox(height: AppTheme.spacingMd),
+                _AuthButton(
+                  icon: Icons.bug_report_rounded,
+                  label: 'Developer sign in',
+                  onPressed: () => _developerSignIn(context),
+                ),
+              ],
               const Spacer(),
             ],
           ),

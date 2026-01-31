@@ -9,6 +9,7 @@
 .tags*
 **/.vagrant/
 **/DerivedData/
+**/build/
 Icon?
 **/Pods/
 **/.symlinks/
@@ -19,6 +20,7 @@ Flutter/App.framework
 Flutter/Flutter.framework
 Flutter/Flutter.podspec
 Flutter/Generated.xcconfig
+Flutter/GoogleMapsKeys.xcconfig
 Flutter/ephemeral/
 Flutter/app.flx
 Flutter/app.zip

@@ -3,11 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../models/profile.dart';
+import '../models/itinerary.dart';
 import '../data/countries.dart';
 import '../services/supabase_service.dart';
+
+/// Merges profile visited countries with countries from all user itineraries.
+List<String> _mergedVisitedCountries(Profile profile, List<Itinerary> itineraries) {
+  final fromProfile = profile.visitedCountries.toSet();
+  for (final it in itineraries) {
+    for (final code in destinationToCountryCodes(it.destination)) {
+      fromProfile.add(code);
+    }
+  }
+  return fromProfile.toList()..sort();
+}
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +31,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Profile? _profile;
+  List<Itinerary> _myItineraries = [];
   bool _isLoading = true;
   String? _error;
 
@@ -30,20 +44,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _load() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
-      final profile = await SupabaseService.getProfile(userId);
+      final results = await Future.wait([
+        SupabaseService.getProfile(userId),
+        SupabaseService.getUserItineraries(userId, publicOnly: false),
+      ]);
+      if (!mounted) return;
       setState(() {
-        _profile = profile;
+        _profile = results[0] as Profile?;
+        _myItineraries = results[1] as List<Itinerary>;
+        _error = null;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = 'Something went wrong. Pull down to retry.';
         _isLoading = false;
       });
     }
   }
+
+  bool _isUploadingPhoto = false;
 
   Future<void> _uploadPhoto() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -51,7 +75,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final picker = ImagePicker();
     final xfile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 512, maxHeight: 512, imageQuality: 85);
     if (xfile == null) return;
-    setState(() => _isLoading = true);
+    setState(() => _isUploadingPhoto = true);
     try {
       final bytes = await xfile.readAsBytes() as Uint8List;
       final ext = xfile.path.split('.').last;
@@ -59,9 +83,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await SupabaseService.updateProfile(userId, {'photo_url': url});
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not upload photo. Please try again.')));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isUploadingPhoto = false);
     }
   }
 
@@ -74,30 +98,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Profile')),
-        body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!), const SizedBox(height: 16), FilledButton(onPressed: _load, child: const Text('Retry'))])),
+        body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error!, textAlign: TextAlign.center), const SizedBox(height: 16), FilledButton(onPressed: _load, child: const Text('Retry'))])),
       );
     }
     final p = _profile!;
+    final visitedCountries = _mergedVisitedCountries(p, _myItineraries);
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile'), actions: [IconButton(icon: const Icon(Icons.logout), onPressed: _signOut)]),
-      body: ListView(
-        padding: const EdgeInsets.all(AppTheme.spacingMd),
-        children: [
-          Center(
-            child: GestureDetector(
-              onTap: _uploadPhoto,
-              child: CircleAvatar(
-                radius: 50,
-                backgroundImage: p.photoUrl != null ? NetworkImage(p.photoUrl!) : null,
-                child: p.photoUrl == null ? const Icon(Icons.person, size: 50) : null,
+      appBar: AppBar(title: const Text('Profile'), actions: [IconButton(icon: const Icon(Icons.logout), onPressed: () => _signOut())]),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(AppTheme.spacingMd),
+          children: [
+            Center(
+              child: GestureDetector(
+                onTap: _isUploadingPhoto ? null : _uploadPhoto,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundImage: p.photoUrl != null ? NetworkImage(p.photoUrl!) : null,
+                      child: p.photoUrl == null ? const Icon(Icons.person, size: 50) : null,
+                    ),
+                    if (_isUploadingPhoto)
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(color: Colors.black38, shape: BoxShape.circle),
+                        child: const Center(child: SizedBox(width: 32, height: 32, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 24),
-          _Section(title: 'Visited countries', count: p.visitedCountries.length, onEdit: () => _editVisitedCountries(p)),
-          if (p.visitedCountries.isNotEmpty) ...[
-            Wrap(spacing: 4, runSpacing: 4, children: p.visitedCountries.take(10).map((c) => Chip(label: Text(countries[c] ?? c))).toList()),
-            if (p.visitedCountries.length > 10) Text('+${p.visitedCountries.length - 10} more', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          _Section(title: 'Visited countries', count: visitedCountries.length, onEdit: () => _editVisitedCountries(p)),
+          if (visitedCountries.isNotEmpty) ...[
+            Wrap(spacing: 4, runSpacing: 4, children: visitedCountries.take(10).map((c) => Chip(label: Text(countries[c] ?? c))).toList()),
+            if (visitedCountries.length > 10) Text('+${visitedCountries.length - 10} more', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
           ],
           const SizedBox(height: 16),
           _Section(title: 'Travel styles', count: p.travelStyles.length, onEdit: () => _editTravelStyles(p)),
@@ -114,20 +153,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _Section(title: 'Ideas / future trips', count: p.ideasFutureTrips.length, onEdit: () => _editIdeasTrips(p)),
           if (p.ideasFutureTrips.isNotEmpty) ...p.ideasFutureTrips.map((i) => ListTile(dense: true, title: Text(i.title), subtitle: Text(i.notes))),
           const SizedBox(height: 24),
+          _Section(title: 'My itineraries', count: _myItineraries.length),
+          if (_myItineraries.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ..._myItineraries.map((it) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(it.title),
+                    subtitle: Text('${it.destination} • ${it.daysCount} days'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/itinerary/${it.id}'),
+                  ),
+                )),
+          ],
+          const SizedBox(height: 24),
           _Section(title: 'Favourite trip', onEdit: () => _editFavouriteTrip(p)),
           if (p.favouriteTripTitle != null) ...[
             Text(p.favouriteTripTitle!, style: const TextStyle(fontWeight: FontWeight.bold)),
             if (p.favouriteTripDescription != null) Text(p.favouriteTripDescription!, style: TextStyle(color: Colors.grey[600])),
-            if (p.favouriteTripLink != null) InkWell(onTap: () {}, child: Text(p.favouriteTripLink!, style: TextStyle(color: Colors.blue))),
+            if (p.favouriteTripLink != null)
+              InkWell(
+                onTap: () async {
+                  final uri = Uri.tryParse(p.favouriteTripLink!);
+                  if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  }
+                },
+                child: Text(p.favouriteTripLink!, style: TextStyle(color: Colors.blue, decoration: TextDecoration.underline)),
+              ),
           ],
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  void _signOut() async {
-    await Supabase.instance.client.auth.signOut();
-    if (mounted) context.go('/');
+  Future<void> _signOut() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+      if (mounted) context.go('/');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not sign out. Please try again.')));
+    }
   }
 
   void _editVisitedCountries(Profile p) => _showCountriesEditor(p.visitedCountries, (list) => _updateProfile(visitedCountries: list));
