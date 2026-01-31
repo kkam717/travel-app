@@ -11,10 +11,15 @@ When the verification link redirects directly to `travelapp://`, many browsers b
 
 ### Step 1: Deploy the auth redirect page
 
-1. Go to [Vercel](https://vercel.com) (or [Netlify](https://netlify.com)) and sign in
-2. Create a new project → Import your Travel App repo (or deploy the `auth_redirect` folder)
-3. Set **Root Directory** to `auth_redirect` (if deploying from the full repo)
-4. Deploy. You'll get a URL like `https://travel-app-auth-xxx.vercel.app`
+**Vercel:**
+1. Go to [Vercel](https://vercel.com) and sign in
+2. Create a new project → Import your Travel App repo
+3. Before deploying, click **Edit** next to "Root Directory"
+4. **Type** `auth_redirect` in the field (it may not appear in a dropdown—typing works)
+5. Set Framework Preset to **Other** (or leave as auto)
+6. Deploy. You'll get a URL like `https://travel-app-auth-xxx.vercel.app`
+
+**Netlify (alternative):** Create a new site from the repo, set Base directory to `auth_redirect`, deploy.
 
 ### Step 2: Configure Supabase
 
