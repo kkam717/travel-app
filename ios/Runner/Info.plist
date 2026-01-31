@@ -47,5 +47,18 @@
 	<true/>
 	<key>GOOGLE_MAPS_API_KEY</key>
 	<string>$(GOOGLE_MAPS_API_KEY)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>Travel App Auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>travelapp</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

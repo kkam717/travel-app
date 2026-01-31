@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
@@ -35,9 +36,13 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
     try {
       if (_isSignUp) {
+        final redirectUrl = dotenv.env['SUPABASE_AUTH_REDIRECT_URL']?.trim();
         await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          emailRedirectTo: (redirectUrl != null && redirectUrl.isNotEmpty)
+              ? redirectUrl
+              : 'travelapp://auth/callback',
         );
         Analytics.logEvent('auth_signup_success');
         if (mounted) {
