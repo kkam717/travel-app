@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Profiles table (extends auth.users)
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT,
   photo_url TEXT,
@@ -22,7 +22,7 @@ CREATE TABLE profiles (
 );
 
 -- Places table (internal place suggestions for beta)
-CREATE TABLE places (
+CREATE TABLE IF NOT EXISTS places (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
   country TEXT,
@@ -34,10 +34,10 @@ CREATE TABLE places (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_places_name_trgm ON places USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_places_name_trgm ON places USING gin (name gin_trgm_ops);
 
 -- Itineraries table
-CREATE TABLE itineraries (
+CREATE TABLE IF NOT EXISTS itineraries (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   author_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
@@ -51,14 +51,14 @@ CREATE TABLE itineraries (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_itineraries_author ON itineraries(author_id);
-CREATE INDEX idx_itineraries_visibility ON itineraries(visibility);
-CREATE INDEX idx_itineraries_created ON itineraries(created_at DESC);
-CREATE INDEX idx_itineraries_destination ON itineraries USING gin (destination gin_trgm_ops);
-CREATE INDEX idx_itineraries_title ON itineraries USING gin (title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_itineraries_author ON itineraries(author_id);
+CREATE INDEX IF NOT EXISTS idx_itineraries_visibility ON itineraries(visibility);
+CREATE INDEX IF NOT EXISTS idx_itineraries_created ON itineraries(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_itineraries_destination ON itineraries USING gin (destination gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_itineraries_title ON itineraries USING gin (title gin_trgm_ops);
 
 -- Itinerary stops table
-CREATE TABLE itinerary_stops (
+CREATE TABLE IF NOT EXISTS itinerary_stops (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   itinerary_id UUID NOT NULL REFERENCES itineraries(id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
@@ -71,17 +71,17 @@ CREATE TABLE itinerary_stops (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_itinerary_stops_itinerary ON itinerary_stops(itinerary_id);
+CREATE INDEX IF NOT EXISTS idx_itinerary_stops_itinerary ON itinerary_stops(itinerary_id);
 
 -- Bookmarks table
-CREATE TABLE bookmarks (
+CREATE TABLE IF NOT EXISTS bookmarks (
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   itinerary_id UUID NOT NULL REFERENCES itineraries(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   PRIMARY KEY (user_id, itinerary_id)
 );
 
-CREATE INDEX idx_bookmarks_user ON bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
 
 -- RLS Policies
 
@@ -92,6 +92,9 @@ ALTER TABLE itinerary_stops ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bookmarks ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: user can read public fields of others; can write only their own
+DROP POLICY IF EXISTS "Profiles are viewable by authenticated users" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Profiles are viewable by authenticated users"
   ON profiles FOR SELECT
   TO authenticated
@@ -109,6 +112,8 @@ CREATE POLICY "Users can insert own profile"
   WITH CHECK (auth.uid() = id);
 
 -- Places: readable by anyone logged in; insert allowed by any logged in user
+DROP POLICY IF EXISTS "Places are viewable by authenticated users" ON places;
+DROP POLICY IF EXISTS "Authenticated users can insert places" ON places;
 CREATE POLICY "Places are viewable by authenticated users"
   ON places FOR SELECT
   TO authenticated
@@ -120,6 +125,10 @@ CREATE POLICY "Authenticated users can insert places"
   WITH CHECK (true);
 
 -- Itineraries: public readable by anyone logged in; private only by owner
+DROP POLICY IF EXISTS "Public itineraries viewable by authenticated" ON itineraries;
+DROP POLICY IF EXISTS "Users can insert own itineraries" ON itineraries;
+DROP POLICY IF EXISTS "Users can update own itineraries" ON itineraries;
+DROP POLICY IF EXISTS "Users can delete own itineraries" ON itineraries;
 CREATE POLICY "Public itineraries viewable by authenticated"
   ON itineraries FOR SELECT
   TO authenticated
@@ -145,6 +154,8 @@ CREATE POLICY "Users can delete own itineraries"
   USING (auth.uid() = author_id);
 
 -- Itinerary stops: follow itinerary visibility
+DROP POLICY IF EXISTS "Stops viewable when itinerary is viewable" ON itinerary_stops;
+DROP POLICY IF EXISTS "Users can manage stops for own itineraries" ON itinerary_stops;
 CREATE POLICY "Stops viewable when itinerary is viewable"
   ON itinerary_stops FOR SELECT
   TO authenticated
@@ -173,6 +184,9 @@ CREATE POLICY "Users can manage stops for own itineraries"
   );
 
 -- Bookmarks: only readable by owner
+DROP POLICY IF EXISTS "Users can view own bookmarks" ON bookmarks;
+DROP POLICY IF EXISTS "Users can insert own bookmarks" ON bookmarks;
+DROP POLICY IF EXISTS "Users can delete own bookmarks" ON bookmarks;
 CREATE POLICY "Users can view own bookmarks"
   ON bookmarks FOR SELECT
   TO authenticated
@@ -198,6 +212,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -207,6 +222,9 @@ INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO NOTHING;
 
+DROP POLICY IF EXISTS "Avatar images are publicly accessible" ON storage.objects;
+DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own avatar" ON storage.objects;
 CREATE POLICY "Avatar images are publicly accessible"
   ON storage.objects FOR SELECT
   USING (bucket_id = 'avatars');

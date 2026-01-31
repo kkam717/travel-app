@@ -15,8 +15,11 @@ Go to **APIs & Services → Library** and enable:
 
 - **Maps SDK for Android**
 - **Maps SDK for iOS**
+- **Maps JavaScript API** (required for web – itinerary map & visited countries map)
 - **Places API**
 - **Places API (New)**
+- **Maps Static API** (for feed card map thumbnails)
+- **Geocoding API** (for showing destination on map when no venue data)
 
 ### 3. Enable Billing
 
@@ -36,7 +39,9 @@ Go to **APIs & Services → Credentials** → click your API key.
 
 **API restrictions:**
 - Choose "Restrict key"
-- Enable: Maps SDK for Android, Maps SDK for iOS, Places API, Places API (New)
+- Enable: Maps SDK for Android, Maps SDK for iOS, Maps JavaScript API, Places API, Places API (New), Maps Static API, Geocoding API
+
+**For web deployment:** If restricting by HTTP referrer, add your deployed domains (e.g. `https://*.vercel.app/*`, `https://your-app.vercel.app/*`).
 
 ### 5. Add Your Key (Secure – keys are gitignored)
 
@@ -82,7 +87,7 @@ Sometimes keys get into a bad state. Create a fresh one:
 3. Copy the new key immediately
 4. Click **Restrict key** (or edit the key):
    - **Application restrictions:** None
-   - **API restrictions:** Restrict key → enable Maps SDK for Android, Maps SDK for iOS, Places API, Places API (New)
+   - **API restrictions:** Restrict key → enable Maps SDK for Android, Maps SDK for iOS, Maps JavaScript API, Places API, Places API (New), Maps Static API, Geocoding API
 5. **Save**
 6. Update the key in all three places (see step 5 above)
 7. **Wait 5–10 minutes** for propagation
@@ -94,8 +99,11 @@ Go to **APIs & Services → Enabled APIs**. You must see:
 
 - Maps SDK for Android
 - Maps SDK for iOS
+- Maps JavaScript API
 - Places API
 - Places API (New)
+- Maps Static API
+- Geocoding API
 
 If any are missing, enable them from the Library.
 

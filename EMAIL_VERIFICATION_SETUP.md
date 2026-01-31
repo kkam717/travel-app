@@ -11,11 +11,11 @@ Deploy the `auth_redirect/` folder to Vercel or Netlify. On **mobile**, users ge
 1. Deploy `auth_redirect/` to [Vercel](https://vercel.com) or [Netlify](https://netlify.com) (set Root/Base directory to `auth_redirect`)
 2. Add to Supabase **Redirect URLs**:
    ```
-   https://your-site.vercel.app/auth_redirect
+   https://your-site.vercel.app
    travelapp://auth/callback
    travelapp://**
    ```
-3. In `.env`: `SUPABASE_AUTH_REDIRECT_URL=https://your-site.vercel.app/auth_redirect`
+3. In `.env`: `SUPABASE_AUTH_REDIRECT_URL=https://your-site.vercel.app` (root URL, no `/auth_redirect` path)
 
 ### Option B: Custom scheme only (mobile only)
 

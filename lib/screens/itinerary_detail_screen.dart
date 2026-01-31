@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -77,24 +77,42 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
 
   Future<void> _openInMaps(ItineraryStop stop) async {
     final Uri uri;
-    if (stop.lat != null && stop.lng != null) {
-      final lat = stop.lat!;
-      final lng = stop.lng!;
-      uri = defaultTargetPlatform == TargetPlatform.iOS
-          ? Uri.parse('https://maps.apple.com/?ll=$lat,$lng')
-          : Uri.parse('geo:$lat,$lng');
+    final hasCoords = stop.lat != null && stop.lng != null;
+    final lat = stop.lat;
+    final lng = stop.lng;
+    final nameEnc = Uri.encodeComponent(stop.name);
+    // Google Place ID from when user added the place via Google Places - opens the actual place with its pin
+    final googlePlaceId = stop.googlePlaceId ?? (stop.placeId != null && stop.placeId!.startsWith('ChIJ') ? stop.placeId : null);
+
+    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
+      // Google Maps - always open the place, not raw coords
+      if (googlePlaceId != null && googlePlaceId.isNotEmpty) {
+        // Place ID: opens the actual place with its pin and details
+        uri = Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(stop.name)}&query_place_id=${Uri.encodeComponent(googlePlaceId)}',
+        );
+      } else {
+        // No place ID: search by name to find the place (shows place results, not a coord pin)
+        uri = Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=$nameEnc',
+        );
+      }
+    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+      // Apple Maps - search by place name to show the place
+      uri = Uri.parse('https://maps.apple.com/?q=$nameEnc');
     } else {
-      final query = Uri.encodeComponent(stop.name);
-      uri = defaultTargetPlatform == TargetPlatform.iOS
-          ? Uri.parse('https://maps.apple.com/?q=$query')
-          : Uri.parse('geo:0,0?q=$query');
+      // Fallback: Google Maps
+      if (googlePlaceId != null && googlePlaceId.isNotEmpty) {
+        uri = Uri.parse(
+          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(stop.name)}&query_place_id=${Uri.encodeComponent(googlePlaceId)}',
+        );
+      } else {
+        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$nameEnc');
+      }
     }
     try {
-      // Prefer native Maps app over browser
-      final launched = await launchUrl(
-        uri,
-        mode: LaunchMode.externalNonBrowserApplication,
-      );
+      final mode = kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalNonBrowserApplication;
+      final launched = await launchUrl(uri, mode: mode);
       if (!launched && await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else if (!launched && mounted) {
@@ -121,6 +139,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           'stop_type': s.stopType,
           'lat': s.lat,
           'lng': s.lng,
+          'google_place_id': s.googlePlaceId,
           'day': s.day,
           'position': pos++,
         };
@@ -150,12 +169,42 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   Widget build(BuildContext context) {
     Analytics.logScreenView('itinerary_detail');
     if (_isLoading && _itinerary == null) {
-      return Scaffold(appBar: AppBar(title: const Text('Itinerary')), body: const Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: AppBar(title: const Text('Itinerary')),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
+              ),
+              const SizedBox(height: AppTheme.spacingLg),
+              Text('Loading itinerary…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      );
     }
     if (_error != null || _itinerary == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Itinerary')),
-        body: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Text(_error ?? 'Not found'), const SizedBox(height: 16), FilledButton(onPressed: _load, child: const Text('Retry'))])),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingLg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.map_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
+                const SizedBox(height: AppTheme.spacingLg),
+                Text(_error ?? 'Not found', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+                const SizedBox(height: AppTheme.spacingLg),
+                FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+              ],
+            ),
+          ),
+        ),
       );
     }
     final it = _itinerary!;
@@ -195,34 +244,58 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         children: [
-          ItineraryMap(stops: it.stops, height: 280),
-          const SizedBox(height: 16),
-          Text(it.destination, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          Row(
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: ItineraryMap(stops: it.stops, destination: it.destination, height: 260),
+          ),
+          const SizedBox(height: AppTheme.spacingLg),
+          Text(it.destination, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: AppTheme.spacingSm),
+          Wrap(
+            spacing: AppTheme.spacingMd,
+            runSpacing: AppTheme.spacingSm,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
-              const SizedBox(width: 4),
-              Text('${it.daysCount} days', style: TextStyle(color: Colors.grey[600])),
-              const SizedBox(width: 16),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.calendar_today_outlined, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text('${it.daysCount} days', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ),
               if (it.mode != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(8)),
-                  child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 12, color: Colors.blue.shade700)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(it.mode!.toUpperCase(), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
                 ),
             ],
           ),
           if (it.authorName != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppTheme.spacingSm),
             InkWell(
               onTap: () => context.push('/author/${it.authorId}'),
-              child: Text('by ${it.authorName}', style: TextStyle(color: Colors.blue, fontSize: 14)),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
             ),
           ],
-          const SizedBox(height: 24),
-          Text('Places', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppTheme.spacingLg),
+          Text('Places', style: Theme.of(context).textTheme.headlineSmall),
+          const SizedBox(height: AppTheme.spacingMd),
           ...sortedDays.map((day) {
             final dayStops = stopsByDay[day]!;
             final locations = dayStops.where((s) => s.isLocation).toList();
@@ -233,30 +306,37 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Day $day', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey[700], fontWeight: FontWeight.bold)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text('Day $day', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
+                    ),
                     if (locations.isNotEmpty) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: AppTheme.spacingSm),
                       Flexible(
                         child: Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
+                          spacing: AppTheme.spacingXs,
+                          runSpacing: AppTheme.spacingXs,
                           children: locations.map((loc) => InkWell(
                             onTap: () => _openInMaps(loc),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.grey[200],
-                                borderRadius: BorderRadius.circular(8),
+                                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.location_city, size: 14, color: Colors.grey[700]),
+                                  Icon(Icons.location_city_outlined, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  const SizedBox(width: 6),
+                                  Text(loc.name, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
                                   const SizedBox(width: 4),
-                                  Text(loc.name, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
-                                  const SizedBox(width: 4),
-                                  Icon(Icons.open_in_new, size: 12, color: Colors.grey[600]),
+                                  Icon(Icons.open_in_new, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ],
                               ),
                             ),
@@ -266,30 +346,45 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                     ],
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: AppTheme.spacingSm),
                 ...venues.map((s) => Card(
-                      margin: const EdgeInsets.only(bottom: 8),
+                      margin: const EdgeInsets.only(bottom: AppTheme.spacingSm),
                       child: ListTile(
                         leading: CircleAvatar(
                           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(Icons.place, size: 20, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                          child: Icon(Icons.place_outlined, size: 22, color: Theme.of(context).colorScheme.onPrimaryContainer),
                         ),
-                        title: Text(s.name),
-                        subtitle: s.category != null && s.category != 'location' ? Text(s.category!) : null,
-                        trailing: Icon(Icons.open_in_new, size: 18, color: Colors.grey[600]),
+                        title: Text(s.name, style: Theme.of(context).textTheme.titleSmall),
+                        subtitle: s.category != null && s.category != 'location'
+                            ? Text(s.category!, style: Theme.of(context).textTheme.bodySmall)
+                            : null,
+                        trailing: Icon(Icons.open_in_new, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         onTap: () => _openInMaps(s),
                       ),
                     )),
                 if (locations.isNotEmpty && venues.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text('No places added', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                    padding: const EdgeInsets.only(bottom: AppTheme.spacingSm),
+                    child: Text('No places added', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ),
-                const SizedBox(height: 12),
+                const SizedBox(height: AppTheme.spacingLg),
               ],
             );
           }),
-          if (it.stops.isEmpty) Text('No places', style: TextStyle(color: Colors.grey[600])),
+          if (it.stops.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingXl),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.place_outlined, size: 48, color: Theme.of(context).colorScheme.outline),
+                    const SizedBox(height: AppTheme.spacingMd),
+                    Text('No places yet', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
