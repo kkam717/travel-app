@@ -65,9 +65,11 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         _isLoading = false;
       });
       Analytics.logEvent('auth_error', {'message': e.message});
-    } catch (e) {
+      debugPrint('Auth error: ${e.message}');
+    } catch (e, st) {
+      debugPrint('Signup error: $e\n$st');
       setState(() {
-        _errorMessage = 'Something went wrong. Please try again.';
+        _errorMessage = e is AuthException ? e.message : 'Something went wrong. Please try again.';
         _isLoading = false;
       });
     }
