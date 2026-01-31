@@ -40,7 +40,6 @@
       transition: background 0.2s;
     }
     .btn:hover { background: #1565c0; }
-    .btn:active { background: #0d47a1; }
     .error { color: #c62828; font-size: 14px; margin-top: 16px; }
   </style>
 </head>
@@ -48,8 +47,8 @@
   <div class="card">
     <div class="icon">✉️</div>
     <h1>Email verified!</h1>
-    <p>Tap the button below to open the Travel App and complete sign-in.</p>
-    <a id="open-app" href="#" class="btn">Open Travel App</a>
+    <p id="message">Completing sign-in…</p>
+    <a id="open-app" href="#" class="btn" style="display:none">Open Travel App</a>
     <p id="error" class="error" style="display:none;"></p>
   </div>
   <script>
@@ -60,17 +59,25 @@
       if (hash) appUrl += hash;
       else if (search) appUrl += search;
 
+      var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       var link = document.getElementById('open-app');
-      link.href = appUrl;
+      var message = document.getElementById('message');
+      var error = document.getElementById('error');
 
       if (!hash && !search) {
-        document.getElementById('error').style.display = 'block';
-        document.getElementById('error').textContent = 'No auth data received. Please open the link from your email again.';
-        link.style.display = 'none';
+        error.style.display = 'block';
+        error.textContent = 'No auth data received. Please open the link from your email again.';
+        message.textContent = 'Something went wrong.';
+        return;
+      }
+
+      if (isMobile) {
+        message.textContent = 'Tap the button below to open the Travel App and complete sign-in.';
+        link.href = appUrl;
+        link.style.display = 'inline-block';
+        try { window.location.href = appUrl; } catch (e) {}
       } else {
-        try {
-          window.location.href = appUrl;
-        } catch (e) {}
+        message.textContent = 'Your email is verified! Open the Travel App on your phone and sign in — your account is now confirmed.';
       }
     })();
   </script>
