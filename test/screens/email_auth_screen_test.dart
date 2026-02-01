@@ -54,7 +54,7 @@ void main() {
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
     });
 
-    testWidgets('can toggle to Sign up mode', (WidgetTester tester) async {
+    testWidgets('can toggle to Sign up mode and shows name field', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp.router(
           routerConfig: router,
@@ -67,6 +67,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Create account'), findsWidgets);
+      expect(find.byType(TextField), findsNWidgets(3)); // name, email, password
     });
 
     testWidgets('validates empty email', (WidgetTester tester) async {

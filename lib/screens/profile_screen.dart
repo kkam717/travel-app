@@ -417,7 +417,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_myItineraries.isEmpty) {
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.only(top: 8, left: AppTheme.spacingLg, right: AppTheme.spacingLg),
           child: Text(
             'No trips yet',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),

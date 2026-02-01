@@ -7,9 +7,9 @@ import '../core/profile_cache.dart';
 import '../data/countries.dart';
 import '../models/profile.dart';
 import '../models/user_city.dart';
-import '../services/google_places_service.dart';
+import '../services/places_service.dart';
 import '../services/supabase_service.dart';
-import '../widgets/google_places_field.dart';
+import '../widgets/places_field.dart';
 
 /// Shows home town, lived before cities, and travel styles.
 /// Editable when viewing own profile.
@@ -156,7 +156,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
     final visited = (_profile?.visitedCountries ?? []).toSet();
     var changed = false;
     for (final city in cities) {
-      final code = await GooglePlacesService.geocodeToCountryCode(city);
+      final code = await PlacesService.geocodeToCountryCode(city);
       if (code != null && !visited.contains(code)) {
         visited.add(code);
         changed = true;
@@ -192,9 +192,9 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
               children: [
                 Text('Home Town', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: AppTheme.spacingLg),
-                GooglePlacesField(
+                PlacesField(
                   hint: 'Search for your city…',
-                  placeType: 'locality',
+                  placeType: 'city',
                   onSelected: (name, _, __, ___) {
                     onSave(name);
                     Navigator.pop(ctx);
@@ -267,9 +267,9 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                         children: [
                                           Text('Add city', style: Theme.of(dctx).textTheme.titleLarge),
                                           const SizedBox(height: 16),
-                                          GooglePlacesField(
+                                          PlacesField(
                                             hint: 'Search for a city…',
-                                            placeType: 'locality',
+                                            placeType: 'city',
                                             onSelected: (placeName, _, __, ___) {
                                               Navigator.pop(dctx, placeName);
                                             },

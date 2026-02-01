@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../core/map_style.dart';
 import '../core/theme.dart';
 import '../core/profile_cache.dart';
 import '../data/countries.dart';
 import '../services/countries_geojson_service.dart';
 import '../services/supabase_service.dart';
+
+/// CRS that disables world wrap (no horizontal looping).
+class Epsg3857NoWrap extends Epsg3857 {
+  const Epsg3857NoWrap();
+  @override
+  bool get replicatesWorldLongitude => false;
+}
 
 class VisitedCountriesMapScreen extends StatefulWidget {
   final List<String> visitedCountryCodes;
@@ -23,9 +28,11 @@ class VisitedCountriesMapScreen extends StatefulWidget {
 
 class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   List<String> _selectedCodes = [];
-  Set<Polygon> _polygons = {};
+  List<Polygon> _polygons = [];
+  List<Polyline> _countryBorders = [];
   bool _loading = true;
   String? _error;
+  final _mapController = MapController();
 
   @override
   void initState() {
@@ -35,20 +42,19 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   }
 
   Future<void> _loadPolygons() async {
-    final codes = _selectedCodes;
-    if (codes.isEmpty) {
-      setState(() {
-        _polygons = {};
-        _loading = false;
-      });
-      return;
-    }
     try {
-      final polygons = await CountriesGeoJsonService.getPolygonsForCountries(
-        codes.toSet(),
-      );
+      final bordersFuture = CountriesGeoJsonService.getAllCountryBorderPolylines();
+      final polygonsFuture = _selectedCodes.isEmpty
+          ? Future.value(<Polygon>[])
+          : CountriesGeoJsonService.getPolygonsForCountries(_selectedCodes.toSet());
+
+      final results = await Future.wait([bordersFuture, polygonsFuture]);
+      final borders = results[0] as List<Polyline>;
+      final polygons = results[1] as List<Polygon>;
+
       if (mounted) {
         setState(() {
+          _countryBorders = borders;
           _polygons = polygons;
           _loading = false;
           _error = null;
@@ -57,7 +63,8 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _polygons = {};
+          _countryBorders = [];
+          _polygons = [];
           _loading = false;
           _error = e.toString();
         });
@@ -138,6 +145,29 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
         },
       ),
     );
+  }
+
+  /// No labels: Carto light_nolabels removes all map text (country names, etc.).
+  TileLayer _buildTileLayer() {
+    return TileLayer(
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
+      userAgentPackageName: 'com.footprint.travel',
+      maxNativeZoom: 20,
+    );
+  }
+
+  void _fitWorld() {
+    try {
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: LatLngBounds(
+            const LatLng(-85, -180),
+            const LatLng(85, 180),
+          ),
+          padding: const EdgeInsets.all(50),
+        ),
+      );
+    } catch (_) {}
   }
 
   @override
@@ -232,42 +262,58 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
         ),
       );
     }
-    return GoogleMap(
-      initialCameraPosition: const CameraPosition(
-        target: LatLng(20, 0),
-        zoom: 2,
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: const LatLng(20, 0),
+        initialZoom: 2,
+        crs: const Epsg3857NoWrap(),
+        cameraConstraint: const CameraConstraint.containLatitude(),
+        onMapReady: () {
+          if (_polygons.isNotEmpty) _fitWorld();
+          // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
+          Future.delayed(const Duration(milliseconds: 200), () async {
+            if (!mounted) return;
+            try {
+              final c = _mapController.camera;
+              _mapController.move(c.center, c.zoom + 0.02);
+              await Future.delayed(const Duration(milliseconds: 80));
+              if (!mounted) return;
+              _mapController.move(c.center, c.zoom);
+            } catch (_) {}
+          });
+        },
+        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
       ),
-      mapType: MapType.normal,
-      style: googleMapsStyleJson,
-      polygons: _polygons,
-      onMapCreated: (ctrl) {
-        if (_polygons.isNotEmpty) {
-          _fitWorld(ctrl);
-        }
-      },
-      gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-        Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
-      },
-      myLocationButtonEnabled: false,
-      myLocationEnabled: false,
-      compassEnabled: false,
-      mapToolbarEnabled: false,
-      buildingsEnabled: false,
-      zoomControlsEnabled: true,
-    );
-  }
-
-  Future<void> _fitWorld(GoogleMapController ctrl) async {
-    try {
-      await ctrl.animateCamera(
-        CameraUpdate.newLatLngBounds(
-          LatLngBounds(
-            southwest: const LatLng(-85, -180),
-            northeast: const LatLng(85, 180),
-          ),
-          50,
+      children: [
+        _buildTileLayer(),
+        PolylineLayer(
+          polylines: _countryBorders,
+          drawInSingleWorld: true,
         ),
-      );
-    } catch (_) {}
+        PolygonLayer(
+          polygons: _polygons,
+          drawInSingleWorld: true,
+          simplificationTolerance: 0,
+        ),
+        Align(
+          alignment: Alignment.bottomRight,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 120),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.bottomRight,
+                  child: Text(
+                  '© CARTO | OSM',
+                  style: TextStyle(fontSize: 8, color: Colors.grey.shade600),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

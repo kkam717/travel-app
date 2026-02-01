@@ -3,10 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../models/user_city.dart';
-import '../services/google_places_service.dart';
+import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 import '../utils/map_urls.dart';
-import '../widgets/google_places_field.dart';
+import '../widgets/places_field.dart';
 
 /// Screen for viewing/editing a city (current or past) with top spots.
 class CityDetailScreen extends StatefulWidget {
@@ -407,16 +407,6 @@ class _SpotTile extends StatelessWidget {
   }
 }
 
-String? _placeTypeForCategory(String category) {
-  switch (category) {
-    case 'eat': return 'restaurant';
-    case 'drink': return 'bar';
-    case 'chill': return 'park';
-    default: return null; // date: broad search
-  }
-}
-
-
 class _SpotEditorSheet extends StatefulWidget {
   final String cityName;
   final String? category;
@@ -453,7 +443,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
     _descController = TextEditingController(text: widget.initialDescription);
     _placeName = widget.initialName;
     _showSearch = widget.initialName == null || widget.initialName!.isEmpty;
-    _cityCoordsFuture = GooglePlacesService.geocodeAddress(widget.cityName);
+    _cityCoordsFuture = PlacesService.geocodeAddress(widget.cityName);
   }
 
   @override
@@ -487,14 +477,13 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
               FutureBuilder<(double, double)?>(
                 future: _cityCoordsFuture,
                 builder: (context, snapshot) {
-                  return GooglePlacesField(
+                  return PlacesField(
                     hint: 'Search for a place in ${widget.cityName}…',
-                    placeType: _placeTypeForCategory(_category),
                     locationLatLng: snapshot.data,
-                    onSelected: (name, _, __, placeId) {
+                    onSelected: (name, _, __, locationUrl) {
                       setState(() {
                         _placeName = name;
-                        _placeId = placeId;
+                        _placeId = locationUrl;
                         _showSearch = false;
                       });
                     },
@@ -551,7 +540,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                       return;
                     }
                     final locationUrl = _placeId != null && (_placeName ?? '').trim().isNotEmpty
-                        ? MapUrls.mapUrlFromPlaceId(_placeId!, _placeName!.trim())
+                        ? MapUrls.mapUrlFromPlace(_placeName!.trim(), null, null, _placeId)
                         : widget.initialLocationUrl;
                     widget.onSave({
                       'category': _category,

@@ -135,7 +135,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           'stop_type': s.stopType,
           'lat': s.lat,
           'lng': s.lng,
-          'google_place_id': s.googlePlaceId,
+          'external_url': s.externalUrl,
           'day': s.day,
           'position': pos++,
         };

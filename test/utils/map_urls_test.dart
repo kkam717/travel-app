@@ -6,13 +6,15 @@ import 'package:travel_app/utils/map_urls.dart';
 
 void main() {
   group('MapUrls.buildItineraryStopMapUrl', () {
-    test('Google Maps URL with Google Place ID on Android', () {
+    test('Google Maps URL with coords when stop has lat/lng', () {
       final stop = ItineraryStop(
         id: 's1',
         itineraryId: 'it1',
         position: 0,
         name: 'Eiffel Tower',
-        googlePlaceId: 'ChIJLU7jZClu5kcRYJSMaBEbL2s',
+        externalUrl: 'https://www.openstreetmap.org/node/123',
+        lat: 48.8584,
+        lng: 2.2945,
       );
       final uri = MapUrls.buildItineraryStopMapUrl(
         stop,
@@ -22,13 +24,32 @@ void main() {
 
       expect(uri.scheme, 'https');
       expect(uri.host, 'www.google.com');
-      expect(uri.path, '/maps/search/');
-      expect(uri.queryParameters['api'], '1');
-      expect(uri.queryParameters['query'], 'Eiffel Tower');
-      expect(uri.queryParameters['query_place_id'], 'ChIJLU7jZClu5kcRYJSMaBEbL2s');
+      expect(uri.toString(), contains('48.8584'));
+      expect(uri.toString(), contains('2.2945'));
     });
 
-    test('Google Maps URL without Place ID on Android', () {
+    test('Google Maps lat/lng URL when stop has coords', () {
+      final stop = ItineraryStop(
+        id: 's1',
+        itineraryId: 'it1',
+        position: 0,
+        name: 'Paris, France',
+        lat: 48.8566,
+        lng: 2.3522,
+      );
+      final uri = MapUrls.buildItineraryStopMapUrl(
+        stop,
+        platform: TargetPlatform.android,
+        isWeb: false,
+      );
+
+      expect(uri.scheme, 'https');
+      expect(uri.host, 'www.google.com');
+      expect(uri.toString(), contains('48.8566'));
+      expect(uri.toString(), contains('2.3522'));
+    });
+
+    test('Google Maps search URL when no coords', () {
       final stop = ItineraryStop(
         id: 's1',
         itineraryId: 'it1',
@@ -43,29 +64,7 @@ void main() {
 
       expect(uri.scheme, 'https');
       expect(uri.host, 'www.google.com');
-      expect(uri.queryParameters['query'], 'Paris, France');
-      expect(uri.queryParameters.containsKey('query_place_id'), isFalse);
-    });
-
-    test('Google Maps URL on iOS for place_id accuracy (Apple Maps lacks place_id)', () {
-      final stop = ItineraryStop(
-        id: 's1',
-        itineraryId: 'it1',
-        position: 0,
-        name: 'Eiffel Tower',
-        googlePlaceId: 'ChIJLU7jZClu5kcRYJSMaBEbL2s',
-      );
-      final uri = MapUrls.buildItineraryStopMapUrl(
-        stop,
-        platform: TargetPlatform.iOS,
-        isWeb: false,
-      );
-
-      expect(uri.scheme, 'https');
-      expect(uri.host, 'www.google.com');
-      expect(uri.path, '/maps/search/');
-      expect(uri.queryParameters['query'], 'Eiffel Tower');
-      expect(uri.queryParameters['query_place_id'], 'ChIJLU7jZClu5kcRYJSMaBEbL2s');
+      expect(uri.path, startsWith('/maps/search/'));
     });
 
     test('encodes special characters in place name', () {
@@ -82,64 +81,10 @@ void main() {
       );
 
       expect(uri.host, 'www.google.com');
-      expect(uri.queryParameters['query'], isNotNull);
-      expect(uri.queryParameters['query']!.length, greaterThan(5));
+      expect(uri.path, startsWith('/maps/search/'));
     });
 
-    test('Google Maps URL on Web', () {
-      final stop = ItineraryStop(
-        id: 's1',
-        itineraryId: 'it1',
-        position: 0,
-        name: 'Le Jules Verne',
-        googlePlaceId: 'ChIJ123',
-      );
-      final uri = MapUrls.buildItineraryStopMapUrl(
-        stop,
-        platform: TargetPlatform.android,
-        isWeb: true,
-      );
-
-      expect(uri.host, 'www.google.com');
-      expect(uri.queryParameters['query_place_id'], 'ChIJ123');
-    });
-
-    test('placeId starting with ChIJ used as Google Place ID', () {
-      final stop = ItineraryStop(
-        id: 's1',
-        itineraryId: 'it1',
-        position: 0,
-        name: 'Restaurant',
-        placeId: 'ChIJabc123',
-      );
-      final uri = MapUrls.buildItineraryStopMapUrl(
-        stop,
-        platform: TargetPlatform.android,
-        isWeb: false,
-      );
-
-      expect(uri.queryParameters['query_place_id'], 'ChIJabc123');
-    });
-
-    test('placeId that is UUID not used as Google Place ID', () {
-      final stop = ItineraryStop(
-        id: 's1',
-        itineraryId: 'it1',
-        position: 0,
-        name: 'Place',
-        placeId: '550e8400-e29b-41d4-a716-446655440000',
-      );
-      final uri = MapUrls.buildItineraryStopMapUrl(
-        stop,
-        platform: TargetPlatform.android,
-        isWeb: false,
-      );
-
-      expect(uri.queryParameters.containsKey('query_place_id'), isFalse);
-      expect(uri.queryParameters['query'], 'Place');
-    });
-
-    test('location stop with coords still uses name for URL', () {
+    test('location stop with coords uses lat/lng URL', () {
       final stop = ItineraryStop(
         id: 's1',
         itineraryId: 'it1',
@@ -154,48 +99,47 @@ void main() {
         isWeb: false,
       );
 
-      expect(uri.queryParameters['query'], 'Tokyo');
+      expect(uri.toString(), contains('35.6762'));
+      expect(uri.toString(), contains('139.6503'));
     });
   });
 
-  group('MapUrls.mapUrlFromPlaceId', () {
-    test('builds correct Google Maps search URL with api=1', () {
-      const placeId = 'ChIJLU7jZClu5kcRYJSMaBEbL2s';
-      const placeName = 'Eiffel Tower';
-      final url = MapUrls.mapUrlFromPlaceId(placeId, placeName);
+  group('MapUrls.mapUrlFromPlace', () {
+    test('builds Google Maps lat/lng URL when coords provided', () {
+      final url = MapUrls.mapUrlFromPlace('Paris', 48.8566, 2.3522, null);
 
-      expect(url, contains('api=1'));
-      expect(url, contains('query_place_id=$placeId'));
-      expect(url, contains('query='));
+      expect(url, contains('google.com'));
+      expect(url, contains('48.8566'));
+      expect(url, contains('2.3522'));
     });
 
-    test('handles different place IDs', () {
-      final url = MapUrls.mapUrlFromPlaceId('ChIJabc', 'Restaurant');
-      expect(url, contains('ChIJabc'));
+    test('builds Google Maps search URL when only name provided', () {
+      final url = MapUrls.mapUrlFromPlace('Restaurant', null, null, null);
+
+      expect(url, contains('google.com'));
+      expect(url, contains('search'));
       expect(url, contains('Restaurant'));
     });
   });
 
   group('MapUrls.buildTopSpotMapUrl', () {
-    test('uses Google Maps search URL with place_id from locationUrl', () {
+    test('returns Google Maps search URL from spot name', () {
       final spot = UserTopSpot(
         id: 's1',
         userId: 'u1',
         cityName: 'Paris',
         category: 'eat',
         name: 'Le Jules Verne',
-        locationUrl: 'https://www.google.com/maps/place/?q=place_id:ChIJ123',
+        locationUrl: 'https://www.openstreetmap.org/node/789',
       );
       final uri = MapUrls.buildTopSpotMapUrl(spot, platform: TargetPlatform.android);
 
       expect(uri, isNotNull);
       expect(uri!.host, 'www.google.com');
-      expect(uri.path, '/maps/search/');
-      expect(uri.queryParameters['api'], '1');
-      expect(uri.queryParameters['query_place_id'], 'ChIJ123');
+      expect(uri.path, contains('Le'));
     });
 
-    test('uses Google Maps on iOS for place_id accuracy (Apple Maps lacks place_id)', () {
+    test('returns Google Maps search URL for spot name', () {
       final spot = UserTopSpot(
         id: 's1',
         userId: 'u1',
@@ -208,30 +152,10 @@ void main() {
 
       expect(uri, isNotNull);
       expect(uri!.host, 'www.google.com');
-      expect(uri.path, '/maps/search/');
-      expect(uri.queryParameters['api'], '1');
-      expect(uri.queryParameters['query_place_id'], 'ChIJ123');
+      expect(uri.path, contains('Eiffel'));
     });
 
-    test('parses query_place_id from new URL format', () {
-      final spot = UserTopSpot(
-        id: 's1',
-        userId: 'u1',
-        cityName: 'London',
-        category: 'eat',
-        name: 'Dishoom',
-        locationUrl: 'https://www.google.com/maps/search/?api=1&query=Dishoom&query_place_id=ChIJabc123xyz',
-      );
-      final uri = MapUrls.buildTopSpotMapUrl(spot, platform: TargetPlatform.android);
-
-      expect(uri, isNotNull);
-      expect(uri!.host, 'www.google.com');
-      expect(uri.path, '/maps/search/');
-      expect(uri.queryParameters['api'], '1');
-      expect(uri.queryParameters['query_place_id'], 'ChIJabc123xyz');
-    });
-
-    test('falls back to search by name when no locationUrl', () {
+    test('returns Google Maps search URL when no locationUrl', () {
       final spot = UserTopSpot(
         id: 's1',
         userId: 'u1',
@@ -239,10 +163,11 @@ void main() {
         category: 'eat',
         name: 'Café de Flore',
       );
-      final uri = MapUrls.buildTopSpotMapUrl(spot, platform: TargetPlatform.android);
+      final uri = MapUrls.buildTopSpotMapUrl(spot, platform: TargetPlatform.iOS);
 
       expect(uri, isNotNull);
-      expect(uri!.queryParameters['query'], 'Café de Flore');
+      expect(uri!.host, 'www.google.com');
+      expect(uri.path, startsWith('/maps/search/'));
     });
   });
 }

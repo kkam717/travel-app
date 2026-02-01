@@ -13,6 +13,7 @@ class EmailAuthScreen extends StatefulWidget {
 
 class _EmailAuthScreenState extends State<EmailAuthScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isSignUp = false;
@@ -21,6 +22,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -38,6 +40,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text,
+          data: {'name': _nameController.text.trim()},
         );
         Analytics.logEvent('auth_signup_success');
         if (mounted) {
@@ -94,12 +97,25 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                 ),
                 const SizedBox(height: AppTheme.spacingSm),
                 Text(
-                  _isSignUp ? 'Enter your email and password to get started' : 'Sign in to continue planning your trips',
+                  _isSignUp ? 'Enter your name, email and password to get started' : 'Sign in to continue planning your trips',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
                 const SizedBox(height: AppTheme.spacingXl),
+                if (_isSignUp)
+                  TextFormField(
+                    controller: _nameController,
+                    textCapitalization: TextCapitalization.words,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Name',
+                      hintText: 'Your name',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                    ),
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter your name' : null,
+                  ),
+                if (_isSignUp) const SizedBox(height: AppTheme.spacingMd),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -172,6 +188,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                           setState(() {
                             _isSignUp = !_isSignUp;
                             _errorMessage = null;
+                            if (!_isSignUp) _nameController.clear();
                           });
                         },
                   child: Text(

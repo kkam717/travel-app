@@ -1,15 +1,14 @@
-import 'dart:async';
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
-import '../core/map_style.dart';
+import 'package:latlong2/latlong.dart';
 import '../core/theme.dart';
 import '../models/itinerary.dart';
 
+/// Interactive itinerary map using flutter_map (Geoapify/Carto tiles).
+/// Geocoding: Nominatim (free).
 class ItineraryMap extends StatefulWidget {
   final List<ItineraryStop> stops;
   final String? destination;
@@ -22,7 +21,7 @@ class ItineraryMap extends StatefulWidget {
 }
 
 class _ItineraryMapState extends State<ItineraryMap> {
-  final Completer<GoogleMapController> _controller = Completer();
+  final _mapController = MapController();
   static const _defaultCenter = LatLng(40.0, -3.0);
 
   List<LatLng>? _geocodedCityPoints;
@@ -35,6 +34,12 @@ class _ItineraryMapState extends State<ItineraryMap> {
   List<ItineraryStop>? _allStopsWithCoords;
   List<LatLng>? _polylinePoints;
   List<LatLng>? _displayPoints;
+
+  static String? get _geoapifyKey {
+    const fromDefine = String.fromEnvironment('GEOAPIFY_API_KEY', defaultValue: '');
+    if (fromDefine.trim().isNotEmpty) return fromDefine.trim();
+    return dotenv.env['GEOAPIFY_API_KEY']?.trim();
+  }
 
   void _invalidateStopsCache() {
     _venueStopsWithCoords = null;
@@ -74,57 +79,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
   bool get _hasMapData => _displayPointsList.isNotEmpty || _polylinePointsList.isNotEmpty;
 
-  /// Pins: venue stops (restaurant/bar/guide) when available, else location stops.
-  /// Uses theme color (teal) for consistent pin styling.
-  Set<Marker> _markersWithIcon(BitmapDescriptor icon) {
-    final venueStops = _venueStopsWithCoordsList;
-    final locStops = _locationStopsWithCoordsList;
-    final useVenue = venueStops.isNotEmpty;
-    final useLoc = !useVenue && locStops.isNotEmpty;
-    final useGeocoded = !useVenue && !useLoc && (_geocodedCityPoints?.isNotEmpty ?? false);
-
-    if (useVenue) {
-      return venueStops.asMap().entries.map((e) {
-        final i = e.key + 1;
-        final s = e.value;
-        final snippet = s.category != null && s.category != 'location'
-            ? '${s.category} • Stop $i'
-            : 'Stop $i';
-        return Marker(
-          markerId: MarkerId(s.id),
-          position: LatLng(s.lat!, s.lng!),
-          icon: icon,
-          infoWindow: InfoWindow(title: s.name, snippet: snippet),
-        );
-      }).toSet();
-    }
-    if (useLoc) {
-      return locStops.asMap().entries.map((e) {
-        final s = e.value;
-        return Marker(
-          markerId: MarkerId(s.id),
-          position: LatLng(s.lat!, s.lng!),
-          icon: icon,
-          infoWindow: InfoWindow(title: s.name, snippet: 'City'),
-        );
-      }).toSet();
-    }
-    if (useGeocoded && _geocodedCityPoints != null) {
-      final names = _geocodedCityNames ?? List.filled(_geocodedCityPoints!.length, '');
-      return _geocodedCityPoints!.asMap().entries.map((e) {
-        final p = e.value;
-        final name = e.key < names.length ? names[e.key] : '';
-        return Marker(
-          markerId: MarkerId('geocoded_${e.key}'),
-          position: p,
-          icon: icon,
-          infoWindow: InfoWindow(title: name, snippet: 'City'),
-        );
-      }).toSet();
-    }
-    return {};
-  }
-
   @override
   void initState() {
     super.initState();
@@ -148,23 +102,23 @@ class _ItineraryMapState extends State<ItineraryMap> {
   }
 
   Future<void> _geocodeCities(List<ItineraryStop> locationStops) async {
-    final key = dotenv.env['GOOGLE_API_KEY'];
-    if (key == null || key.isEmpty) return;
-
     if (mounted) setState(() => _geocodingCities = true);
     try {
       final destination = (widget.destination ?? '').trim();
       final uniqueNames = locationStops.map((s) => s.name.trim()).where((n) => n.isNotEmpty).toSet().toList();
       final points = <LatLng>[];
       final names = <String>[];
+
       for (final name in uniqueNames) {
         final address = destination.isNotEmpty ? '$name, $destination' : name;
-        final coords = await _geocodeAddress(key, address);
+        final coords = await _geocodeNominatim(address);
         if (coords != null) {
           points.add(LatLng(coords.$1, coords.$2));
           names.add(name);
         }
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
       }
+
       if (mounted && points.isNotEmpty) {
         setState(() {
           _geocodedCityPoints = points;
@@ -182,52 +136,129 @@ class _ItineraryMapState extends State<ItineraryMap> {
     }
   }
 
-  Future<(double, double)?> _geocodeAddress(String key, String address) async {
-    final url = Uri.parse(
-      'https://maps.googleapis.com/maps/api/geocode/json'
-      '?address=${Uri.encodeComponent(address)}'
-      '&key=$key',
-    );
-    final res = await http.get(url);
-    if (res.statusCode != 200) return null;
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
-    final results = json['results'] as List<dynamic>?;
-    if (results == null || results.isEmpty) return null;
-    final loc = (results.first as Map<String, dynamic>)['geometry']?['location'] as Map<String, dynamic>?;
-    if (loc == null) return null;
-    final lat = (loc['lat'] as num?)?.toDouble();
-    final lng = (loc['lng'] as num?)?.toDouble();
-    if (lat == null || lng == null) return null;
-    return (lat, lng);
+  Future<(double, double)?> _geocodeNominatim(String address) async {
+    try {
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search'
+        '?q=${Uri.encodeComponent(address)}'
+        '&format=json'
+        '&limit=1',
+      );
+      final res = await http.get(url, headers: {'User-Agent': 'FootprintTravelApp/1.0'});
+      if (res.statusCode != 200) return null;
+      final list = jsonDecode(res.body) as List<dynamic>?;
+      if (list == null || list.isEmpty) return null;
+      final item = list.first as Map<String, dynamic>;
+      final latVal = item['lat'];
+      final lonVal = item['lon'];
+      final lat = latVal is num ? latVal.toDouble() : (latVal is String ? double.tryParse(latVal) : null);
+      final lon = lonVal is num ? lonVal.toDouble() : (lonVal is String ? double.tryParse(lonVal) : null);
+      if (lat == null || lon == null) return null;
+      return (lat, lon);
+    } catch (e) {
+      debugPrint('ItineraryMap Nominatim error: $e');
+      return null;
+    }
   }
 
   LatLngBounds? _bounds() {
     final points = _polylinePointsList;
     if (points.isEmpty) return null;
-    double minLat = points.first.latitude, maxLat = points.first.latitude;
-    double minLng = points.first.longitude, maxLng = points.first.longitude;
-    for (final p in points) {
-      if (p.latitude < minLat) minLat = p.latitude;
-      if (p.latitude > maxLat) maxLat = p.latitude;
-      if (p.longitude < minLng) minLng = p.longitude;
-      if (p.longitude > maxLng) maxLng = p.longitude;
-    }
-    return LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
-    );
+    return LatLngBounds.fromPoints(points);
   }
 
-  Future<void> _fitBounds() async {
+  void _fitBounds() {
     final bounds = _bounds();
     if (bounds == null) return;
     try {
-      final ctrl = await _controller.future;
-      if (!mounted) return;
-      await ctrl.animateCamera(CameraUpdate.newLatLngBounds(bounds, 50));
-    } catch (_) {
-      // Map may have been disposed before controller completed
+      _mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(50),
+        ),
+      );
+    } catch (_) {}
+  }
+
+  TileLayer _buildTileLayer() {
+    final key = _geoapifyKey;
+    if (key != null && key.trim().isNotEmpty) {
+      return TileLayer(
+        urlTemplate: 'https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}.png?apiKey=$key',
+        userAgentPackageName: 'com.footprint.travel',
+        maxNativeZoom: 20,
+      );
     }
+    return TileLayer(
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
+      userAgentPackageName: 'com.footprint.travel',
+      maxNativeZoom: 20,
+    );
+  }
+
+  List<Marker> _buildMarkers(Color primaryColor) {
+    final venueStops = _venueStopsWithCoordsList;
+    final locStops = _locationStopsWithCoordsList;
+    final useVenue = venueStops.isNotEmpty;
+    final useLoc = !useVenue && locStops.isNotEmpty;
+    final useGeocoded = !useVenue && !useLoc && (_geocodedCityPoints?.isNotEmpty ?? false);
+
+    if (useVenue) {
+      return venueStops.asMap().entries.map((e) {
+        final i = e.key + 1;
+        final s = e.value;
+        final snippet = s.category != null && s.category != 'location'
+            ? '${s.category} • Stop $i'
+            : 'Stop $i';
+        return Marker(
+          point: LatLng(s.lat!, s.lng!),
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _showMarkerInfo(s.name, snippet),
+            child: Icon(Icons.place, color: primaryColor, size: 40),
+          ),
+        );
+      }).toList();
+    }
+    if (useLoc) {
+      return locStops.map((s) => Marker(
+        point: LatLng(s.lat!, s.lng!),
+        width: 40,
+        height: 40,
+        child: GestureDetector(
+          onTap: () => _showMarkerInfo(s.name, 'City'),
+          child: Icon(Icons.place, color: primaryColor, size: 40),
+        ),
+      )).toList();
+    }
+    if (useGeocoded && _geocodedCityPoints != null) {
+      final names = _geocodedCityNames ?? List.filled(_geocodedCityPoints!.length, '');
+      return _geocodedCityPoints!.asMap().entries.map((e) {
+        final p = e.value;
+        final name = e.key < names.length ? names[e.key] : '';
+        return Marker(
+          point: p,
+          width: 40,
+          height: 40,
+          child: GestureDetector(
+            onTap: () => _showMarkerInfo(name, 'City'),
+            child: Icon(Icons.place, color: primaryColor, size: 40),
+          ),
+        );
+      }).toList();
+    }
+    return [];
+  }
+
+  void _showMarkerInfo(String title, String snippet) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$title — $snippet'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   @override
@@ -251,7 +282,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
               decoration: BoxDecoration(
@@ -288,7 +318,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
                 ],
               ),
             ),
-            // Map or empty state
             if (!hasCoords && !_geocodingCities) _buildEmptyState(context)
             else if (_geocodingCities) _buildLoadingState(context)
             else _buildMap(context, primaryColor),
@@ -373,38 +402,67 @@ class _ItineraryMapState extends State<ItineraryMap> {
   }
 
   Widget _buildMap(BuildContext context, Color primaryColor) {
-    final hue = HSVColor.fromColor(primaryColor).hue;
-    final markerIcon = BitmapDescriptor.defaultMarkerWithHue(hue);
     final initialPos = _polylinePointsList.isNotEmpty ? _polylinePointsList.first : _defaultCenter;
+    final bounds = _bounds();
     return SizedBox(
       height: widget.height,
-      child: GoogleMap(
-        initialCameraPosition: CameraPosition(target: initialPos, zoom: 12),
-        mapType: MapType.normal,
-        style: googleMapsStyleJson,
-        markers: _markersWithIcon(markerIcon),
-        polylines: {
+      child: FlutterMap(
+        mapController: _mapController,
+        options: MapOptions(
+          initialCenter: initialPos,
+          initialZoom: 12,
+          initialCameraFit: bounds != null
+              ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50))
+              : null,
+          onMapReady: () {
+            if (bounds == null) _fitBounds();
+            // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
+            Future.delayed(const Duration(milliseconds: 200), () async {
+              if (!mounted) return;
+              try {
+                final c = _mapController.camera;
+                _mapController.move(c.center, c.zoom + 0.02);
+                await Future.delayed(const Duration(milliseconds: 80));
+                if (!mounted) return;
+                _mapController.move(c.center, c.zoom);
+              } catch (_) {}
+            });
+          },
+          interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all,
+          ),
+        ),
+        children: [
+          _buildTileLayer(),
           if (_polylinePointsList.length >= 2)
-            Polyline(
-              polylineId: const PolylineId('route'),
-              points: _polylinePointsList,
-              color: primaryColor,
-              width: 5,
+            PolylineLayer(
+              polylines: [
+                Polyline(
+                  points: _polylinePointsList,
+                  color: primaryColor,
+                  strokeWidth: 5,
+                ),
+              ],
             ),
-        },
-        onMapCreated: (ctrl) {
-          _controller.complete(ctrl);
-          if (mounted) _fitBounds();
-        },
-        gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
-          Factory<OneSequenceGestureRecognizer>(() => EagerGestureRecognizer()),
-        },
-        myLocationButtonEnabled: false,
-        myLocationEnabled: false,
-        compassEnabled: false,
-        mapToolbarEnabled: false,
-        buildingsEnabled: false,
-        zoomControlsEnabled: true,
+          MarkerLayer(markers: _buildMarkers(primaryColor)),
+          Align(
+            alignment: Alignment.bottomRight,
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 120),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.bottomRight,
+                  child: Text(
+                    (_geoapifyKey ?? '').trim().isNotEmpty ? 'Geoapify | OSM' : '© CARTO | OSM',
+                    style: TextStyle(fontSize: 8, color: Colors.grey.shade600),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

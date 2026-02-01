@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../services/google_places_service.dart';
+import '../services/places_service.dart';
 
-class GooglePlacesField extends StatefulWidget {
+/// Place search field using Photon (OSM). Replaces GooglePlacesField.
+class PlacesField extends StatefulWidget {
   final String hint;
-  final void Function(String name, double? lat, double? lng, String? placeId) onSelected;
+  final void Function(String name, double? lat, double? lng, String? locationUrl) onSelected;
   final String? placeType;
   final List<String>? countryCodes;
-  final (double, double)? locationLatLng; // Bias venue search toward this point (day's city)
+  final (double, double)? locationLatLng;
 
-  const GooglePlacesField({
+  const PlacesField({
     super.key,
     required this.hint,
     required this.onSelected,
@@ -19,10 +20,10 @@ class GooglePlacesField extends StatefulWidget {
   });
 
   @override
-  State<GooglePlacesField> createState() => _GooglePlacesFieldState();
+  State<PlacesField> createState() => _PlacesFieldState();
 }
 
-class _GooglePlacesFieldState extends State<GooglePlacesField> {
+class _PlacesFieldState extends State<PlacesField> {
   final _controller = TextEditingController();
   List<PlacePrediction> _predictions = [];
   bool _isLoading = false;
@@ -38,15 +39,13 @@ class _GooglePlacesFieldState extends State<GooglePlacesField> {
   void _search(String query) {
     _debounce?.cancel();
     if (query.trim().length < 2) {
-      setState(() {
-        _predictions = [];
-      });
+      setState(() => _predictions = []);
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 400), () async {
       setState(() => _isLoading = true);
       try {
-        final results = await GooglePlacesService.autocomplete(
+        final results = await PlacesService.search(
           query,
           countryCodes: widget.countryCodes,
           placeType: widget.placeType,
@@ -64,34 +63,15 @@ class _GooglePlacesFieldState extends State<GooglePlacesField> {
     });
   }
 
-  Future<void> _selectPrediction(PlacePrediction p) async {
+  void _selectPrediction(PlacePrediction p) {
     if (!mounted) return;
-    setState(() => _isLoading = true);
-    try {
-      final details = await GooglePlacesService.getDetails(p.placeId);
-      if (!mounted) return;
-      widget.onSelected(
-        details?.name ?? p.mainText,
-        details?.lat,
-        details?.lng,
-        p.placeId,
-      );
-      if (!mounted) return;
-      _controller.clear();
-      setState(() {
-        _predictions = [];
-        _isLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      widget.onSelected(p.mainText, null, null, p.placeId);
-      if (!mounted) return;
-      _controller.clear();
-      setState(() {
-        _predictions = [];
-        _isLoading = false;
-      });
-    }
+    final locationUrl = p.osmUrl ??
+        (p.lat != null && p.lng != null
+            ? 'https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}'
+            : null);
+    widget.onSelected(p.mainText, p.lat, p.lng, locationUrl);
+    _controller.clear();
+    setState(() => _predictions = []);
   }
 
   @override

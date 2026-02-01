@@ -15,18 +15,15 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   int _step = 0;
-  final _nameController = TextEditingController();
   final _searchController = TextEditingController();
   Set<String> _selectedCountries = {};
   Set<String> _selectedStyles = {};
   String? _selectedMode;
   bool _isLoading = false;
   String _searchQuery = '';
-  String? _nameError;
 
   @override
   void dispose() {
-    _nameController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -41,16 +38,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _completeOnboarding() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    final name = _nameController.text.trim();
     if (userId == null) return;
-    if (name.isEmpty) {
-      setState(() => _nameError = 'Please enter your name');
-      return;
-    }
     setState(() => _isLoading = true);
     try {
       await SupabaseService.updateProfile(userId, {
-        'name': name,
         'visited_countries': _selectedCountries.toList(),
         'travel_styles': _selectedStyles.map((s) => s.toLowerCase()).toList(),
         'travel_mode': _selectedMode?.toLowerCase(),
@@ -79,10 +70,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stepTitles = ['Your name', 'Countries visited', 'Travel preferences'];
+    final stepTitles = ['Countries visited', 'Travel preferences'];
     return Scaffold(
       appBar: AppBar(
-        title: Text(stepTitles[_step.clamp(0, 2)]),
+        title: Text(stepTitles[_step.clamp(0, 1)]),
         actions: [
           TextButton(
             onPressed: _signOut,
@@ -97,11 +88,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg, vertical: AppTheme.spacingMd),
               child: Row(
-                children: List.generate(3, (i) {
+                children: List.generate(2, (i) {
                   final active = i <= _step;
                   return Expanded(
                     child: Container(
-                      margin: EdgeInsets.only(right: i < 2 ? 8 : 0),
+                      margin: EdgeInsets.only(right: i < 1 ? 8 : 0),
                       height: 4,
                       decoration: BoxDecoration(
                         color: active
@@ -115,61 +106,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
             Expanded(
-              child: _step == 0 ? _buildNameStep() : _step == 1 ? _buildCountriesStep() : _buildStylesStep(),
+              child: _step == 0 ? _buildCountriesStep() : _buildStylesStep(),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildNameStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacingLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: AppTheme.spacingMd),
-          Text(
-            "What's your name?",
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: AppTheme.spacingSm),
-          Text(
-            "We'll use this when you share your trips",
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: AppTheme.spacingXl),
-          TextField(
-            controller: _nameController,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: InputDecoration(
-              labelText: 'Name',
-              hintText: 'Enter your name',
-              errorText: _nameError,
-              prefixIcon: const Icon(Icons.person_outline_rounded),
-            ),
-            onChanged: (_) => setState(() => _nameError = null),
-          ),
-          const SizedBox(height: AppTheme.spacingXl),
-          FilledButton(
-            onPressed: () {
-              final name = _nameController.text.trim();
-              if (name.isEmpty) {
-                setState(() => _nameError = 'Please enter your name');
-              } else {
-                setState(() {
-                  _nameError = null;
-                  _step = 1;
-                });
-              }
-            },
-            child: const Text('Next'),
-          ),
-        ],
       ),
     );
   }
@@ -231,7 +171,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         Padding(
           padding: const EdgeInsets.all(AppTheme.spacingMd),
           child: FilledButton(
-            onPressed: () => setState(() => _step = 2),
+            onPressed: () => setState(() => _step = 1),
             child: const Text('Next'),
           ),
         ),

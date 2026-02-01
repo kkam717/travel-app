@@ -6,7 +6,7 @@ import '../core/analytics.dart';
 import '../core/constants.dart';
 import '../data/countries.dart' show countries, destinationToCountryCodes, travelModes;
 import '../services/supabase_service.dart';
-import '../widgets/google_places_field.dart';
+import '../widgets/places_field.dart';
 import '../widgets/itinerary_map.dart';
 import '../models/itinerary.dart';
 
@@ -96,7 +96,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               ..name = s.name
               ..lat = s.lat
               ..lng = s.lng
-              ..placeId = s.googlePlaceId ?? s.placeId
+              ..externalUrl = s.externalUrl
               ..days = {s.day}
               ..venues = [];
             destByKey[key] = currentDest;
@@ -108,7 +108,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             ..name = s.name
             ..lat = s.lat
             ..lng = s.lng
-            ..placeId = s.googlePlaceId ?? s.placeId
+            ..externalUrl = s.externalUrl
             ..category = s.category ?? 'restaurant');
         }
       }
@@ -264,7 +264,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           'stop_type': 'location',
           'lat': d.lat,
           'lng': d.lng,
-          'google_place_id': d.placeId,
+          'external_url': d.externalUrl,
           'day': day,
           'position': position++,
         });
@@ -281,7 +281,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             'stop_type': 'venue',
             'lat': v.lat,
             'lng': v.lng,
-            'google_place_id': v.placeId,
+            'external_url': v.externalUrl,
             'day': anchorDay,
             'position': position++,
           });
@@ -347,7 +347,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         stopType: 'location',
         lat: d.lat,
         lng: d.lng,
-        googlePlaceId: d.placeId,
+        externalUrl: d.externalUrl,
       ));
       for (final v in d.venues ?? []) {
         if (v.name.isNotEmpty && v.lat != null && v.lng != null) {
@@ -361,7 +361,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             stopType: 'venue',
             lat: v.lat,
             lng: v.lng,
-            googlePlaceId: v.placeId,
+            externalUrl: v.externalUrl,
           ));
         }
       }
@@ -663,15 +663,15 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                     children: [
                       Expanded(
                         child: d.name.isEmpty
-                            ? GooglePlacesField(
+                            ? PlacesField(
                                 hint: 'Search city or location…',
                                 countryCodes: _selectedCountries,
-                                placeType: '(cities)',
-                                onSelected: (name, lat, lng, placeId) {
+                                placeType: 'city',
+                                onSelected: (name, lat, lng, locationUrl) {
                                   d.name = name;
                                   d.lat = lat;
                                   d.lng = lng;
-                                  d.placeId = placeId;
+                                  d.externalUrl = locationUrl;
                                   setState(() {});
                                 },
                               )
@@ -689,7 +689,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                                   d.name = '';
                                   d.lat = null;
                                   d.lng = null;
-                                  d.placeId = null;
+                                  d.externalUrl = null;
                                   setState(() {});
                                 },
                               ),
@@ -919,15 +919,15 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Expanded(
-                                            child: GooglePlacesField(
+                                            child: PlacesField(
                                               hint: 'Search ${v.category}…',
                                               countryCodes: _selectedCountries,
                                               locationLatLng: d.lat != null && d.lng != null ? (d.lat!, d.lng!) : null,
-                                              onSelected: (name, lat, lng, placeId) {
+                                              onSelected: (name, lat, lng, locationUrl) {
                                                 v.name = name;
                                                 v.lat = lat;
                                                 v.lng = lng;
-                                                v.placeId = placeId;
+                                                v.externalUrl = locationUrl;
                                                 setState(() {});
                                               },
                                             ),
@@ -1101,7 +1101,7 @@ class _DestinationEntry {
   String name = '';
   double? lat;
   double? lng;
-  String? placeId;
+  String? externalUrl;
   Set<int>? days; // specific days user was at this destination (non-contiguous)
   List<_VenueEntry>? venues;
 }
@@ -1110,6 +1110,6 @@ class _VenueEntry {
   String name = '';
   double? lat;
   double? lng;
-  String? placeId;
+  String? externalUrl;
   String? category;
 }
