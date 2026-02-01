@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/map_style.dart';
 import '../core/theme.dart';
+import '../core/profile_cache.dart';
 import '../data/countries.dart';
 import '../services/countries_geojson_service.dart';
 import '../services/supabase_service.dart';
@@ -95,6 +96,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
                           if (!ctx.mounted) return;
                           Navigator.pop(ctx);
                           if (!mounted) return;
+                          ProfileCache.updateVisitedCountries(userId, list);
                           setState(() {
                             _selectedCodes = list;
                             _loadPolygons();

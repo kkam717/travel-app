@@ -7,6 +7,7 @@ import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../models/user_city.dart';
 import '../services/supabase_service.dart';
+import '../widgets/itinerary_feed_card.dart';
 
 List<String> _mergedVisitedCountries(Profile? profile, List<Itinerary> itineraries) {
   final fromProfile = (profile?.visitedCountries ?? []).toSet();
@@ -36,6 +37,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isFollowing = false;
+  bool _isMutualFriend = false;
 
   bool get _isOwnProfile => Supabase.instance.client.auth.currentUser?.id == widget.authorId;
 
@@ -53,26 +55,28 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
       final isMutual = userId != null && !_isOwnProfile ? SupabaseService.isMutualFriend(userId, widget.authorId) : Future.value(false);
       final results = await Future.wait([
         SupabaseService.getProfile(widget.authorId),
+        SupabaseService.getPastCities(widget.authorId),
         SupabaseService.getFollowerCount(widget.authorId),
         SupabaseService.getFollowingCount(widget.authorId),
         userId != null && !_isOwnProfile ? SupabaseService.isFollowing(userId, widget.authorId) : Future.value(false),
         isMutual,
       ]);
       final profile = results[0] as Profile?;
-      final followersCount = results[1] as int;
-      final followingCount = results[2] as int;
-      final isFollowing = results[3] as bool;
-      final mutualFriend = results[4] as bool;
+      final pastCities = results[1] as List<UserPastCity>;
+      final followersCount = results[2] as int;
+      final followingCount = results[3] as int;
+      final isFollowing = results[4] as bool;
+      final mutualFriend = results[5] as bool;
       final itineraries = await SupabaseService.getUserItineraries(widget.authorId, publicOnly: !_isOwnProfile && !mutualFriend);
-      final pastCities = await SupabaseService.getPastCities(widget.authorId);
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _itineraries = itineraries;
         _pastCities = pastCities;
+        _itineraries = itineraries;
         _followersCount = followersCount;
         _followingCount = followingCount;
         _isFollowing = isFollowing;
+        _isMutualFriend = mutualFriend;
         _isLoading = false;
       });
     } catch (e) {
@@ -107,18 +111,21 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_profile?.name ?? 'Profile'),
-        actions: [
-          if (!_isOwnProfile && !_isLoading)
-            Padding(
-              padding: const EdgeInsets.only(right: AppTheme.spacingSm),
-              child: FilledButton.icon(
-                onPressed: _toggleFollow,
-                icon: Icon(_isFollowing ? Icons.check : Icons.person_add, size: 18),
-                label: Text(_isFollowing ? 'Following' : 'Follow'),
-              ),
-            ),
-        ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          },
+        ),
+        title: Text(
+          _profile?.name ?? 'Profile',
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
       ),
       body: _isLoading
           ? Center(
@@ -151,16 +158,15 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                   onRefresh: _load,
                   child: CustomScrollView(
                     slivers: [
-                      SliverToBoxAdapter(
-                        child: _buildProfileHeader(),
-                      ),
+                      SliverToBoxAdapter(child: _buildProfileHeaderContent()),
+                      _buildTripsSliver(),
                     ],
                   ),
                 ),
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeaderContent() {
     final p = _profile;
     final currentCity = p?.currentCity?.trim();
     final hasCity = currentCity != null && currentCity.isNotEmpty;
@@ -175,9 +181,12 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
+                Row(
+                  children: [
+                    Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 2))],
@@ -229,9 +238,47 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                           ),
                         ),
                 ),
+                  ],
+                ),
+                if (!_isOwnProfile) ...[
+                  const SizedBox(height: AppTheme.spacingMd),
+                  SizedBox(
+                    width: double.infinity,
+                    child: _isFollowing
+                        ? OutlinedButton.icon(
+                            onPressed: _toggleFollow,
+                            icon: const Icon(Icons.person, size: 20),
+                            label: const Text('Following'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                          )
+                        : FilledButton.icon(
+                            onPressed: _toggleFollow,
+                            icon: const Icon(Icons.person_add, size: 20),
+                            label: const Text('Follow'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              minimumSize: const Size(double.infinity, 40),
+                            ),
+                          ),
+                  ),
+                ],
               ],
             ),
           ),
+          if (_isMutualFriend)
+            Padding(
+              padding: const EdgeInsets.only(top: AppTheme.spacingSm),
+              child: Text(
+                'You follow each other',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           const SizedBox(height: AppTheme.spacingLg),
           Row(
             children: [
@@ -251,12 +298,12 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
               const SizedBox(width: AppTheme.spacingSm),
               Expanded(
                 child: _AuthorStatCard(
-                  icon: Icons.route_outlined,
-                  value: '${_itineraries.length}',
-                  label: 'Trips',
+                  icon: Icons.location_city_outlined,
+                  value: '${(hasCity ? 1 : 0) + _pastCities.length}',
+                  label: 'Lived',
                   color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.secondary,
-                  onTap: () => context.push('/trips/${widget.authorId}'),
+                  onTap: () => context.push('/profile/stats?userId=${widget.authorId}'),
                 ),
               ),
             ],
@@ -271,70 +318,85 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _StatChip(label: 'Followers', value: '$_followersCount'),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => context.push('/profile/followers?userId=${widget.authorId}'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: _StatChip(label: 'Followers', value: '$_followersCount'),
+                  ),
+                ),
                 Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
-                _StatChip(label: 'Following', value: '$_followingCount'),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => context.push('/profile/following?userId=${widget.authorId}'),
+                    borderRadius: BorderRadius.circular(8),
+                    child: _StatChip(label: 'Following', value: '$_followingCount'),
+                  ),
+                ),
               ],
             ),
           ),
           const SizedBox(height: AppTheme.spacingLg),
-          _buildPastCitiesSection(),
-          const SizedBox(height: AppTheme.spacingLg),
-          _buildTravelStylesSection(),
+          Row(
+            children: [
+              Text('Trips', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              if (_itineraries.isNotEmpty)
+                Text(' (${_itineraries.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingSm),
         ],
       ),
     );
   }
 
-  Widget _buildPastCitiesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Lived Before', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            if (_pastCities.isNotEmpty) Text(' (${_pastCities.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-        const SizedBox(height: AppTheme.spacingSm),
-        if (_pastCities.isEmpty)
-          Text('None', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _pastCities.map((c) => ActionChip(
-              avatar: Icon(Icons.location_city_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
-              label: Text(c.cityName),
-              onPressed: () => context.push('/city/${Uri.encodeComponent(c.cityName)}?userId=${widget.authorId}'),
-            )).toList(),
+  Widget _buildTripsSliver() {
+    if (_itineraries.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'No trips yet',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
-      ],
+        ),
+      );
+    }
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (_, i) {
+          final it = _itineraries[i];
+          return RepaintBoundary(
+            child: ItineraryFeedCard(
+              itinerary: it,
+              description: _descriptionFor(it),
+              locations: _locationsFor(it),
+              onTap: () => context.push('/itinerary/${it.id}'),
+              onAuthorTap: null,
+            ),
+          );
+        },
+        childCount: _itineraries.length,
+        addRepaintBoundaries: true,
+      ),
     );
   }
 
-  Widget _buildTravelStylesSection() {
-    final styles = _profile?.travelStyles ?? [];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Travel styles', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            if (styles.isNotEmpty) Text(' (${styles.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-        if (styles.isNotEmpty) ...[
-          const SizedBox(height: AppTheme.spacingSm),
-          Wrap(
-            spacing: AppTheme.spacingSm,
-            runSpacing: AppTheme.spacingSm,
-            children: styles.map((s) => Chip(label: Text(s))).toList(),
-          ),
-        ],
-      ],
-    );
+  String _descriptionFor(Itinerary it) {
+    if (it.styleTags.isNotEmpty) {
+      return '${it.destination} • ${it.styleTags.take(2).join(', ').toLowerCase()}';
+    }
+    return it.destination;
   }
+
+  String _locationsFor(Itinerary it) {
+    if (it.stops.isEmpty) return it.destination;
+    final venues = it.stops.where((s) => s.isVenue).toList();
+    final toShow = venues.isNotEmpty ? venues : it.stops.where((s) => s.isLocation).toList();
+    if (toShow.isEmpty) return it.destination;
+    return toShow.take(2).map((s) => s.name).join(' • ');
+  }
+
 }
 
 class _StatChip extends StatelessWidget {

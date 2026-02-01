@@ -17,6 +17,7 @@ import 'screens/city_detail_screen.dart';
 import 'screens/visited_countries_map_screen.dart';
 import 'screens/my_trips_screen.dart';
 import 'screens/followers_screen.dart';
+import 'screens/profile_stats_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -137,6 +138,14 @@ GoRouter createRouter() {
         builder: (_, __) => const MyTripsScreen(),
       ),
       GoRoute(
+        path: '/profile/stats',
+        builder: (_, state) {
+          final userId = state.uri.queryParameters['userId'];
+          final open = state.uri.queryParameters['open'];
+          return ProfileStatsScreen(userId: userId, openEditor: open);
+        },
+      ),
+      GoRoute(
         path: '/trips/:userId',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (_, state) {
@@ -146,7 +155,17 @@ GoRouter createRouter() {
       ),
       GoRoute(
         path: '/profile/followers',
-        builder: (_, __) => const FollowersScreen(),
+        builder: (_, state) {
+          final userId = state.uri.queryParameters['userId'];
+          return FollowersScreen(userId: userId, showFollowing: false);
+        },
+      ),
+      GoRoute(
+        path: '/profile/following',
+        builder: (_, state) {
+          final userId = state.uri.queryParameters['userId'];
+          return FollowersScreen(userId: userId, showFollowing: true);
+        },
       ),
     ],
   );

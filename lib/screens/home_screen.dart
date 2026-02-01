@@ -261,7 +261,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     return _buildLoadMoreOrEnd();
                   }
                   final it = _feed[i];
-                  return _SwipeableFeedCard(
+                  return RepaintBoundary(
+                    child: _SwipeableFeedCard(
                     itinerary: it,
                     description: _descriptionFor(it),
                     locations: _locationsFor(it),
@@ -271,9 +272,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     onAuthorTap: () => context.push('/author/${it.authorId}'),
                     variant: _CardVariant.standard,
                     index: i,
+                  ),
                   );
                 },
                 childCount: _feed.length + 1,
+                addRepaintBoundaries: true,
               ),
             ),
           SliverToBoxAdapter(child: _buildPeekPadding()),
@@ -325,7 +328,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   delegate: SliverChildBuilderDelegate(
                     (_, i) {
                       final it = _discover[i];
-                      return _SwipeableFeedCard(
+                      return RepaintBoundary(
+                        child: _SwipeableFeedCard(
                         itinerary: it,
                         description: _descriptionFor(it),
                         locations: _locationsFor(it),
@@ -335,9 +339,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         onAuthorTap: () => context.push('/author/${it.authorId}'),
                         variant: _CardVariant.standard,
                         index: i,
+                      ),
                       );
                     },
                     childCount: _discover.length,
+                    addRepaintBoundaries: true,
                   ),
                 ),
               ],
@@ -529,13 +535,15 @@ class _SwipeableFeedCard extends StatelessWidget {
             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(20),
           ),
-          child: Icon(Icons.bookmark_add_rounded, color: Theme.of(context).colorScheme.primary, size: 32),
+          child: Icon(
+            isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 32,
+          ),
         ),
         confirmDismiss: (direction) async {
-          if (!isBookmarked) {
-            HapticFeedback.mediumImpact();
-            onBookmark();
-          }
+          HapticFeedback.mediumImpact();
+          onBookmark();
           return false;
         },
         child: _FeedCard(

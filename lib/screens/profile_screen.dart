@@ -1,15 +1,18 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../core/home_cache.dart';
+import '../core/profile_cache.dart';
+import '../core/profile_refresh_notifier.dart';
+import '../core/saved_cache.dart';
 import '../models/profile.dart';
 import '../models/itinerary.dart';
 import '../models/user_city.dart';
 import '../data/countries.dart';
-import '../widgets/google_places_field.dart';
+import '../widgets/itinerary_feed_card.dart';
 import '../services/supabase_service.dart';
 
 /// Merges profile visited countries with countries from all user itineraries.
@@ -42,35 +45,90 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _initOrLoad();
+    ProfileRefreshNotifier.addListener(_onRefreshRequested);
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    ProfileRefreshNotifier.removeListener(_onRefreshRequested);
+    super.dispose();
+  }
+
+  void _onRefreshRequested() {
+    if (mounted) _load(silent: true);
+  }
+
+  void _initOrLoad() {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    if (ProfileCache.hasData(userId)) {
+      final cached = ProfileCache.get(userId);
+      if (mounted) {
+        setState(() {
+          _profile = cached.profile;
+          _myItineraries = cached.myItineraries;
+          _pastCities = cached.pastCities;
+          _followersCount = cached.followersCount;
+          _followingCount = cached.followingCount;
+          _isLoading = false;
+          _error = null;
+        });
+      }
+      _load(silent: true);
+    } else {
+      _load(silent: false);
+    }
+  }
+
+  Future<void> _load({bool silent = false}) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
     if (!mounted) return;
-    setState(() => _isLoading = true);
+    if (!silent) {
+      setState(() => _isLoading = true);
+    }
     try {
       final results = await Future.wait([
         SupabaseService.getProfile(userId),
         SupabaseService.getUserItineraries(userId, publicOnly: false),
+        SupabaseService.getPastCities(userId),
         SupabaseService.getFollowerCount(userId),
         SupabaseService.getFollowingCount(userId),
-        SupabaseService.getPastCities(userId),
       ]);
       final profile = results[0] as Profile?;
+      final myItineraries = results[1] as List<Itinerary>;
+      final pastCities = results[2] as List<UserPastCity>;
+      final followersCount = results[3] as int;
+      final followingCount = results[4] as int;
       if (!mounted) return;
+      ProfileCache.put(
+        userId,
+        profile: profile,
+        myItineraries: myItineraries,
+        pastCities: pastCities,
+        followersCount: followersCount,
+        followingCount: followingCount,
+      );
       setState(() {
         _profile = profile;
-        _myItineraries = results[1] as List<Itinerary>;
-        _followersCount = results[2] as int;
-        _followingCount = results[3] as int;
-        _pastCities = results[4] as List<UserPastCity>;
+        _myItineraries = myItineraries;
+        _pastCities = pastCities;
+        _followersCount = followersCount;
+        _followingCount = followingCount;
         _error = null;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
+      if (silent) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not refresh. Pull down to retry.')),
+          );
+        }
+        return;
+      }
       setState(() {
         _error = 'Something went wrong. Pull down to retry.';
         _isLoading = false;
@@ -152,12 +210,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: () => _load(silent: true),
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(
-              child: _buildProfileHeader(p, userId),
-            ),
+            SliverToBoxAdapter(child: _buildProfileHeaderContent(p, userId)),
+            _buildTripsSliver(userId),
           ],
         ),
       ),
@@ -166,14 +223,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _signOut() async {
     try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
       await Supabase.instance.client.auth.signOut();
+      if (userId != null) {
+        HomeCache.clear(userId);
+        SavedCache.clear(userId);
+        ProfileCache.clear(userId);
+      }
       if (mounted) context.go('/');
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not sign out. Please try again.')));
     }
   }
 
-  Widget _buildProfileHeader(Profile p, String userId) {
+  Widget _buildProfileHeaderContent(Profile p, String userId) {
     final visitedCountries = _mergedVisitedCountries(p, _myItineraries);
     final currentCity = p.currentCity?.trim();
     final hasCity = currentCity != null && currentCity.isNotEmpty;
@@ -243,17 +306,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                         )
-                      : Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            children: [
-                              Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Not set',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                              ),
-                            ],
+                      : InkWell(
+                          onTap: () async {
+                            await context.push('/profile/stats?open=current_city');
+                            if (mounted) _load();
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Not set',
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                ),
+                                Icon(Icons.chevron_right, size: 24, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ],
+                            ),
                           ),
                         ),
                 ),
@@ -279,93 +350,114 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(width: AppTheme.spacingSm),
               Expanded(
                 child: _StatCard(
-                  icon: Icons.route_outlined,
-                  value: '${_myItineraries.length}',
-                  label: 'Trips',
+                  icon: Icons.location_city_outlined,
+                  value: '${(hasCity ? 1 : 0) + _pastCities.length}',
+                  label: 'Lived',
                   color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.secondary,
-                  onTap: () => context.push('/profile/trips'),
+                  onTap: () async {
+                    final livedCount = (hasCity ? 1 : 0) + _pastCities.length;
+                    final open = livedCount == 0 ? 'current_city' : null;
+                    await context.push(open != null ? '/profile/stats?open=$open' : '/profile/stats');
+                    if (mounted) _load();
+                  },
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppTheme.spacingMd),
-          InkWell(
-            onTap: () => context.push('/profile/followers'),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg, vertical: AppTheme.spacingMd),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _ProfileStatChip(label: 'Followers', value: '$_followersCount'),
-                  Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
-                  _ProfileStatChip(label: 'Following', value: '$_followingCount'),
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg, vertical: AppTheme.spacingMd),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      await context.push('/profile/followers');
+                      if (mounted) _load();
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: _ProfileStatChip(label: 'Followers', value: '$_followersCount'),
+                  ),
+                ),
+                Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      await context.push('/profile/following');
+                      if (mounted) _load();
+                    },
+                    borderRadius: BorderRadius.circular(8),
+                    child: _ProfileStatChip(label: 'Following', value: '$_followingCount'),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: AppTheme.spacingLg),
-          _buildPastCitiesSection(p, userId),
-          const SizedBox(height: AppTheme.spacingLg),
-          _buildTravelStylesSection(p),
+          Row(
+            children: [
+              Text('Trips', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              if (_myItineraries.isNotEmpty)
+                Text(' (${_myItineraries.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingSm),
         ],
       ),
     );
   }
 
-  Widget _buildPastCitiesSection(Profile p, String userId) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Lived Before', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            if (_pastCities.isNotEmpty) Text(' (${_pastCities.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-        const SizedBox(height: AppTheme.spacingSm),
-        if (_pastCities.isEmpty)
-          Text('None', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _pastCities.map((c) => ActionChip(
-              avatar: Icon(Icons.location_city_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
-              label: Text(c.cityName),
-              onPressed: () => context.push('/city/${Uri.encodeComponent(c.cityName)}?userId=$userId'),
-            )).toList(),
+  Widget _buildTripsSliver(String userId) {
+    if (_myItineraries.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'No trips yet',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
-      ],
+        ),
+      );
+    }
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (_, i) {
+          final it = _myItineraries[i];
+          return RepaintBoundary(
+            child: ItineraryFeedCard(
+              itinerary: it,
+              description: _descriptionFor(it),
+              locations: _locationsFor(it),
+              onTap: () => context.push('/itinerary/${it.id}'),
+              onEdit: () => context.push('/itinerary/${it.id}/edit'),
+            ),
+          );
+        },
+        childCount: _myItineraries.length,
+        addRepaintBoundaries: true,
+      ),
     );
   }
 
-  Widget _buildTravelStylesSection(Profile p) {
-    final styles = p.travelStyles;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Travel styles', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            if (styles.isNotEmpty) Text(' (${styles.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-        if (styles.isNotEmpty) ...[
-          const SizedBox(height: AppTheme.spacingSm),
-          Wrap(
-            spacing: AppTheme.spacingSm,
-            runSpacing: AppTheme.spacingSm,
-            children: styles.map((s) => Chip(label: Text(s))).toList(),
-          ),
-        ],
-      ],
-    );
+  String _descriptionFor(Itinerary it) {
+    if (it.styleTags.isNotEmpty) {
+      return '${it.destination} • ${it.styleTags.take(2).join(', ').toLowerCase()}';
+    }
+    return it.destination;
+  }
+
+  String _locationsFor(Itinerary it) {
+    if (it.stops.isEmpty) return it.destination;
+    final venues = it.stops.where((s) => s.isVenue).toList();
+    final toShow = venues.isNotEmpty ? venues : it.stops.where((s) => s.isLocation).toList();
+    if (toShow.isEmpty) return it.destination;
+    return toShow.take(2).map((s) => s.name).join(' • ');
   }
 
   Future<void> _showEditProfileSheet(Profile p) async {
@@ -373,7 +465,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       isScrollControlled: true,
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
+        initialChildSize: 0.35,
         expand: false,
         builder: (_, scrollController) => ListView(
           controller: scrollController,
@@ -393,32 +485,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.location_city_outlined),
-              title: const Text('Home town'),
-              subtitle: Text(p.currentCity?.trim().isNotEmpty == true ? p.currentCity! : 'Not set'),
+              title: const Text('Lived'),
+              subtitle: const Text('Home town, lived before, travel styles'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
                 Navigator.pop(ctx);
-                await _showCurrentCityEditor(p.currentCity ?? '', (city) => _updateProfile(currentCity: city));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.history_outlined),
-              title: const Text('Lived before'),
-              subtitle: Text(_pastCities.isEmpty ? 'None' : '${_pastCities.length} cities'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await _showPastCitiesEditor(_pastCities, () => _load());
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.style_outlined),
-              title: const Text('Travel styles'),
-              subtitle: Text(p.travelStyles.isEmpty ? 'None' : p.travelStyles.join(', ')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await _showStylesEditor(p.travelStyles, (list) => _updateProfile(travelStyles: list));
+                final hasCity = p.currentCity?.trim().isNotEmpty == true;
+                final hasPast = _pastCities.isNotEmpty;
+                final hasStyles = (p.travelStyles).isNotEmpty;
+                String? open;
+                if (!hasCity) open = 'current_city';
+                else if (!hasPast) open = 'past_cities';
+                else if (!hasStyles) open = 'travel_styles';
+                await context.push(open != null ? '/profile/stats?open=$open' : '/profile/stats');
+                if (mounted) _load();
               },
             ),
           ],
@@ -479,308 +559,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _showStylesEditor(List<String> initial, void Function(List<String>) onSave) async {
-    Set<String> selected = initial.toSet();
-    await showModalBottomSheet(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (_, setModal) => Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Travel styles', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: travelStyles.map((s) {
-                  final sel = selected.contains(s);
-                  return FilterChip(
-                    label: Text(s),
-                    selected: sel,
-                    onSelected: (_) => setModal(() {
-                      if (sel) selected.remove(s);
-                      else selected.add(s);
-                    }),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: () {
-                      onSave(selected.toList());
-                      Navigator.pop(ctx);
-                      _load();
-                    },
-                    child: const Text('Save'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _updateProfile({String? name, String? currentCity, List<String>? visitedCountries, List<String>? travelStyles}) async {
+  Future<void> _updateProfile({String? name, List<String>? visitedCountries}) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
     final data = <String, dynamic>{};
     if (name != null) data['name'] = name;
-    if (currentCity != null) data['current_city'] = currentCity.trim().isEmpty ? null : currentCity.trim();
     if (visitedCountries != null) data['visited_countries'] = visitedCountries;
-    if (travelStyles != null) data['travel_styles'] = travelStyles!.map((s) => s.toLowerCase()).toList();
     await SupabaseService.updateProfile(userId, data);
     await _load();
   }
 
-  Future<void> _showCurrentCityEditor(String initial, void Function(String) onSave) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Home Town', style: Theme.of(context).textTheme.headlineSmall),
-                const SizedBox(height: AppTheme.spacingLg),
-                GooglePlacesField(
-                  hint: 'Search for your city…',
-                  placeType: 'locality',
-                  onSelected: (name, _, __, ___) {
-                    onSave(name);
-                    Navigator.pop(ctx);
-                    _load();
-                  },
-                ),
-                if (initial.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Text('Current: $initial', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ),
-                const SizedBox(height: 16),
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showPastCitiesEditor(List<UserPastCity> initial, VoidCallback onDone) async {
-    List<UserPastCity> pastCities = List.from(initial);
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (_, setModal) {
-          return DraggableScrollableSheet(
-            initialChildSize: 0.6,
-            expand: false,
-            builder: (_, scrollController) => Padding(
-              padding: const EdgeInsets.all(AppTheme.spacingMd),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Lived Before', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  Text('Cities you previously lived in', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  const SizedBox(height: AppTheme.spacingMd),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      itemCount: pastCities.length + 1,
-                      itemBuilder: (_, i) {
-                        if (i == pastCities.length) {
-                          return ListTile(
-                            leading: Icon(Icons.add, color: Theme.of(context).colorScheme.primary),
-                            title: Text('Add city', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-                            onTap: () async {
-                              final name = await showDialog<String>(
-                                context: context,
-                                builder: (dctx) => Dialog(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(AppTheme.spacingLg),
-                                    child: SingleChildScrollView(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                                        children: [
-                                          Text('Add city', style: Theme.of(dctx).textTheme.titleLarge),
-                                          const SizedBox(height: 16),
-                                          GooglePlacesField(
-                                            hint: 'Search for a city…',
-                                            placeType: 'locality',
-                                            onSelected: (placeName, _, __, ___) {
-                                              Navigator.pop(dctx, placeName);
-                                            },
-                                          ),
-                                          const SizedBox(height: 16),
-                                          TextButton(onPressed: () => Navigator.pop(dctx), child: const Text('Cancel')),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                              if (name != null && name.isNotEmpty) {
-                                final userId = Supabase.instance.client.auth.currentUser?.id;
-                                if (userId != null) {
-                                  try {
-                                    final added = await SupabaseService.addPastCity(userId, name);
-                                    if (added != null) setModal(() => pastCities = [...pastCities, added]);
-                                  } catch (e) {
-                                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not add: $e')));
-                                  }
-                                }
-                              }
-                            },
-                          );
-                        }
-                        final pastCity = pastCities[i];
-                        return ListTile(
-                          leading: Icon(Icons.location_city_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          title: Text(pastCity.cityName),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: () async {
-                              try {
-                                await SupabaseService.removePastCity(pastCity.id);
-                                setModal(() => pastCities = pastCities.where((c) => c.id != pastCity.id).toList());
-                              } catch (e) {
-                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
-                              }
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: AppTheme.spacingMd),
-                  FilledButton(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      onDone();
-                    },
-                    child: const Text('Done'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _CurrentCitySection extends StatelessWidget {
-  final String? currentCity;
-  final List<UserTopSpot> spots;
-  final VoidCallback? onTapCity;
-
-  const _CurrentCitySection({
-    required this.currentCity,
-    required this.spots,
-    this.onTapCity,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasCity = currentCity != null && currentCity!.trim().isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Home Town', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        const SizedBox(height: AppTheme.spacingSm),
-        if (!hasCity)
-          Text('Not set', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
-        else ...[
-          InkWell(
-            onTap: onTapCity,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(currentCity!, style: Theme.of(context).textTheme.titleMedium),
-                  if (onTapCity != null) Icon(Icons.chevron_right, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingSm),
-          Text('Top spots in $currentCity', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppTheme.spacingXs),
-          if (spots.isEmpty)
-            Text('No spots yet', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: spots.take(10).map((s) => Chip(
-                label: Text('${topSpotCategoryLabels[s.category] ?? s.category}: ${s.name}'),
-                labelStyle: Theme.of(context).textTheme.bodySmall,
-              )).toList(),
-            ),
-          if (spots.length > 10) Padding(padding: const EdgeInsets.only(top: 4), child: Text('+${spots.length - 10} more', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))),
-        ],
-      ],
-    );
-  }
-}
-
-class _PastCitiesSection extends StatelessWidget {
-  final List<UserPastCity> pastCities;
-  final void Function(String) onTapCity;
-
-  const _PastCitiesSection({
-    required this.pastCities,
-    required this.onTapCity,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Lived Before', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-            if (pastCities.isNotEmpty) Text(' (${pastCities.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-        const SizedBox(height: AppTheme.spacingSm),
-        if (pastCities.isEmpty)
-          Text('None', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: pastCities.map((c) => ActionChip(
-              avatar: Icon(Icons.location_city_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
-              label: Text(c.cityName),
-              onPressed: () => onTapCity(c.cityName),
-            )).toList(),
-          ),
-      ],
-    );
-  }
 }
 
 class _StatCard extends StatelessWidget {
@@ -849,22 +637,3 @@ class _ProfileStatChip extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  final String title;
-  final int? count;
-  final VoidCallback? onEdit;
-
-  const _Section({required this.title, this.count, this.onEdit});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        if (count != null) Text(' ($count)', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        const Spacer(),
-        if (onEdit != null) TextButton.icon(onPressed: onEdit, icon: const Icon(Icons.edit_outlined, size: 18), label: const Text('Edit')),
-      ],
-    );
-  }
-}

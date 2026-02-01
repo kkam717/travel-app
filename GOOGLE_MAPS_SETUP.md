@@ -1,8 +1,28 @@
-# Google Maps & Places API Setup
+# Maps & Places API Setup
 
-This app uses **one API key** for both the map display and Places autocomplete. You do **not** need multiple keys for different features or device types.
+## Static Maps (Feed Card Thumbnails) – Free Option
 
-## Fix Grey Map & Places Autocomplete
+For static map images on feed cards, you can use **Geoapify** (free tier: 3,000 credits/day) instead of Google:
+
+1. Sign up at [Geoapify](https://www.geoapify.com/) and get an API key
+2. Add to `.env`:
+   ```
+   GEOAPIFY_API_KEY=your-geoapify-key
+   ```
+
+When `GEOAPIFY_API_KEY` is set, the app uses:
+- **Geoapify Static Maps** for map images
+- **Nominatim** (OpenStreetMap) for geocoding – free, no API key, 1 request/second limit
+
+If `GEOAPIFY_API_KEY` is not set, the app falls back to Google Maps Static API and Geocoding API (requires `GOOGLE_API_KEY` and billing).
+
+---
+
+## Google Maps & Places API (Map Display & Autocomplete)
+
+This app uses **one API key** for map display and Places autocomplete. You do **not** need multiple keys for different features or device types.
+
+### Fix Grey Map & Places Autocomplete
 
 ### 1. Go to Google Cloud Console
 
@@ -18,8 +38,8 @@ Go to **APIs & Services → Library** and enable:
 - **Maps JavaScript API** (required for web – itinerary map & visited countries map)
 - **Places API**
 - **Places API (New)**
-- **Maps Static API** (for feed card map thumbnails)
-- **Geocoding API** (for showing destination on map when no venue data)
+- **Maps Static API** (for feed card map thumbnails – only if not using Geoapify)
+- **Geocoding API** (for showing destination on map – only if not using Geoapify)
 
 ### 3. Enable Billing
 

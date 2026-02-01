@@ -104,6 +104,38 @@ class GooglePlacesService {
     return (46.0, 8.0); // Default: central Europe
   }
 
+  /// Geocode an address (e.g. city name) and return the country code (ISO 3166-1 alpha-2).
+  static Future<String?> geocodeToCountryCode(String address) async {
+    final key = _apiKey;
+    if (key == null || key.isEmpty || address.trim().isEmpty) return null;
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/geocode/json'
+        '?address=${Uri.encodeComponent(address.trim())}'
+        '&key=$key',
+      );
+      final res = await http.get(url);
+      if (res.statusCode != 200) return null;
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      final results = json['results'] as List<dynamic>?;
+      if (results == null || results.isEmpty) return null;
+      final components = (results.first as Map<String, dynamic>)['address_components'] as List<dynamic>?;
+      if (components == null) return null;
+      for (final c in components) {
+        final comp = c as Map<String, dynamic>;
+        final types = comp['types'] as List<dynamic>? ?? [];
+        if (types.contains('country')) {
+          final code = comp['short_name'] as String?;
+          return code?.toUpperCase();
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('GooglePlaces geocodeToCountryCode exception: $e');
+      return null;
+    }
+  }
+
   /// Geocode an address (e.g. city name) to lat/lng for location bias
   static Future<(double, double)?> geocodeAddress(String address) async {
     final key = _apiKey;

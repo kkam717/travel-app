@@ -28,6 +28,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   List<String> _filterStyles = [];
   String? _filterMode;
   Timer? _placesSearchDebounce;
+  Timer? _profileSearchDebounce;
 
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     _placesSearchDebounce?.cancel();
+    _profileSearchDebounce?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
@@ -182,7 +184,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               onSubmitted: (_) => _search(),
               onChanged: (_) {
                 if (_tabController.index == 0) {
-                  _search();
+                  _profileSearchDebounce?.cancel();
+                  _profileSearchDebounce = Timer(const Duration(milliseconds: 400), _search);
                 } else {
                   _debouncedPlacesSearch();
                 }

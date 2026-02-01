@@ -414,7 +414,18 @@ class SupabaseService {
       var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null);
       if (publicOnly) q = q.eq('visibility', 'public');
       final res = await q.order('created_at', ascending: false);
-      return (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
+      final itineraries = (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
+      if (itineraries.isEmpty) return itineraries;
+
+      // Batch load stops for map preview in feed cards
+      final ids = itineraries.map((i) => i.id).toList();
+      final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+      final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+      final stopsByItinerary = <String, List<ItineraryStop>>{};
+      for (final s in stopsList) {
+        stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
+      }
+      return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [])).toList();
     } catch (e) {
       Analytics.logEvent('user_itineraries_fetch_error', {'error': e.toString()});
       rethrow;
@@ -503,7 +514,7 @@ class SupabaseService {
     }
   }
 
-  /// Returns profiles of users who follow the given userId
+  /// Returns profiles of users who follow the given userId (people they are followed by)
   static Future<List<Profile>> getFollowers(String userId) async {
     try {
       final res = await _client.from('follows').select('follower_id').eq('following_id', userId);
@@ -513,6 +524,20 @@ class SupabaseService {
       return (profilesRes as List).map((e) => Profile.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
       Analytics.logEvent('followers_fetch_error', {'error': e.toString()});
+      return [];
+    }
+  }
+
+  /// Returns profiles of users the given userId follows (people they follow)
+  static Future<List<Profile>> getFollowing(String userId) async {
+    try {
+      final res = await _client.from('follows').select('following_id').eq('follower_id', userId);
+      final followingIds = (res as List).map((e) => (e as Map)['following_id'] as String).toList();
+      if (followingIds.isEmpty) return [];
+      final profilesRes = await _client.from('profiles').select().inFilter('id', followingIds);
+      return (profilesRes as List).map((e) => Profile.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      Analytics.logEvent('following_fetch_error', {'error': e.toString()});
       return [];
     }
   }

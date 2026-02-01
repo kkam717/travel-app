@@ -396,9 +396,21 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               ],
             ),
           );
-          if (leave == true && context.mounted) context.go('/home');
+          if (leave == true && context.mounted) {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          }
         } else {
-          if (context.mounted) context.go('/home');
+          if (context.mounted) {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/home');
+            }
+          }
         }
       },
       child: Scaffold(
@@ -842,22 +854,14 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
   int? _selectedDestForDetails;
 
   Widget _buildStep5() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return ListView(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingMd),
-          child: Text('Add Details to Each Destination', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-          child: Text('Tap a destination below to add restaurants, hotels, and guides.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        ),
+        Text('Add Details to Each Destination', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: AppTheme.spacingXs),
+        Text('Tap a destination below to add restaurants, hotels, guides, and drinks.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingMd),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-            children: _destinations.asMap().entries.where((e) => e.value.name.isNotEmpty).map((entry) {
+        ..._destinations.asMap().entries.where((e) => e.value.name.isNotEmpty).map((entry) {
               final i = entry.key;
               final d = entry.value;
               final isSelected = _selectedDestForDetails == i;
@@ -896,6 +900,10 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                               FilledButton.tonal(
                                 onPressed: () => _addVenue(i, 'guide'),
                                 child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), SizedBox(width: 6), Text('Guide')]),
+                              ),
+                              FilledButton.tonal(
+                                onPressed: () => _addVenue(i, 'bar'),
+                                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), SizedBox(width: 6), Text('Drinks')]),
                               ),
                             ],
                           ),
@@ -945,16 +953,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                 ),
               );
             }).toList(),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingMd),
-          child: FilledButton.icon(
-            onPressed: _nextPage,
-            icon: const Icon(Icons.arrow_forward, size: 20),
-            label: const Text('Next: Review Trip'),
-            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
-          ),
+        const SizedBox(height: AppTheme.spacingLg),
+        FilledButton.icon(
+          onPressed: _nextPage,
+          icon: const Icon(Icons.arrow_forward, size: 20),
+          label: const Text('Next: Review Trip'),
+          style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
         ),
       ],
     );
@@ -1009,7 +1013,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                           child: Text(v.name, style: Theme.of(context).textTheme.bodyMedium, overflow: TextOverflow.ellipsis),
                         ),
                         const SizedBox(width: 4),
-                        Text('(${v.category ?? 'restaurant'})', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        Text('(${_displayCategory(v.category)})', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   )),
@@ -1041,10 +1045,21 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     );
   }
 
+  String _displayCategory(String? cat) {
+    switch (cat) {
+      case 'hotel': return 'Hotel';
+      case 'guide': return 'Guide';
+      case 'bar': return 'Drinks';
+      case 'restaurant': return 'Restaurant';
+      default: return cat ?? 'Restaurant';
+    }
+  }
+
   IconData _iconForCategory(String? cat) {
     switch (cat) {
       case 'hotel': return Icons.hotel;
       case 'guide': return Icons.tour;
+      case 'bar': return Icons.local_bar;
       default: return Icons.restaurant;
     }
   }

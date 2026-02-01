@@ -29,46 +29,56 @@ class _ItineraryMapState extends State<ItineraryMap> {
   List<String>? _geocodedCityNames;
   bool _geocodingCities = false;
 
-  /// Venue stops (bars, restaurants, hotels) with coordinates
-  List<ItineraryStop> get _venueStopsWithCoords =>
-      widget.stops.where((s) => s.isVenue && s.lat != null && s.lng != null).toList();
+  List<ItineraryStop>? _venueStopsWithCoords;
+  List<ItineraryStop>? _locationStopsWithCoords;
+  List<ItineraryStop>? _locationStopsNoCoords;
+  List<ItineraryStop>? _allStopsWithCoords;
+  List<LatLng>? _polylinePoints;
+  List<LatLng>? _displayPoints;
 
-  /// Location stops (cities, towns) with coordinates
-  List<ItineraryStop> get _locationStopsWithCoords =>
-      widget.stops.where((s) => s.isLocation && s.lat != null && s.lng != null).toList();
-
-  /// Location stops without coordinates (will geocode)
-  List<ItineraryStop> get _locationStopsNoCoords =>
-      widget.stops.where((s) => s.isLocation && (s.lat == null || s.lng == null)).toList();
-
-  /// All stops with coords (locations + venues) in day/position order
-  List<ItineraryStop> get _allStopsWithCoords =>
-      widget.stops.where((s) => s.lat != null && s.lng != null).toList();
-
-  /// Points for path: all stops with coords, or geocoded cities (no dedupe - same place
-  /// on multiple days still contributes so route line draws, matching old version)
-  List<LatLng> get _polylinePoints {
-    final fromStops = _allStopsWithCoords.map((s) => LatLng(s.lat!, s.lng!)).toList();
-    if (fromStops.isNotEmpty) return fromStops;
-    return _geocodedCityPoints ?? [];
+  void _invalidateStopsCache() {
+    _venueStopsWithCoords = null;
+    _locationStopsWithCoords = null;
+    _locationStopsNoCoords = null;
+    _allStopsWithCoords = null;
+    _polylinePoints = null;
+    _displayPoints = null;
   }
 
-  /// Display points: prefer venues (restaurant/bar/guide) for pins, else locations, else geocoded
-  List<LatLng> get _displayPoints {
-    final venue = _venueStopsWithCoords.map((s) => LatLng(s.lat!, s.lng!)).toList();
-    if (venue.isNotEmpty) return venue;
-    final loc = _locationStopsWithCoords.map((s) => LatLng(s.lat!, s.lng!)).toList();
-    if (loc.isNotEmpty) return loc;
-    return _geocodedCityPoints ?? [];
+  List<ItineraryStop> get _venueStopsWithCoordsList =>
+      _venueStopsWithCoords ??= widget.stops.where((s) => s.isVenue && s.lat != null && s.lng != null).toList();
+
+  List<ItineraryStop> get _locationStopsWithCoordsList =>
+      _locationStopsWithCoords ??= widget.stops.where((s) => s.isLocation && s.lat != null && s.lng != null).toList();
+
+  List<ItineraryStop> get _locationStopsNoCoordsList =>
+      _locationStopsNoCoords ??= widget.stops.where((s) => s.isLocation && (s.lat == null || s.lng == null)).toList();
+
+  List<ItineraryStop> get _allStopsWithCoordsList =>
+      _allStopsWithCoords ??= widget.stops.where((s) => s.lat != null && s.lng != null).toList();
+
+  List<LatLng> get _polylinePointsList {
+    if (_polylinePoints != null) return _polylinePoints!;
+    final fromStops = _allStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
+    return _polylinePoints = fromStops.isNotEmpty ? fromStops : (_geocodedCityPoints ?? []);
   }
 
-  bool get _hasMapData => _displayPoints.isNotEmpty || _polylinePoints.isNotEmpty;
+  List<LatLng> get _displayPointsList {
+    if (_displayPoints != null) return _displayPoints!;
+    final venue = _venueStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
+    if (venue.isNotEmpty) return _displayPoints = venue;
+    final loc = _locationStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
+    if (loc.isNotEmpty) return _displayPoints = loc;
+    return _displayPoints = _geocodedCityPoints ?? [];
+  }
+
+  bool get _hasMapData => _displayPointsList.isNotEmpty || _polylinePointsList.isNotEmpty;
 
   /// Pins: venue stops (restaurant/bar/guide) when available, else location stops.
   /// Uses theme color (teal) for consistent pin styling.
   Set<Marker> _markersWithIcon(BitmapDescriptor icon) {
-    final venueStops = _venueStopsWithCoords;
-    final locStops = _locationStopsWithCoords;
+    final venueStops = _venueStopsWithCoordsList;
+    final locStops = _locationStopsWithCoordsList;
     final useVenue = venueStops.isNotEmpty;
     final useLoc = !useVenue && locStops.isNotEmpty;
     final useGeocoded = !useVenue && !useLoc && (_geocodedCityPoints?.isNotEmpty ?? false);
@@ -125,13 +135,14 @@ class _ItineraryMapState extends State<ItineraryMap> {
   void didUpdateWidget(ItineraryMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.stops != widget.stops || oldWidget.destination != widget.destination) {
+      _invalidateStopsCache();
       _maybeGeocodeCities();
     }
   }
 
   void _maybeGeocodeCities() {
-    if (_venueStopsWithCoords.isNotEmpty || _locationStopsWithCoords.isNotEmpty) return;
-    final locNoCoords = _locationStopsNoCoords;
+    if (_venueStopsWithCoordsList.isNotEmpty || _locationStopsWithCoordsList.isNotEmpty) return;
+    final locNoCoords = _locationStopsNoCoordsList;
     if (locNoCoords.isEmpty) return;
     _geocodeCities(locNoCoords);
   }
@@ -159,6 +170,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
           _geocodedCityPoints = points;
           _geocodedCityNames = names;
           _geocodingCities = false;
+          _invalidateStopsCache();
         });
         WidgetsBinding.instance.addPostFrameCallback((_) => _fitBounds());
       } else if (mounted) {
@@ -190,7 +202,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   }
 
   LatLngBounds? _bounds() {
-    final points = _polylinePoints;
+    final points = _polylinePointsList;
     if (points.isEmpty) return null;
     double minLat = points.first.latitude, maxLat = points.first.latitude;
     double minLng = points.first.longitude, maxLng = points.first.longitude;
@@ -221,7 +233,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   @override
   Widget build(BuildContext context) {
     final hasCoords = _hasMapData;
-    final stopCount = _displayPoints.length;
+    final stopCount = _displayPointsList.length;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Material(
@@ -363,7 +375,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   Widget _buildMap(BuildContext context, Color primaryColor) {
     final hue = HSVColor.fromColor(primaryColor).hue;
     final markerIcon = BitmapDescriptor.defaultMarkerWithHue(hue);
-    final initialPos = _polylinePoints.isNotEmpty ? _polylinePoints.first : _defaultCenter;
+    final initialPos = _polylinePointsList.isNotEmpty ? _polylinePointsList.first : _defaultCenter;
     return SizedBox(
       height: widget.height,
       child: GoogleMap(
@@ -372,10 +384,10 @@ class _ItineraryMapState extends State<ItineraryMap> {
         style: googleMapsStyleJson,
         markers: _markersWithIcon(markerIcon),
         polylines: {
-          if (_polylinePoints.length >= 2)
+          if (_polylinePointsList.length >= 2)
             Polyline(
               polylineId: const PolylineId('route'),
-              points: _polylinePoints,
+              points: _polylinePointsList,
               color: primaryColor,
               width: 5,
             ),

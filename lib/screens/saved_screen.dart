@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../core/saved_cache.dart';
 import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
 
@@ -24,7 +25,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _load();
+    _initOrLoad();
   }
 
   @override
@@ -33,29 +34,61 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  Future<void> _load() async {
+  void _initOrLoad() {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    if (SavedCache.hasData(userId)) {
+      final cached = SavedCache.get(userId);
+      if (mounted) {
+        setState(() {
+          _bookmarked = cached.bookmarked;
+          _planning = cached.planning;
+          _isLoading = false;
+          _error = null;
+        });
+      }
+      _load(silent: true);
+    } else {
+      _load(silent: false);
+    }
+  }
+
+  Future<void> _load({bool silent = false}) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
     try {
       final results = await Future.wait([
         SupabaseService.getBookmarkedItineraries(userId),
         SupabaseService.getPlanningItineraries(userId),
       ]);
       if (!mounted) return;
-      final bookmarked = results[0] as List<Itinerary>;
-      final planning = results[1] as List<Itinerary>;
-      setState(() {
-        _bookmarked = bookmarked;
-        _planning = planning;
-        _isLoading = false;
-      });
+      final bookmarked = results[0];
+      final planning = results[1];
+      SavedCache.put(userId, bookmarked: bookmarked, planning: planning);
+      if (mounted) {
+        setState(() {
+          _bookmarked = bookmarked;
+          _planning = planning;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
+      if (silent) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not refresh. Pull down to retry.')),
+          );
+        }
+        return;
+      }
       setState(() {
         _error = 'Something went wrong. Please try again.';
         _isLoading = false;
@@ -104,12 +137,15 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
                     ),
                   ),
                 )
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _ItineraryList(itineraries: _bookmarked, emptyMessage: 'No bookmarked itineraries', canEdit: false),
-                    _ItineraryList(itineraries: _planning, emptyMessage: 'No itineraries in planning', canEdit: true),
-                  ],
+              : RefreshIndicator(
+                  onRefresh: () => _load(silent: true),
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _ItineraryList(itineraries: _bookmarked, emptyMessage: 'No bookmarked itineraries', canEdit: false),
+                      _ItineraryList(itineraries: _planning, emptyMessage: 'No itineraries in planning', canEdit: true),
+                    ],
+                  ),
                 ),
     );
   }
@@ -142,6 +178,7 @@ class _ItineraryList extends StatelessWidget {
     return ListView.builder(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       itemCount: itineraries.length,
+      addRepaintBoundaries: true,
       itemBuilder: (_, i) {
         final it = itineraries[i];
         return Card(

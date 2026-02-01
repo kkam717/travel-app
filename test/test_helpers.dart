@@ -17,6 +17,7 @@ import 'package:travel_app/screens/city_detail_screen.dart';
 import 'package:travel_app/screens/visited_countries_map_screen.dart';
 import 'package:travel_app/screens/my_trips_screen.dart';
 import 'package:travel_app/screens/followers_screen.dart';
+import 'package:travel_app/screens/profile_stats_screen.dart';
 
 /// Creates a GoRouter for testing that does NOT check Supabase auth.
 /// Use this to test screens in isolation without initializing Supabase.
@@ -96,13 +97,21 @@ GoRouter createTestRouter({String initialLocation = '/'}) {
       ),
       GoRoute(path: '/profile/trips', builder: (_, __) => const MyTripsScreen()),
       GoRoute(
+        path: '/profile/stats',
+        builder: (_, state) {
+          final userId = state.uri.queryParameters['userId'];
+          return ProfileStatsScreen(userId: userId);
+        },
+      ),
+      GoRoute(
         path: '/trips/:userId',
         builder: (_, state) {
           final userId = state.pathParameters['userId'];
           return MyTripsScreen(userId: userId?.isEmpty == true ? null : userId);
         },
       ),
-      GoRoute(path: '/profile/followers', builder: (_, __) => const FollowersScreen()),
+      GoRoute(path: '/profile/followers', builder: (_, __) => const FollowersScreen(showFollowing: false)),
+      GoRoute(path: '/profile/following', builder: (_, __) => const FollowersScreen(showFollowing: true)),
     ],
   );
 }

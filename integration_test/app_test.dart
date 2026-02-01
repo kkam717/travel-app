@@ -157,7 +157,7 @@ void main() {
   });
 
   group('8. Profile', () {
-    testWidgets('Profile screen shows Countries, Trips, Followers/Following', (WidgetTester tester) async {
+    testWidgets('Profile screen shows Countries, Stats, Followers/Following', (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -166,22 +166,22 @@ void main() {
 
       expect(find.text('Profile'), findsWidgets);
       expect(find.text('Countries'), findsOneWidget);
-      expect(find.text('Trips'), findsOneWidget);
+      expect(find.text('Stats'), findsOneWidget);
       expect(find.text('Followers'), findsOneWidget);
       expect(find.text('Following'), findsOneWidget);
     });
 
-    testWidgets('Profile Trips card navigates to My Trips', (WidgetTester tester) async {
+    testWidgets('Profile Stats card navigates to Stats screen', (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Trips'));
+      await tester.tap(find.text('Stats'));
       await tester.pumpAndSettle();
 
-      expect(find.text('My Trips').evaluate().isNotEmpty || find.text('Create Trip').evaluate().isNotEmpty, isTrue);
+      expect(find.text('Stats'), findsWidgets);
     });
 
     testWidgets('Profile Followers bar navigates to Followers screen', (WidgetTester tester) async {
@@ -236,19 +236,21 @@ void main() {
     });
   });
 
-  group('10. My Trips', () {
-    testWidgets('My Trips screen loads', (WidgetTester tester) async {
+  group('10. Stats', () {
+    testWidgets('Stats screen loads with home town, lived before, travel styles', (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Trips'));
+      await tester.tap(find.text('Stats'));
       await tester.pumpAndSettle();
 
-      // My Trips or Create Trip (empty state)
-      expect(find.text('My Trips').evaluate().isNotEmpty || find.text('Create Trip').evaluate().isNotEmpty, isTrue);
+      expect(find.text('Stats'), findsWidgets);
+      expect(find.text('Home Town'), findsOneWidget);
+      expect(find.text('Lived Before'), findsOneWidget);
+      expect(find.text('Travel styles'), findsOneWidget);
     });
   });
 
