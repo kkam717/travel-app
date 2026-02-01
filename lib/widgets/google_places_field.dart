@@ -65,31 +65,32 @@ class _GooglePlacesFieldState extends State<GooglePlacesField> {
   }
 
   Future<void> _selectPrediction(PlacePrediction p) async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
     try {
       final details = await GooglePlacesService.getDetails(p.placeId);
-      if (mounted) {
-        widget.onSelected(
-          details?.name ?? p.mainText,
-          details?.lat,
-          details?.lng,
-          p.placeId,
-        );
-        _controller.clear();
-        setState(() {
-          _predictions = [];
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      widget.onSelected(
+        details?.name ?? p.mainText,
+        details?.lat,
+        details?.lng,
+        p.placeId,
+      );
+      if (!mounted) return;
+      _controller.clear();
+      setState(() {
+        _predictions = [];
+        _isLoading = false;
+      });
     } catch (_) {
-      if (mounted) {
-        widget.onSelected(p.mainText, null, null, p.placeId);
-        _controller.clear();
-        setState(() {
-          _predictions = [];
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      widget.onSelected(p.mainText, null, null, p.placeId);
+      if (!mounted) return;
+      _controller.clear();
+      setState(() {
+        _predictions = [];
+        _isLoading = false;
+      });
     }
   }
 

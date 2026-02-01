@@ -194,7 +194,7 @@ class SupabaseService {
       // Only public itineraries in search - private/friends never appear
       final searchQuery = query?.trim();
       final hasQuery = searchQuery != null && searchQuery.isNotEmpty;
-      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').isFilter('forked_from_itinerary_id', null).eq('visibility', 'public');
+      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').isFilter('forked_from_itinerary_id', null).eq('visibility', 'public');
       if (daysCount != null) q = q.eq('days_count', daysCount);
       if (mode != null) q = q.eq('mode', mode.toLowerCase());
       if (styles != null && styles.isNotEmpty) {
@@ -225,7 +225,7 @@ class SupabaseService {
 
   static Future<Itinerary?> getItinerary(String id, {bool checkAccess = true}) async {
     try {
-      final res = await _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').eq('id', id).maybeSingle();
+      final res = await _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').eq('id', id).maybeSingle();
       if (res == null) return null;
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);
@@ -384,7 +384,7 @@ class SupabaseService {
       final ids = (res as List).map((e) => (e as Map)['itinerary_id'] as String).toList();
       if (ids.isEmpty) return [];
 
-      final itRes = await _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').inFilter('id', ids).isFilter('forked_from_itinerary_id', null);
+      final itRes = await _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').inFilter('id', ids).isFilter('forked_from_itinerary_id', null);
       final itList = (itRes as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
       final byId = {for (final i in itList) i.id: i};
       return ids.map((id) => byId[id]).whereType<Itinerary>().toList();
@@ -398,7 +398,7 @@ class SupabaseService {
     try {
       final res = await _client
           .from('itineraries')
-          .select('*, profiles!itineraries_author_id_fkey(name)')
+          .select('*, profiles!itineraries_author_id_fkey(name,photo_url)')
           .eq('author_id', userId)
           .not('forked_from_itinerary_id', 'is', null)
           .order('updated_at', ascending: false);
@@ -411,7 +411,7 @@ class SupabaseService {
 
   static Future<List<Itinerary>> getUserItineraries(String userId, {bool publicOnly = false}) async {
     try {
-      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null);
+      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null);
       if (publicOnly) q = q.eq('visibility', 'public');
       final res = await q.order('created_at', ascending: false);
       return (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
@@ -543,19 +543,19 @@ class SupabaseService {
       // 1. Own posts: all visibility
       // 2. Others: public from followed, OR all from mutual friends
       // Apply lt() before order/limit (lt is on FilterBuilder, not TransformBuilder)
-      var q1 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null);
+      var q1 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null);
       if (afterCreatedAt != null) q1 = q1.lt('created_at', afterCreatedAt);
       final exec1 = q1.order('created_at', ascending: false).limit(limit * 2);
 
       final futures = <Future<List<dynamic>>>[exec1];
       if (followedIds.isNotEmpty) {
-        var q2 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').inFilter('author_id', followedIds).isFilter('forked_from_itinerary_id', null).eq('visibility', 'public');
+        var q2 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').inFilter('author_id', followedIds).isFilter('forked_from_itinerary_id', null).eq('visibility', 'public');
         if (afterCreatedAt != null) q2 = q2.lt('created_at', afterCreatedAt);
         final exec2 = q2.order('created_at', ascending: false).limit(limit * 2);
         futures.add(exec2);
       }
       if (mutualIds.isNotEmpty) {
-        var q3 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').inFilter('author_id', mutualIds).isFilter('forked_from_itinerary_id', null);
+        var q3 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').inFilter('author_id', mutualIds).isFilter('forked_from_itinerary_id', null);
         if (afterCreatedAt != null) q3 = q3.lt('created_at', afterCreatedAt);
         final exec3 = q3.order('created_at', ascending: false).limit(limit * 2);
         futures.add(exec3);
@@ -603,7 +603,7 @@ class SupabaseService {
       final excludeIds = {...followedIds, ...mutualIds, userId};
       if (excludeAuthorIds != null) excludeIds.addAll(excludeAuthorIds);
 
-      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name)').isFilter('forked_from_itinerary_id', null).eq('visibility', 'public').order('created_at', ascending: false).limit(limit * 6);
+      var q = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').isFilter('forked_from_itinerary_id', null).eq('visibility', 'public').order('created_at', ascending: false).limit(limit * 6);
 
       final res = await q;
       var rows = (res as List).cast<Map<String, dynamic>>().where((r) => !excludeIds.contains(r['author_id'])).toList();

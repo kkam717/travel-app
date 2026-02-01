@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   List<Itinerary> _feed = [];
   List<Itinerary> _discover = [];
   bool _isLoading = true;
@@ -29,17 +29,20 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   final Map<String, bool> _bookmarked = {};
   final ScrollController _scrollController = ScrollController();
+  late TabController _tabController;
   int _newTripsCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
     _scrollController.addListener(_onScroll);
     _initOrLoad();
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -215,78 +218,24 @@ class _HomeScreenState extends State<HomeScreen> {
             ? _buildSkeletonLoading()
             : _error != null
                 ? _buildErrorState()
-                : RefreshIndicator(
-                    onRefresh: _onRefresh,
-                    child: CustomScrollView(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      slivers: [
-                        SliverToBoxAdapter(child: _buildHeader()),
-                        if (_discover.isNotEmpty) ...[
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingSm),
-                              child: Text('For you', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                            ),
-                          ),
-                          SliverToBoxAdapter(
-                            child: SizedBox(
-                              height: 220,
-                              child: ListView.builder(
-                                scrollDirection: Axis.horizontal,
-                                padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-                                itemCount: _discover.length,
-                                itemBuilder: (_, i) {
-                                  final it = _discover[i];
-                                  return Padding(
-                                    padding: const EdgeInsets.only(right: AppTheme.spacingMd),
-                                    child: SizedBox(
-                                      width: 280,
-                                      child: _FeedCard(
-                                        itinerary: it,
-                                        description: _descriptionFor(it),
-                                        locations: _locationsFor(it),
-                                        isBookmarked: _bookmarked[it.id] ?? false,
-                                        onBookmark: () => _toggleBookmark(it.id),
-                                        onTap: () => context.push('/itinerary/${it.id}'),
-                                        onAuthorTap: () => context.push('/author/${it.authorId}'),
-                                        variant: _CardVariant.compact,
-                                        index: i,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
-                          const SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingLg)),
-                        ],
-                        if (_feed.isEmpty)
-                          SliverFillRemaining(child: _buildEmptyState())
-                        else
-                          SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (_, i) {
-                                if (i == _feed.length) {
-                                  return _buildLoadMoreOrEnd();
-                                }
-                                final it = _feed[i];
-                                return _SwipeableFeedCard(
-                                  itinerary: it,
-                                  description: _descriptionFor(it),
-                                  locations: _locationsFor(it),
-                                  isBookmarked: _bookmarked[it.id] ?? false,
-                                  onBookmark: () => _toggleBookmark(it.id),
-                                  onTap: () => context.push('/itinerary/${it.id}'),
-                                  onAuthorTap: () => context.push('/author/${it.authorId}'),
-                                  variant: _CardVariant.standard,
-                                  index: i,
-                                );
-                              },
-                              childCount: _feed.length + 1,
-                            ),
-                          ),
-                        SliverToBoxAdapter(child: _buildPeekPadding()),
+                : NestedScrollView(
+                    headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                      SliverToBoxAdapter(child: _buildHeader()),
+                      SliverToBoxAdapter(
+                        child: TabBar(
+                          controller: _tabController,
+                          tabs: const [
+                            Tab(text: 'Following'),
+                            Tab(text: 'For you'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    body: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildFollowingTab(),
+                        _buildForYouTab(),
                       ],
                     ),
                   ),
@@ -294,10 +243,121 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildFollowingTab() {
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      child: CustomScrollView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
+          if (_feed.isEmpty)
+            SliverFillRemaining(child: _buildEmptyState())
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (_, i) {
+                  if (i == _feed.length) {
+                    return _buildLoadMoreOrEnd();
+                  }
+                  final it = _feed[i];
+                  return _SwipeableFeedCard(
+                    itinerary: it,
+                    description: _descriptionFor(it),
+                    locations: _locationsFor(it),
+                    isBookmarked: _bookmarked[it.id] ?? false,
+                    onBookmark: () => _toggleBookmark(it.id),
+                    onTap: () => context.push('/itinerary/${it.id}'),
+                    onAuthorTap: () => context.push('/author/${it.authorId}'),
+                    variant: _CardVariant.standard,
+                    index: i,
+                  );
+                },
+                childCount: _feed.length + 1,
+              ),
+            ),
+          SliverToBoxAdapter(child: _buildPeekPadding()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForYouTab() {
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      child: _discover.isEmpty
+          ? CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
+                SliverFillRemaining(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppTheme.spacingXl),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                          const SizedBox(height: AppTheme.spacingLg),
+                          Text(
+                            'No recommendations yet',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: AppTheme.spacingSm),
+                          Text(
+                            'Check back later for trips tailored to your interests',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) {
+                      final it = _discover[i];
+                      return _SwipeableFeedCard(
+                        itinerary: it,
+                        description: _descriptionFor(it),
+                        locations: _locationsFor(it),
+                        isBookmarked: _bookmarked[it.id] ?? false,
+                        onBookmark: () => _toggleBookmark(it.id),
+                        onTap: () => context.push('/itinerary/${it.id}'),
+                        onAuthorTap: () => context.push('/author/${it.authorId}'),
+                        variant: _CardVariant.standard,
+                        index: i,
+                      );
+                    },
+                    childCount: _discover.length,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
   Widget _buildSkeletonLoading() {
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(child: _buildHeader()),
+        SliverToBoxAdapter(
+          child: TabBar(
+            controller: _tabController,
+            tabs: const [
+              Tab(text: 'Following'),
+              Tab(text: 'For you'),
+            ],
+          ),
+        ),
         SliverList(
           delegate: SliverChildBuilderDelegate(
             (_, i) => _SkeletonCard(variant: _CardVariant.values[i % 3]),
@@ -521,7 +581,7 @@ class _FeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final it = itinerary;
     final isCompact = variant == _CardVariant.compact;
-    final mapHeight = variant == _CardVariant.tall ? 240.0 : (isCompact ? 120.0 : 200.0);
+    final mapHeight = variant == _CardVariant.tall ? 240.0 : (isCompact ? 88.0 : 200.0);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
@@ -529,7 +589,12 @@ class _FeedCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: EdgeInsets.all(isCompact ? AppTheme.spacingSm : AppTheme.spacingMd),
+          padding: EdgeInsets.fromLTRB(
+            isCompact ? AppTheme.spacingSm : AppTheme.spacingMd,
+            isCompact ? AppTheme.spacingSm : AppTheme.spacingSm,
+            isCompact ? AppTheme.spacingSm : AppTheme.spacingMd,
+            isCompact ? AppTheme.spacingSm : AppTheme.spacingMd,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final contentWidth = constraints.maxWidth;
@@ -538,7 +603,7 @@ class _FeedCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: InkWell(
@@ -546,8 +611,16 @@ class _FeedCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       child: Row(
                         children: [
-                          Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                          const SizedBox(width: 6),
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
+                                ? NetworkImage(it.authorPhotoUrl!)
+                                : null,
+                            child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
+                                ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                                : null,
+                          ),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               it.authorName ?? 'Unknown',
@@ -577,23 +650,23 @@ class _FeedCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
-              const SizedBox(height: AppTheme.spacingSm),
+              SizedBox(height: isCompact ? 4 : AppTheme.spacingSm),
               Text(
                 it.title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
                 maxLines: isCompact ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
               ),
               if (description.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                SizedBox(height: isCompact ? 2 : 4),
                 Text(
                   description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: isCompact ? 1.2 : 1.4, fontSize: isCompact ? 12 : null),
                   maxLines: isCompact ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              const SizedBox(height: AppTheme.spacingMd),
+              SizedBox(height: isCompact ? 6 : AppTheme.spacingMd),
               Wrap(
                 spacing: 16,
                 runSpacing: 8,
@@ -626,7 +699,7 @@ class _FeedCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: AppTheme.spacingMd),
+              SizedBox(height: isCompact ? 6 : AppTheme.spacingMd),
               ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: StaticMapImage(

@@ -2,6 +2,7 @@ class Itinerary {
   final String id;
   final String authorId;
   final String? authorName;
+  final String? authorPhotoUrl;
   final String title;
   final String destination;
   final int daysCount;
@@ -19,6 +20,7 @@ class Itinerary {
     required this.id,
     required this.authorId,
     this.authorName,
+    this.authorPhotoUrl,
     required this.title,
     required this.destination,
     required this.daysCount,
@@ -38,6 +40,7 @@ class Itinerary {
       id: json['id'] as String,
       authorId: json['author_id'] as String,
       authorName: json['profiles']?['name'] as String?,
+      authorPhotoUrl: json['profiles']?['photo_url'] as String?,
       title: json['title'] as String,
       destination: json['destination'] as String,
       daysCount: json['days_count'] as int,
@@ -73,6 +76,7 @@ class Itinerary {
         id: id,
         authorId: authorId,
         authorName: authorName,
+        authorPhotoUrl: authorPhotoUrl,
         title: title,
         destination: destination,
         daysCount: daysCount,

@@ -449,13 +449,17 @@ class _ProfileCard extends StatelessWidget {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       profile.name ?? 'Unknown',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
                     const SizedBox(height: 4),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.map_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
@@ -463,23 +467,32 @@ class _ProfileCard extends StatelessWidget {
                         const SizedBox(width: 12),
                         Icon(Icons.people_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
-                        Text('${profile.followersCount} followers', style: Theme.of(context).textTheme.bodySmall),
+                        Flexible(
+                          child: Text(
+                            '${profile.followersCount} followers',
+                            style: Theme.of(context).textTheme.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                   ],
                 ),
               ),
               if (onFollowTap != null && !isOwnProfile)
-                FilledButton.tonal(
-                  onPressed: onFollowTap,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    minimumSize: Size.zero,
+                Flexible(
+                  child: FilledButton.tonal(
+                    onPressed: onFollowTap,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(isFollowing ? 'Following' : 'Follow'),
                   ),
-                  child: Text(isFollowing ? 'Following' : 'Follow'),
                 )
               else
-                Icon(Icons.chevron_right_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                Icon(Icons.chevron_right_rounded, size: 24, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ],
           ),
         ),

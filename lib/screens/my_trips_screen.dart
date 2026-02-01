@@ -7,7 +7,9 @@ import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
 
 class MyTripsScreen extends StatefulWidget {
-  const MyTripsScreen({super.key});
+  final String? userId;
+
+  const MyTripsScreen({super.key, this.userId});
 
   @override
   State<MyTripsScreen> createState() => _MyTripsScreenState();
@@ -24,8 +26,16 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(MyTripsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userId != widget.userId) _load();
+  }
+
+  bool get _isOwnTrips => widget.userId == null;
+
   Future<void> _load() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = widget.userId ?? Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
     if (!mounted) return;
     setState(() {
@@ -33,6 +43,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
       _error = null;
     });
     try {
+      // RLS already enforces visibility (public, own, mutual friends). No need to filter by visibility client-side.
       final itineraries = await SupabaseService.getUserItineraries(userId, publicOnly: false);
       if (!mounted) return;
       setState(() {
@@ -53,7 +64,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     Analytics.logScreenView('my_trips');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Trips'),
+        title: Text(_isOwnTrips ? 'My Trips' : 'Trips'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -102,16 +113,18 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             Text('No trips yet', style: Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: AppTheme.spacingSm),
                             Text(
-                              'Create your first trip to get started',
+                              _isOwnTrips ? 'Create your first trip to get started' : 'No trips yet',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
-                            const SizedBox(height: AppTheme.spacingLg),
-                            FilledButton.icon(
-                              onPressed: () => context.go('/create'),
-                              icon: const Icon(Icons.add, size: 20),
-                              label: const Text('Create Trip'),
-                            ),
+                            if (_isOwnTrips) ...[
+                              const SizedBox(height: AppTheme.spacingLg),
+                              FilledButton.icon(
+                                onPressed: () => context.go('/create'),
+                                icon: const Icon(Icons.add, size: 20),
+                                label: const Text('Create Trip'),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -135,10 +148,11 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit_outlined),
-                                    onPressed: () => context.push('/itinerary/${it.id}/edit'),
-                                  ),
+                                  if (_isOwnTrips)
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () => context.push('/itinerary/${it.id}/edit'),
+                                    ),
                                   Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ],
                               ),

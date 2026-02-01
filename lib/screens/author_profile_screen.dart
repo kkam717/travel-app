@@ -2,10 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
+import '../data/countries.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../models/user_city.dart';
 import '../services/supabase_service.dart';
+
+List<String> _mergedVisitedCountries(Profile? profile, List<Itinerary> itineraries) {
+  final fromProfile = (profile?.visitedCountries ?? []).toSet();
+  for (final it in itineraries) {
+    for (final code in destinationToCountryCodes(it.destination)) {
+      fromProfile.add(code);
+    }
+  }
+  return fromProfile.toList()..sort();
+}
 
 class AuthorProfileScreen extends StatefulWidget {
   final String authorId;
@@ -20,7 +31,6 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   Profile? _profile;
   List<Itinerary> _itineraries = [];
   List<UserPastCity> _pastCities = [];
-  List<UserTopSpot> _currentCitySpots = [];
   int _followersCount = 0;
   int _followingCount = 0;
   bool _isLoading = true;
@@ -55,17 +65,11 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
       final mutualFriend = results[4] as bool;
       final itineraries = await SupabaseService.getUserItineraries(widget.authorId, publicOnly: !_isOwnProfile && !mutualFriend);
       final pastCities = await SupabaseService.getPastCities(widget.authorId);
-      List<UserTopSpot> currentCitySpots = [];
-      final currentCity = profile?.currentCity?.trim();
-      if (currentCity != null && currentCity.isNotEmpty) {
-        currentCitySpots = await SupabaseService.getTopSpots(widget.authorId, currentCity);
-      }
       if (!mounted) return;
       setState(() {
         _profile = profile;
         _itineraries = itineraries;
         _pastCities = pastCities;
-        _currentCitySpots = currentCitySpots;
         _followersCount = followersCount;
         _followingCount = followingCount;
         _isFollowing = isFollowing;
@@ -150,60 +154,6 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                       SliverToBoxAdapter(
                         child: _buildProfileHeader(),
                       ),
-                      SliverToBoxAdapter(
-                        child: _buildCurrentCitySection(),
-                      ),
-                      SliverToBoxAdapter(
-                        child: _buildPastCitiesSection(),
-                      ),
-                      if (_itineraries.isEmpty)
-                        SliverFillRemaining(
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppTheme.spacingLg),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.route_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
-                                  const SizedBox(height: AppTheme.spacingLg),
-                                  Text('No itineraries', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.all(AppTheme.spacingMd),
-                          sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (_, i) {
-                                final it = _itineraries[i];
-                                return Card(
-                                  margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
-                                  child: ListTile(
-                                    leading: CircleAvatar(
-                                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                                      child: Icon(Icons.route_outlined, color: Theme.of(context).colorScheme.onPrimaryContainer),
-                                    ),
-                                    title: Text(it.title, style: Theme.of(context).textTheme.titleSmall),
-                                    subtitle: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('${it.destination} • ${it.daysCount} days', style: Theme.of(context).textTheme.bodySmall),
-                                        if (it.stopsCount != null && it.stopsCount! > 0)
-                                          Text('${it.stopsCount} stops', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                                      ],
-                                    ),
-                                    trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                    onTap: () => context.push('/itinerary/${it.id}'),
-                                  ),
-                                );
-                              },
-                              childCount: _itineraries.length,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -212,32 +162,106 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
 
   Widget _buildProfileHeader() {
     final p = _profile;
+    final currentCity = p?.currentCity?.trim();
+    final hasCity = currentCity != null && currentCity.isNotEmpty;
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacingLg),
       child: Column(
         children: [
           Container(
+            padding: const EdgeInsets.all(AppTheme.spacingMd),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2), blurRadius: 16, offset: const Offset(0, 4))],
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
             ),
-            child: CircleAvatar(
-              radius: 52,
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: CircleAvatar(
-                radius: 50,
-                backgroundImage: p?.photoUrl != null ? NetworkImage(p!.photoUrl!) : null,
-                child: p?.photoUrl == null ? Icon(Icons.person_outline, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant) : null,
-              ),
+            child: Row(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 2))],
+                  ),
+                  child: CircleAvatar(
+                    radius: 36,
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    child: CircleAvatar(
+                      radius: 34,
+                      backgroundImage: p?.photoUrl != null ? NetworkImage(p!.photoUrl!) : null,
+                      child: p?.photoUrl == null ? Icon(Icons.person_outline, size: 36, color: Theme.of(context).colorScheme.onSurfaceVariant) : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppTheme.spacingMd),
+                Expanded(
+                  child: hasCity
+                      ? InkWell(
+                          onTap: () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=${widget.authorId}'),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Row(
+                              children: [
+                                Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    currentCity!,
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right, size: 24, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ],
+                            ),
+                          ),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Not set',
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: AppTheme.spacingMd),
-          Text(
-            p?.name ?? 'Unknown',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
-            textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppTheme.spacingLg),
+          Row(
+            children: [
+              Expanded(
+                child: _AuthorStatCard(
+                  icon: Icons.public_outlined,
+                  value: '${_mergedVisitedCountries(_profile, _itineraries).length}',
+                  label: 'Countries',
+                  color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                  iconColor: Theme.of(context).colorScheme.primary,
+                  onTap: () {
+                    final codes = _mergedVisitedCountries(_profile, _itineraries);
+                    context.push('/map/countries?codes=${codes.join(',')}');
+                  },
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacingSm),
+              Expanded(
+                child: _AuthorStatCard(
+                  icon: Icons.route_outlined,
+                  value: '${_itineraries.length}',
+                  label: 'Trips',
+                  color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                  iconColor: Theme.of(context).colorScheme.secondary,
+                  onTap: () => context.push('/trips/${widget.authorId}'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingMd),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg, vertical: AppTheme.spacingMd),
             decoration: BoxDecoration(
@@ -247,82 +271,35 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _StatChip(label: 'Trips', value: '${_itineraries.length}'),
-                Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
                 _StatChip(label: 'Followers', value: '$_followersCount'),
                 Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
                 _StatChip(label: 'Following', value: '$_followingCount'),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentCitySection() {
-    final p = _profile;
-    final currentCity = p?.currentCity?.trim();
-    final hasCity = currentCity != null && currentCity.isNotEmpty;
-    if (!hasCity) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Current City', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppTheme.spacingSm),
-          InkWell(
-            onTap: () => context.push('/city/${Uri.encodeComponent(currentCity)}?userId=${widget.authorId}'),
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(currentCity, style: Theme.of(context).textTheme.titleMedium),
-                  Icon(Icons.chevron_right, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppTheme.spacingSm),
-          Text('Top spots in $currentCity', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppTheme.spacingXs),
-          if (_currentCitySpots.isEmpty)
-            Text('No spots', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: _currentCitySpots.take(10).map((s) => Chip(
-                label: Text('${topSpotCategoryLabels[s.category] ?? s.category}: ${s.name}'),
-                labelStyle: Theme.of(context).textTheme.bodySmall,
-              )).toList(),
-            ),
-          if (_currentCitySpots.length > 10)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: GestureDetector(
-                onTap: () => context.push('/city/${Uri.encodeComponent(currentCity)}?userId=${widget.authorId}'),
-                child: Text('View all →', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
-              ),
-            ),
+          const SizedBox(height: AppTheme.spacingLg),
+          _buildPastCitiesSection(),
+          const SizedBox(height: AppTheme.spacingLg),
+          _buildTravelStylesSection(),
         ],
       ),
     );
   }
 
   Widget _buildPastCitiesSection() {
-    if (_pastCities.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Past Cities', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-          const SizedBox(height: AppTheme.spacingSm),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Lived Before', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            if (_pastCities.isNotEmpty) Text(' (${_pastCities.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacingSm),
+        if (_pastCities.isEmpty)
+          Text('None', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))
+        else
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -332,8 +309,30 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
               onPressed: () => context.push('/city/${Uri.encodeComponent(c.cityName)}?userId=${widget.authorId}'),
             )).toList(),
           ),
+      ],
+    );
+  }
+
+  Widget _buildTravelStylesSection() {
+    final styles = _profile?.travelStyles ?? [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Travel styles', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            if (styles.isNotEmpty) Text(' (${styles.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        if (styles.isNotEmpty) ...[
+          const SizedBox(height: AppTheme.spacingSm),
+          Wrap(
+            spacing: AppTheme.spacingSm,
+            runSpacing: AppTheme.spacingSm,
+            children: styles.map((s) => Chip(label: Text(s))).toList(),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -353,5 +352,53 @@ class _StatChip extends StatelessWidget {
         Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],
     );
+  }
+}
+
+class _AuthorStatCard extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color color;
+  final Color iconColor;
+  final VoidCallback? onTap;
+
+  const _AuthorStatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.color,
+    required this.iconColor,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final child = Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 26, color: iconColor),
+          const SizedBox(height: AppTheme.spacingSm),
+          Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+          const SizedBox(height: 2),
+          Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        ],
+      ),
+    );
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: child,
+      );
+    }
+    return child;
   }
 }

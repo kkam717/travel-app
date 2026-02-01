@@ -128,12 +128,21 @@ GoRouter createRouter() {
         path: '/map/countries',
         builder: (_, state) {
           final codes = state.uri.queryParameters['codes']?.split(',').where((s) => s.isNotEmpty).toList() ?? [];
-          return VisitedCountriesMapScreen(visitedCountryCodes: codes);
+          final canEdit = state.uri.queryParameters['editable'] == '1';
+          return VisitedCountriesMapScreen(visitedCountryCodes: codes, canEdit: canEdit);
         },
       ),
       GoRoute(
         path: '/profile/trips',
         builder: (_, __) => const MyTripsScreen(),
+      ),
+      GoRoute(
+        path: '/trips/:userId',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, state) {
+          final userId = state.pathParameters['userId'] ?? state.uri.pathSegments.lastOrNull;
+          return MyTripsScreen(userId: userId?.isEmpty == true ? null : userId);
+        },
       ),
       GoRoute(
         path: '/profile/followers',

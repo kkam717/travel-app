@@ -204,24 +204,20 @@ Search Screen
 ```
 Profile Screen
     │
-    ├─► Tap edit (name) → Inline edit → Save
-    ├─► Tap edit (styles) → Select styles → Save
+    ├─► Tap avatar → Upload photo (gallery)
     │
-    ├─► Current city
-    │       ├─► Tap city → City Detail Screen
-    │       └─► Edit top spots (Eat, Drink, Date, Chill)
+    ├─► Tap current city (in card) → City Detail Screen
     │
-    ├─► Past cities
-    │       ├─► Add city (Google Places)
-    │       ├─► Tap city → City Detail Screen
-    │       └─► Remove city
-    │
-    ├─► Tap "Visited countries" / map link → Visited Countries Map Screen
+    ├─► Tap "Countries" card → Visited Countries Map (editable)
     │       └─► Edit → Country picker → Save → Back to Profile
     │
-    ├─► Tap "My Trips" → My Trips Screen
+    ├─► Tap "Trips" card → My Trips Screen (itineraries list)
     │
-    ├─► Tap "Followers" → Followers Screen
+    ├─► Tap Followers/Following bar → Followers Screen
+    │
+    ├─► Tap past city chip → City Detail Screen
+    │
+    ├─► Tap edit (app bar) → Edit sheet (name, current city, past cities, travel styles)
     │
     └─► Tap "Sign out" → Welcome Screen
 ```
@@ -233,11 +229,17 @@ Profile Screen
 ```
 Author Profile Screen
     │
-    ├─► Tap "Follow" / "Unfollow" → Toggle follow
+    ├─► Tap "Follow" / "Unfollow" (app bar) → Toggle follow
     │
-    ├─► Tap current city → City Detail Screen (read-only if not own)
+    ├─► Tap current city (in card) → City Detail Screen
     │
-    └─► Tap past city → City Detail Screen
+    ├─► Tap "Countries" card → Visited Countries Map (read-only; no edit)
+    │
+    ├─► Tap "Trips" card → Trips Screen for that author (itineraries list)
+    │
+    ├─► Tap past city chip → City Detail Screen
+    │
+    └─► Tap travel style chip → (display only)
 ```
 
 ---
@@ -260,11 +262,11 @@ City Detail Screen
 ## 12. My Trips Flow
 
 ```
-My Trips Screen
+My Trips Screen (own: /profile/trips | author: /trips/:userId)
     │
     ├─► Tap card → Itinerary Detail
-    ├─► Tap edit → Create Itinerary Screen (edit mode)
-    └─► Tap delete → Confirm → Remove itinerary
+    ├─► Tap edit (own trips only) → Create Itinerary Screen (edit mode)
+    └─► Empty state (own trips) → "Create Trip" button → Create Itinerary Screen
 ```
 
 ---
@@ -307,5 +309,6 @@ Followers Screen
 | `/author/:id`       | Author Profile         |
 | `/city/:cityName`    | City Detail            |
 | `/map/countries`     | Visited Countries Map  |
-| `/profile/trips`     | My Trips               |
+| `/profile/trips`     | My Trips (own)         |
+| `/trips/:userId`     | Trips (author)         |
 | `/profile/followers` | Followers              |

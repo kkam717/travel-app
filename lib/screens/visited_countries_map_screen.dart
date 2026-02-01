@@ -12,8 +12,9 @@ import '../services/supabase_service.dart';
 
 class VisitedCountriesMapScreen extends StatefulWidget {
   final List<String> visitedCountryCodes;
+  final bool canEdit;
 
-  const VisitedCountriesMapScreen({super.key, required this.visitedCountryCodes});
+  const VisitedCountriesMapScreen({super.key, required this.visitedCountryCodes, this.canEdit = false});
 
   @override
   State<VisitedCountriesMapScreen> createState() => _VisitedCountriesMapScreenState();
@@ -147,11 +148,12 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
           onPressed: () => context.pop(),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: _showEditCountries,
-            tooltip: 'Edit countries',
-          ),
+          if (widget.canEdit)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: _showEditCountries,
+              tooltip: 'Edit countries',
+            ),
         ],
       ),
       body: Column(

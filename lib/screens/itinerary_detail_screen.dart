@@ -8,6 +8,7 @@ import '../core/constants.dart';
 import '../core/analytics.dart';
 import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
+import '../utils/map_urls.dart';
 import '../widgets/itinerary_map.dart';
 
 class ItineraryDetailScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class ItineraryDetailScreen extends StatefulWidget {
 class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   Itinerary? _itinerary;
   bool _isBookmarked = false;
+  bool _isFollowing = false;
   bool _isLoading = true;
   String? _error;
 
@@ -39,11 +41,18 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       if (!mounted) return;
       final userId = Supabase.instance.client.auth.currentUser?.id;
       bool bookmarked = false;
-      if (userId != null) bookmarked = await SupabaseService.isBookmarked(userId, widget.itineraryId);
+      bool following = false;
+      if (userId != null && it != null) {
+        bookmarked = await SupabaseService.isBookmarked(userId, widget.itineraryId);
+        if (it.authorId != userId) {
+          following = await SupabaseService.isFollowing(userId, it.authorId);
+        }
+      }
       if (!mounted) return;
       setState(() {
         _itinerary = it;
         _isBookmarked = bookmarked;
+        _isFollowing = following;
         _isLoading = false;
       });
     } catch (e) {
@@ -52,6 +61,26 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         _error = 'Could not load itinerary. Please try again.';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final it = _itinerary;
+    if (userId == null || it == null || it.authorId == userId) return;
+    if (!mounted) return;
+    setState(() => _isFollowing = !_isFollowing);
+    try {
+      if (_isFollowing) {
+        await SupabaseService.followUser(userId, it.authorId);
+      } else {
+        await SupabaseService.unfollowUser(userId, it.authorId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isFollowing = !_isFollowing);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update follow status. Please try again.')));
+      }
     }
   }
 
@@ -76,40 +105,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   }
 
   Future<void> _openInMaps(ItineraryStop stop) async {
-    final Uri uri;
-    final hasCoords = stop.lat != null && stop.lng != null;
-    final lat = stop.lat;
-    final lng = stop.lng;
-    final nameEnc = Uri.encodeComponent(stop.name);
-    // Google Place ID from when user added the place via Google Places - opens the actual place with its pin
-    final googlePlaceId = stop.googlePlaceId ?? (stop.placeId != null && stop.placeId!.startsWith('ChIJ') ? stop.placeId : null);
-
-    if (kIsWeb || defaultTargetPlatform == TargetPlatform.android) {
-      // Google Maps - always open the place, not raw coords
-      if (googlePlaceId != null && googlePlaceId.isNotEmpty) {
-        // Place ID: opens the actual place with its pin and details
-        uri = Uri.parse(
-          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(stop.name)}&query_place_id=${Uri.encodeComponent(googlePlaceId)}',
-        );
-      } else {
-        // No place ID: search by name to find the place (shows place results, not a coord pin)
-        uri = Uri.parse(
-          'https://www.google.com/maps/search/?api=1&query=$nameEnc',
-        );
-      }
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      // Apple Maps - search by place name to show the place
-      uri = Uri.parse('https://maps.apple.com/?q=$nameEnc');
-    } else {
-      // Fallback: Google Maps
-      if (googlePlaceId != null && googlePlaceId.isNotEmpty) {
-        uri = Uri.parse(
-          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(stop.name)}&query_place_id=${Uri.encodeComponent(googlePlaceId)}',
-        );
-      } else {
-        uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$nameEnc');
-      }
-    }
+    final uri = MapUrls.buildItineraryStopMapUrl(stop);
     try {
       final mode = kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalNonBrowserApplication;
       final launched = await launchUrl(uri, mode: mode);
@@ -277,20 +273,36 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           ),
           if (it.authorName != null) ...[
             const SizedBox(height: AppTheme.spacingSm),
-            InkWell(
-              onTap: () => context.push('/author/${it.authorId}'),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 6),
-                    Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
-                  ],
+            Row(
+              children: [
+                InkWell(
+                  onTap: () => context.push('/author/${it.authorId}'),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+                if (Supabase.instance.client.auth.currentUser?.id != it.authorId) ...[
+                  const SizedBox(width: AppTheme.spacingMd),
+                  FilledButton.tonal(
+                    onPressed: _toggleFollow,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(_isFollowing ? 'Following' : 'Follow'),
+                  ),
+                ],
+              ],
             ),
           ],
           const SizedBox(height: AppTheme.spacingLg),

@@ -130,29 +130,28 @@
 
 ## Profile (Own)
 
-- **Header** — Photo, name, stats (Countries visited, Trips, Followers)
-- **Edit name** — Inline edit
-- **Edit travel styles** — Multi-select styles
-- **Current city** — Google Places autocomplete (locality)
-- **Top spots (current city)** — Eat, Drink, Date, Chill categories
-- **Add/edit top spots** — Google Places autocomplete per category
-- **Past cities** — Add/remove via Google Places autocomplete
-- **Past city top spots** — Per-city top spots
-- **Visited countries** — List with link to map
-- **Visited countries map** — `/map/countries?codes=...`
-- **My Trips** — Link to `/profile/trips`
-- **Followers** — Link to `/profile/followers`
+- **Layout** — Matches author profile: card with avatar + current city, Countries/Trips stats, Followers/Following bar, Past cities, Travel styles
+- **Profile card** — Avatar (tap to upload photo) + current city (tap to open city page)
+- **Countries card** — Opens visited countries map with edit enabled (`/map/countries?codes=...&editable=1`)
+- **Trips card** — Opens My Trips page (`/profile/trips`); itineraries are shown only on Trips page, not on profile
+- **Followers/Following bar** — Tappable; opens Followers screen (`/profile/followers`)
+- **Past cities** — Add/remove via edit sheet; tap city to open city detail
+- **Travel styles** — Edit via edit sheet
+- **Edit button** — App bar; opens edit sheet for name, current city, past cities, travel styles
 - **Sign out** — App bar action
 
 ---
 
 ## Author Profile (Other Users)
 
-- **View-only** — Name, photo, stats
-- **Current city** — With top spots
-- **Past cities** — With top spots
-- **Follow / Unfollow** — Toggle follow
-- **City detail** — Tap city to open `/city/:cityName?userId=...`
+- **Layout** — Card with avatar + current city, Countries/Trips stats, Followers/Following bar, Past cities, Travel styles
+- **Profile card** — Avatar + current city (tap to open city detail page)
+- **Countries card** — Opens visited countries map (read-only; no edit option)
+- **Trips card** — Opens author's Trips page (`/trips/:userId`); itineraries are shown only on Trips page, not on profile
+- **Followers/Following bar** — Displays counts
+- **Past cities** — Tappable chips; open city detail
+- **Travel styles** — Display only
+- **Follow / Unfollow** — App bar button
 
 ---
 
@@ -169,17 +168,19 @@
 ## Visited Countries Map
 
 - **World map** — Countries highlighted by visited list
-- **Edit mode** — Modify visited countries via country picker
-- **Save** — Updates profile and refreshes map
-- **Access** — From profile or direct route `/map/countries?codes=...`
+- **Edit mode (own profile)** — When opened from own profile (`editable=1`), edit button visible; modify visited countries via country picker
+- **Read-only (other profiles)** — When opened from author profile, no edit button
+- **Save** — Updates profile and refreshes map (own profile only)
+- **Access** — From profile (`/map/countries?codes=...&editable=1`) or author profile (`/map/countries?codes=...`)
 
 ---
 
 ## My Trips
 
-- **Own itineraries** — List of user-created itineraries
-- **Card actions** — View, edit, delete
-- **Empty state** — Message when no trips
+- **Own itineraries** — `/profile/trips` — List of user-created itineraries
+- **Author itineraries** — `/trips/:userId` — List of another user's itineraries (opened from author profile)
+- **Card actions** — View, edit (own trips only)
+- **Empty state** — Message when no trips; "Create Trip" button for own trips
 
 ---
 

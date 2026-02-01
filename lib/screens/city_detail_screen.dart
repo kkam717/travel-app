@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
-import '../widgets/google_places_field.dart';
 import '../models/user_city.dart';
-import '../services/supabase_service.dart';
 import '../services/google_places_service.dart';
+import '../services/supabase_service.dart';
+import '../utils/map_urls.dart';
+import '../widgets/google_places_field.dart';
 
 /// Screen for viewing/editing a city (current or past) with top spots.
 class CityDetailScreen extends StatefulWidget {
@@ -238,11 +239,17 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
   }
 
   Future<void> _openSpot(UserTopSpot spot) async {
-    if (spot.locationUrl != null && spot.locationUrl!.trim().isNotEmpty) {
-      final uri = Uri.tryParse(spot.locationUrl!);
-      if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+    final uri = MapUrls.buildTopSpotMapUrl(spot);
+    if (uri != null) {
+      try {
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Maps')));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Maps')));
         }
       }
     } else {
@@ -398,8 +405,6 @@ String? _placeTypeForCategory(String category) {
   }
 }
 
-String _mapUrlFromPlaceId(String placeId) =>
-    'https://www.google.com/maps/place/?q=place_id:$placeId';
 
 class _SpotEditorSheet extends StatefulWidget {
   final String cityName;
@@ -450,12 +455,13 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spacingLg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             Text(widget.initialName != null ? 'Edit spot' : 'Add spot', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppTheme.spacingLg),
             if (widget.category == null)
@@ -533,8 +539,8 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please search and select a place')));
                       return;
                     }
-                    final locationUrl = _placeId != null
-                        ? _mapUrlFromPlaceId(_placeId!)
+                    final locationUrl = _placeId != null && (_placeName ?? '').trim().isNotEmpty
+                        ? MapUrls.mapUrlFromPlaceId(_placeId!, _placeName!.trim())
                         : widget.initialLocationUrl;
                     widget.onSave({
                       'category': _category,
@@ -547,7 +553,8 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                 ),
               ],
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
