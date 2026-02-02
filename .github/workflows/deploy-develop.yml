@@ -1,4 +1,5 @@
 name: Deploy Develop to Vercel
+# Deploys develop branch to Vercel preview
 
 on:
   push:
@@ -9,11 +10,16 @@ env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_DEVELOP }}
 
+concurrency:
+  group: deploy-develop
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2

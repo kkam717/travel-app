@@ -235,7 +235,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           isFollowing: _followedProfileIds.contains(p.id),
           isOwnProfile: currentUserId == p.id,
           onTap: () => context.push('/author/${p.id}'),
-          onFollowTap: currentUserId != null && currentUserId != p.id ? () => _toggleFollow(p.id) : null,
+          onFollowTap: null,
         );
       },
     );

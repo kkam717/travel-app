@@ -46,8 +46,9 @@ class MainShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       body: child,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -76,10 +77,12 @@ class MainShell extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: Transform.translate(
-        offset: const Offset(0, 20),
-        child: _AddTripButton(onPressed: () => context.go('/create')),
-      ),
+      floatingActionButton: keyboardVisible
+          ? null
+          : Transform.translate(
+              offset: const Offset(0, 20),
+              child: _AddTripButton(onPressed: () => context.go('/create')),
+            ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
     );
   }
