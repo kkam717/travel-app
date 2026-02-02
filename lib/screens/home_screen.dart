@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String? _error;
   final Map<String, bool> _bookmarked = {};
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _scrollControllerForYou = ScrollController();
   late TabController _tabController;
   int _newTripsCount = 0;
 
@@ -37,6 +38,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.initState();
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
     _scrollController.addListener(_onScroll);
+    _scrollControllerForYou.addListener(_onScrollForYou);
     _initOrLoad();
   }
 
@@ -45,12 +47,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _tabController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _scrollControllerForYou.removeListener(_onScrollForYou);
+    _scrollControllerForYou.dispose();
     super.dispose();
   }
 
   void _onScroll() {
     if (_isLoadingMore || !_hasMore || _feed.isEmpty) return;
     final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 400) {
+      _loadMore();
+    }
+  }
+
+  void _onScrollForYou() {
+    if (_isLoadingMore || !_hasMore || _feed.isEmpty) return;
+    final pos = _scrollControllerForYou.position;
     if (pos.pixels >= pos.maxScrollExtent - 400) {
       _loadMore();
     }
@@ -225,8 +237,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         child: TabBar(
                           controller: _tabController,
                           tabs: const [
-                            Tab(text: 'Following'),
                             Tab(text: 'For you'),
+                            Tab(text: 'Following'),
                           ],
                         ),
                       ),
@@ -234,8 +246,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     body: TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildFollowingTab(),
                         _buildForYouTab(),
+                        _buildFollowingTab(),
                       ],
                     ),
                   ),
@@ -285,10 +297,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  List<Itinerary> get _forYouItems {
+    final seen = <String>{};
+    final merged = <Itinerary>[..._feed, ..._discover];
+    return merged.where((i) => seen.add(i.id)).toList()
+      ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+  }
+
   Widget _buildForYouTab() {
+    final items = _forYouItems;
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      child: _discover.isEmpty
+      child: items.isEmpty
           ? CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
@@ -321,13 +341,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ],
             )
           : CustomScrollView(
+              controller: _scrollControllerForYou,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (_, i) {
-                      final it = _discover[i];
+                      if (i == items.length) {
+                        return _buildLoadMoreOrEnd(displayCount: items.length);
+                      }
+                      final it = items[i];
                       return RepaintBoundary(
                         child: _SwipeableFeedCard(
                         itinerary: it,
@@ -342,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                       );
                     },
-                    childCount: _discover.length,
+                    childCount: items.length + 1,
                     addRepaintBoundaries: true,
                   ),
                 ),
@@ -359,8 +383,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           child: TabBar(
             controller: _tabController,
             tabs: const [
-              Tab(text: 'Following'),
               Tab(text: 'For you'),
+              Tab(text: 'Following'),
             ],
           ),
         ),
@@ -374,7 +398,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildLoadMoreOrEnd() {
+  Widget _buildLoadMoreOrEnd({int? displayCount}) {
+    final count = displayCount ?? _feed.length;
     if (_isLoadingMore) {
       return const Padding(
         padding: EdgeInsets.all(AppTheme.spacingLg),
@@ -386,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         child: Center(
           child: Text(
-            '${_feed.length} trips so far • Keep scrolling for more',
+            '$count trips so far • Keep scrolling for more',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
@@ -524,40 +549,79 @@ class _SwipeableFeedCard extends StatelessWidget {
           ),
         );
       },
-      child: Dismissible(
-        key: Key('swipe-${itinerary.id}'),
-        direction: DismissDirection.horizontal,
-        background: Container(
-          margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: AppTheme.spacingLg),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(20),
+      child: _EdgeAwareSwipeCard(
+        edgeZonePx: 24,
+        child: Dismissible(
+          key: Key('swipe-${itinerary.id}'),
+          direction: DismissDirection.horizontal,
+          background: Container(
+            margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: AppTheme.spacingLg),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
+              color: Theme.of(context).colorScheme.primary,
+              size: 32,
+            ),
           ),
-          child: Icon(
-            isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
-            color: Theme.of(context).colorScheme.primary,
-            size: 32,
-          ),
-        ),
         confirmDismiss: (direction) async {
           HapticFeedback.mediumImpact();
           onBookmark();
           return false;
         },
-        child: _FeedCard(
-          itinerary: itinerary,
-          description: description,
-          locations: locations,
-          isBookmarked: isBookmarked,
-          onBookmark: onBookmark,
-          onTap: onTap,
-          onAuthorTap: onAuthorTap,
-          variant: variant,
-          index: index,
+          child: _FeedCard(
+            itinerary: itinerary,
+            description: description,
+            locations: locations,
+            isBookmarked: isBookmarked,
+            onBookmark: onBookmark,
+            onTap: onTap,
+            onAuthorTap: onAuthorTap,
+            variant: variant,
+            index: index,
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// Wraps a card so horizontal swipes within [edgeZonePx] of any edge pass through
+/// to the TabBarView for tab switching, while swipes in the center trigger bookmark.
+class _EdgeAwareSwipeCard extends StatelessWidget {
+  final int edgeZonePx;
+  final Widget child;
+
+  const _EdgeAwareSwipeCard({required this.edgeZonePx, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final edge = edgeZonePx.toDouble();
+    return Stack(
+      children: [
+        child,
+        Positioned(left: 0, top: 0, bottom: 0, width: edge, child: const _EdgeZone()),
+        Positioned(right: 0, top: 0, bottom: 0, width: edge, child: const _EdgeZone()),
+        Positioned(left: edge, right: edge, top: 0, height: edge, child: const _EdgeZone()),
+        Positioned(left: edge, right: edge, bottom: 0, height: edge, child: const _EdgeZone()),
+      ],
+    );
+  }
+}
+
+/// Transparent hit-testable zone that blocks Dismissible so TabBarView gets the swipe.
+class _EdgeZone extends StatelessWidget {
+  const _EdgeZone();
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) {},
     );
   }
 }

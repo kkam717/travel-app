@@ -45,40 +45,52 @@ class ItineraryFeedCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (onAuthorTap != null && (it.authorName != null || it.authorPhotoUrl != null))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: InkWell(
+                        onTap: onAuthorTap,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
+                                  ? NetworkImage(it.authorPhotoUrl!)
+                                  : null,
+                              child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
+                                  ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                                  : null,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                it.authorName ?? 'Unknown',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '${it.bookmarkCount} saved',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      if (onAuthorTap != null && (it.authorName != null || it.authorPhotoUrl != null))
+                      if (it.updatedAt != null)
                         Expanded(
-                          child: InkWell(
-                            onTap: onAuthorTap,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 14,
-                                  backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
-                                      ? NetworkImage(it.authorPhotoUrl!)
-                                      : null,
-                                  child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
-                                      ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
-                                      : null,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    it.authorName ?? 'Unknown',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                          child: Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         )
                       else
                         const Spacer(),
@@ -99,17 +111,6 @@ class ItineraryFeedCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '${it.bookmarkCount} saved',
-                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                  if (it.updatedAt != null) ...[
-                    const SizedBox(height: 2),
-                    Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ],
                   const SizedBox(height: AppTheme.spacingSm),
                   Text(
                     it.title,
