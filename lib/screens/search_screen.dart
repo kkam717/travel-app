@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../core/app_link.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
@@ -550,6 +551,11 @@ class _ItineraryCard extends StatelessWidget {
                       child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
                     ),
                   const Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.share_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    onPressed: () => shareItineraryLink(it.id, title: it.title),
+                    style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(36, 36)),
+                  ),
                   if (it.authorName != null)
                     InkWell(
                       onTap: onAuthorTap,

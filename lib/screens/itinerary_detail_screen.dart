@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/analytics.dart';
+import '../core/app_link.dart';
 import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
 import '../utils/map_urls.dart';
@@ -240,8 +241,12 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
             }
           },
         ),
-        title: Text(it.title),
+        title: const Text('Trip Details'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () => shareItineraryLink(widget.itineraryId, title: it.title),
+          ),
           IconButton(
             icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
             onPressed: _toggleBookmark,
@@ -261,6 +266,8 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         children: [
+          Text(it.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: AppTheme.spacingLg),
           ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: ItineraryMap(stops: it.stops, destination: it.destination, height: 260),

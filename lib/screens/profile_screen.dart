@@ -201,6 +201,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userId = Supabase.instance.client.auth.currentUser?.id ?? p.id;
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.qr_code_2_outlined),
+          onPressed: () => context.push('/profile/qr', extra: {'userId': userId, 'userName': p.name}),
+        ),
         title: Text(p.name ?? 'Profile'),
         actions: [
           IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _showEditProfileSheet(p)),

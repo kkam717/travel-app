@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../core/app_link.dart';
 import '../core/home_cache.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
@@ -703,6 +704,11 @@ class _FeedCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    onPressed: () => shareItineraryLink(it.id, title: it.title),
+                    style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                   ),
                   IconButton(
                     icon: Icon(isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
