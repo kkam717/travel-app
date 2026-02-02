@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/profile_cache.dart';
+import '../core/web_tile_provider.dart';
 import '../data/countries.dart';
 import '../services/countries_geojson_service.dart';
 import '../services/supabase_service.dart';
@@ -148,11 +150,13 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   }
 
   /// No labels: Carto light_nolabels removes all map text (country names, etc.).
+  /// On web, use WebTileProvider to bypass CORS.
   TileLayer _buildTileLayer() {
     return TileLayer(
       urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
+      tileProvider: kIsWeb ? WebTileProvider() : null,
     );
   }
 
