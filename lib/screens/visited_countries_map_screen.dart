@@ -151,12 +151,17 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
 
   /// No labels: Carto light_nolabels removes all map text (country names, etc.).
   /// On web, use WebTileProvider to bypass CORS.
+  /// tileBounds restricts tiles to single world (-180..180) so underlying map doesn't spill.
   TileLayer _buildTileLayer() {
     return TileLayer(
       urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: kIsWeb ? WebTileProvider() : null,
+      tileBounds: LatLngBounds(
+        const LatLng(-85, -180),
+        const LatLng(85, 180),
+      ),
     );
   }
 

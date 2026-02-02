@@ -254,10 +254,9 @@ class LocationCard extends StatelessWidget {
     final theme = Theme.of(context);
     final locationName = locations.isNotEmpty ? locations.first.name : 'Day $day';
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
           SizedBox(
             width: 56,
             child: Padding(
@@ -289,11 +288,10 @@ class LocationCard extends StatelessWidget {
               margin: EdgeInsets.zero,
               child: Padding(
                 padding: const EdgeInsets.all(AppTheme.spacingMd),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                       if (showLocationName)
                         Text(
                           locationName,
@@ -333,13 +331,11 @@ class LocationCard extends StatelessWidget {
                           child: Text('No places added', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                         ),
                     ],
-                  ),
                 ),
               ),
             ),
           ),
         ],
-      ),
     );
   }
 }
