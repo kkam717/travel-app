@@ -1,3 +1,10 @@
+bool? _parseBool(dynamic v) {
+  if (v == null) return null;
+  if (v is bool) return v;
+  if (v is String) return v.toLowerCase() == 'true';
+  return null;
+}
+
 class Itinerary {
   final String id;
   final String authorId;
@@ -15,6 +22,13 @@ class Itinerary {
   final DateTime? updatedAt;
   final int? stopsCount;
   final int? bookmarkCount;
+  final bool? useDates;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final int? durationYear;
+  final int? durationMonth;
+  final String? durationSeason;
+  final List<String>? transportTransitions;
 
   const Itinerary({
     required this.id,
@@ -33,6 +47,13 @@ class Itinerary {
     this.updatedAt,
     this.stopsCount,
     this.bookmarkCount,
+    this.useDates,
+    this.startDate,
+    this.endDate,
+    this.durationYear,
+    this.durationMonth,
+    this.durationSeason,
+    this.transportTransitions,
   });
 
   factory Itinerary.fromJson(Map<String, dynamic> json, {List<ItineraryStop>? stops}) {
@@ -53,6 +74,15 @@ class Itinerary {
       bookmarkCount: (json['bookmark_count'] as num?)?.toInt(),
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String) : null,
+      useDates: _parseBool(json['use_dates']),
+      startDate: json['start_date'] != null ? DateTime.parse(json['start_date'] as String) : null,
+      endDate: json['end_date'] != null ? DateTime.parse(json['end_date'] as String) : null,
+      durationYear: (json['duration_year'] as num?)?.toInt(),
+      durationMonth: (json['duration_month'] as num?)?.toInt(),
+      durationSeason: json['duration_season'] as String?,
+      transportTransitions: json['transport_transitions'] != null
+          ? List<String>.from(json['transport_transitions'] as List)
+          : null,
     );
   }
 
@@ -67,12 +97,31 @@ class Itinerary {
       'visibility': visibility,
       'forked_from_itinerary_id': forkedFromItineraryId,
       'updated_at': DateTime.now().toIso8601String(),
+      if (useDates != null) 'use_dates': useDates,
+      if (startDate != null) 'start_date': startDate!.toIso8601String().split('T').first,
+      if (endDate != null) 'end_date': endDate!.toIso8601String().split('T').first,
+      if (durationYear != null) 'duration_year': durationYear,
+      if (durationMonth != null) 'duration_month': durationMonth,
+      if (durationSeason != null) 'duration_season': durationSeason,
+      if (transportTransitions != null) 'transport_transitions': transportTransitions,
     };
   }
 
   bool get hasMapStops => stops.any((s) => s.lat != null && s.lng != null);
 
-  Itinerary copyWith({List<ItineraryStop>? stops, int? stopsCount, int? bookmarkCount}) => Itinerary(
+  Itinerary copyWith({
+    List<ItineraryStop>? stops,
+    int? stopsCount,
+    int? bookmarkCount,
+    bool? useDates,
+    DateTime? startDate,
+    DateTime? endDate,
+    int? durationYear,
+    int? durationMonth,
+    String? durationSeason,
+    List<String>? transportTransitions,
+  }) =>
+      Itinerary(
         id: id,
         authorId: authorId,
         authorName: authorName,
@@ -89,6 +138,13 @@ class Itinerary {
         updatedAt: updatedAt,
         stopsCount: stopsCount ?? this.stopsCount,
         bookmarkCount: bookmarkCount ?? this.bookmarkCount,
+        useDates: useDates ?? this.useDates,
+        startDate: startDate ?? this.startDate,
+        endDate: endDate ?? this.endDate,
+        durationYear: durationYear ?? this.durationYear,
+        durationMonth: durationMonth ?? this.durationMonth,
+        durationSeason: durationSeason ?? this.durationSeason,
+        transportTransitions: transportTransitions ?? this.transportTransitions,
       );
 }
 

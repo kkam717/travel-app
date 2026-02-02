@@ -10,6 +10,7 @@ import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
 import '../utils/map_urls.dart';
 import '../widgets/itinerary_map.dart';
+import '../widgets/itinerary_timeline.dart' show ItineraryTimeline, TransportOverrides, TransportType, transportTypeFromString;
 
 class ItineraryDetailScreen extends StatefulWidget {
   final String itineraryId;
@@ -121,6 +122,16 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     }
   }
 
+  TransportOverrides? _transportOverridesFor(Itinerary it) {
+    final list = it.transportTransitions;
+    if (list == null || list.isEmpty) return null;
+    final overrides = <int, TransportType>{};
+    for (var i = 0; i < list.length; i++) {
+      overrides[i] = transportTypeFromString(list[i]);
+    }
+    return overrides;
+  }
+
   Future<void> _forkItinerary() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     final it = _itinerary;
@@ -151,6 +162,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         visibility: visibilityPrivate,
         forkedFromId: it.id,
         stopsData: stopsData,
+        transportTransitions: it.transportTransitions,
       );
       Analytics.logEvent('itinerary_forked', {'from': it.id, 'to': forked.id});
       if (mounted) context.go('/itinerary/${forked.id}');
@@ -204,14 +216,6 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       );
     }
     final it = _itinerary!;
-    final stopsByDay = <int, List<ItineraryStop>>{};
-    for (final s in it.stops) {
-      stopsByDay.putIfAbsent(s.day, () => []).add(s);
-    }
-    for (final list in stopsByDay.values) {
-      list.sort((a, b) => a.position.compareTo(b.position));
-    }
-    final sortedDays = stopsByDay.keys.toList()..sort();
 
     return Scaffold(
       appBar: AppBar(
@@ -314,95 +318,11 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           const SizedBox(height: AppTheme.spacingLg),
           Text('Places', style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: AppTheme.spacingMd),
-          ...sortedDays.map((day) {
-            final dayStops = stopsByDay[day]!;
-            final locations = dayStops.where((s) => s.isLocation).toList();
-            final venues = dayStops.where((s) => s.isVenue).toList();
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text('Day $day', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w600)),
-                    ),
-                    if (locations.isNotEmpty) ...[
-                      const SizedBox(width: AppTheme.spacingSm),
-                      Flexible(
-                        child: Wrap(
-                          spacing: AppTheme.spacingXs,
-                          runSpacing: AppTheme.spacingXs,
-                          children: locations.map((loc) => InkWell(
-                            onTap: () => _openInMaps(loc),
-                            borderRadius: BorderRadius.circular(10),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.location_city_outlined, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                  const SizedBox(width: 6),
-                                  Text(loc.name, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
-                                  const SizedBox(width: 4),
-                                  Icon(Icons.open_in_new, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                                ],
-                              ),
-                            ),
-                          )).toList(),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: AppTheme.spacingSm),
-                ...venues.map((s) => Card(
-                      margin: const EdgeInsets.only(bottom: AppTheme.spacingSm),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(Icons.place_outlined, size: 22, color: Theme.of(context).colorScheme.onPrimaryContainer),
-                        ),
-                        title: Text(s.name, style: Theme.of(context).textTheme.titleSmall),
-                        subtitle: s.category != null && s.category != 'location'
-                            ? Text(s.category!, style: Theme.of(context).textTheme.bodySmall)
-                            : null,
-                        trailing: Icon(Icons.open_in_new, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        onTap: () => _openInMaps(s),
-                      ),
-                    )),
-                if (locations.isNotEmpty && venues.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: AppTheme.spacingSm),
-                    child: Text('No places added', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ),
-                const SizedBox(height: AppTheme.spacingLg),
-              ],
-            );
-          }),
-          if (it.stops.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingXl),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.place_outlined, size: 48, color: Theme.of(context).colorScheme.outline),
-                    const SizedBox(height: AppTheme.spacingMd),
-                    Text('No places yet', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                  ],
-                ),
-              ),
-            ),
+          ItineraryTimeline(
+            itinerary: it,
+            transportOverrides: _transportOverridesFor(it),
+            onOpenInMaps: _openInMaps,
+          ),
         ],
       ),
     );

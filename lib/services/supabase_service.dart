@@ -251,9 +251,16 @@ class SupabaseService {
     required String visibility,
     String? forkedFromId,
     required List<Map<String, dynamic>> stopsData,
+    bool? useDates,
+    DateTime? startDate,
+    DateTime? endDate,
+    int?     durationYear,
+    int? durationMonth,
+    String? durationSeason,
+    List<String>? transportTransitions,
   }) async {
     try {
-      final res = await _client.from('itineraries').insert({
+      final insertData = <String, dynamic>{
         'author_id': authorId,
         'title': title,
         'destination': destination,
@@ -262,7 +269,15 @@ class SupabaseService {
         'mode': mode.toLowerCase(),
         'visibility': visibility,
         'forked_from_itinerary_id': forkedFromId,
-      }).select().single();
+      };
+      if (useDates != null) insertData['use_dates'] = useDates;
+      if (startDate != null) insertData['start_date'] = startDate.toIso8601String().split('T').first;
+      if (endDate != null) insertData['end_date'] = endDate.toIso8601String().split('T').first;
+      if (durationYear != null) insertData['duration_year'] = durationYear;
+      if (durationMonth != null) insertData['duration_month'] = durationMonth;
+      if (durationSeason != null) insertData['duration_season'] = durationSeason;
+      if (transportTransitions != null && transportTransitions.isNotEmpty) insertData['transport_transitions'] = transportTransitions;
+      final res = await _client.from('itineraries').insert(insertData).select().single();
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);
       for (var i = 0; i < stopsData.length; i++) {

@@ -8,6 +8,7 @@ import '../data/countries.dart' show countries, destinationToCountryCodes, trave
 import '../services/supabase_service.dart';
 import '../widgets/places_field.dart';
 import '../widgets/itinerary_map.dart';
+import '../widgets/itinerary_timeline.dart' show TransportType, TimelineConnector, transportTypeFromString, transportTypeToString;
 import '../models/itinerary.dart';
 
 const List<String> _seasons = ['Spring', 'Summer', 'Fall', 'Winter'];
@@ -48,6 +49,9 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
   // Step 2 & 3: Destinations with day ranges
   final List<_DestinationEntry> _destinations = [];
 
+  // Transport between destinations (transition index -> TransportType)
+  final Map<int, TransportType> _transportBetweenDestinations = {};
+
   bool _isLoading = false;
   bool _isLoadingData = false;
 
@@ -78,9 +82,37 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         return;
       }
       _titleController.text = it.title;
+      _selectedCountries.clear();
       _selectedCountries.addAll(destinationToCountryCodes(it.destination));
       _selectedMode = it.mode ?? modeStandard;
       _visibility = it.visibility;
+
+      // Restore trip duration (Step 1)
+      _daysCountOverride = it.daysCount;
+      _daysOverrideController.text = '${it.daysCount}';
+      // Infer Dates vs Month/Season: use stored value, or infer from duration_year/season
+      if (it.useDates != null) {
+        _useDates = it.useDates!;
+      } else if (it.durationYear != null || it.durationSeason != null) {
+        _useDates = false;
+      }
+      if (_useDates) {
+        _startDate = it.startDate;
+        _endDate = it.endDate;
+        if (_startDate == null && _endDate == null && it.createdAt != null) {
+          _startDate = it.createdAt;
+          _endDate = it.createdAt!.add(Duration(days: it.daysCount - 1));
+        }
+        // Pre-fill year/month from dates so they appear when switching to Month/Season
+        if (_startDate != null) {
+          _selectedYear = _startDate!.year;
+          _selectedMonth = _startDate!.month;
+        }
+      } else {
+        _selectedYear = it.durationYear ?? it.createdAt?.year ?? DateTime.now().year;
+        _selectedMonth = it.durationMonth ?? it.createdAt?.month;
+        _selectedSeason = it.durationSeason;
+      }
 
       _destinations.clear();
       // Build destinations by walking stops in order: venues belong to the destination
@@ -119,9 +151,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         return aMin.compareTo(bMin);
       });
 
-      if (_destinations.isEmpty && it.daysCount > 0) {
-        _daysCountOverride = it.daysCount;
-        _daysOverrideController.text = '${it.daysCount}';
+      _transportBetweenDestinations.clear();
+      final trans = it.transportTransitions;
+      if (trans != null) {
+        for (var i = 0; i < trans.length; i++) {
+          _transportBetweenDestinations[i] = transportTypeFromString(trans[i]);
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load itinerary. Please try again.')));
@@ -293,13 +328,35 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     try {
       if (_isEditMode) {
         final id = widget.itineraryId!;
-        await SupabaseService.updateItinerary(id, {
+        final updateData = <String, dynamic>{
           'title': _titleController.text.trim(),
           'destination': destination,
           'days_count': _daysCount,
           'mode': (_selectedMode ?? modeStandard).toLowerCase(),
           'visibility': _visibility,
-        });
+        };
+        updateData['use_dates'] = _useDates;
+        if (_useDates) {
+          updateData['start_date'] = _startDate?.toIso8601String().split('T').first;
+          updateData['end_date'] = _endDate?.toIso8601String().split('T').first;
+          updateData['duration_year'] = null;
+          updateData['duration_month'] = null;
+          updateData['duration_season'] = null;
+        } else {
+          updateData['start_date'] = null;
+          updateData['end_date'] = null;
+          updateData['duration_year'] = _selectedYear;
+          updateData['duration_month'] = _selectedMonth;
+          updateData['duration_season'] = _selectedSeason;
+        }
+        final ordered = _orderedDestinations;
+        if (ordered.length >= 2) {
+          updateData['transport_transitions'] = List.generate(ordered.length - 1, (i) {
+            final t = _transportBetweenDestinations[i] ?? TransportType.unknown;
+            return transportTypeToString(t);
+          });
+        }
+        await SupabaseService.updateItinerary(id, updateData);
         await SupabaseService.updateItineraryStops(id, stopsData);
         Analytics.logEvent('itinerary_updated', {'id': id});
         if (mounted) context.go('/itinerary/$id');
@@ -314,6 +371,15 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           visibility: _visibility,
           forkedFromId: null,
           stopsData: stopsData,
+          useDates: _useDates,
+          startDate: _useDates ? _startDate : null,
+          endDate: _useDates ? _endDate : null,
+          durationYear: _useDates ? null : _selectedYear,
+          durationMonth: _useDates ? null : _selectedMonth,
+          durationSeason: _useDates ? null : _selectedSeason,
+          transportTransitions: _orderedDestinations.length >= 2
+              ? List.generate(_orderedDestinations.length - 1, (i) => transportTypeToString(_transportBetweenDestinations[i] ?? TransportType.unknown))
+              : null,
         );
         Analytics.logEvent('itinerary_created', {'id': it.id});
         if (mounted) context.go('/itinerary/${it.id}');
@@ -328,7 +394,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
   }
 
   String _pageTitle() {
-    final titles = ['New Trip', 'Add Destinations', 'Assign Days', 'Trip Map', 'Add Details', 'Review Trip', 'Save Trip'];
+    final titles = ['New Trip', 'Add Destinations', 'Assign Days', 'Trip Map', 'Add Transport', 'Add Details', 'Review Trip'];
     return _isEditMode && _currentPage == 0 ? 'Edit Trip' : titles[_currentPage.clamp(0, 6)];
   }
 
@@ -439,9 +505,9 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   _buildStep2(),
                   _buildStep3(),
                   _buildStep4(),
+                  _buildStepTransport(),
                   _buildStep5(),
                   _buildStep6(),
-                  _buildStep7(),
                 ],
               ),
       ),
@@ -841,7 +907,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               FilledButton.icon(
                 onPressed: _nextPage,
                 icon: const Icon(Icons.arrow_forward, size: 20),
-                label: const Text('Next: Add Details'),
+                label: const Text('Next: Add Transport'),
                 style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
             ],
@@ -851,108 +917,183 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     );
   }
 
-  int? _selectedDestForDetails;
+  Widget _buildStepTransport() {
+    final ordered = _destinations.where((d) => d.name.isNotEmpty).toList()
+      ..sort((a, b) {
+        final aMin = a.days?.isNotEmpty == true ? a.days!.reduce((x, y) => x < y ? x : y) : 1;
+        final bMin = b.days?.isNotEmpty == true ? b.days!.reduce((x, y) => x < y ? x : y) : 1;
+        return aMin.compareTo(bMin);
+      });
+    return ListView(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      children: [
+        Text('Add Transport Between Locations', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: AppTheme.spacingSm),
+        Text('How did you travel between each location?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: AppTheme.spacingLg),
+        ...List.generate(ordered.length - 1, (i) {
+          final from = ordered[i];
+          final to = ordered[i + 1];
+          final current = _transportBetweenDestinations[i] ?? TransportType.unknown;
+          return Card(
+            margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingMd),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.place, size: 20, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(from.name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                      Icon(Icons.arrow_downward, size: 20, color: Theme.of(context).colorScheme.outline),
+                      const SizedBox(width: 8),
+                      Icon(Icons.place, size: 20, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(to.name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                    ],
+                  ),
+                  const SizedBox(height: AppTheme.spacingMd),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.flight_rounded, size: 18, color: current == TransportType.plane ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Plane')]),
+                        selected: current == TransportType.plane,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.plane),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.train_rounded, size: 18, color: current == TransportType.train ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Train')]),
+                        selected: current == TransportType.train,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.train),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_car_rounded, size: 18, color: current == TransportType.car ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Car')]),
+                        selected: current == TransportType.car,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.car),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_boat_rounded, size: 18, color: current == TransportType.ferry ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Ferry')]),
+                        selected: current == TransportType.ferry,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.ferry),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_walk_rounded, size: 18, color: current == TransportType.walk ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Walk')]),
+                        selected: current == TransportType.walk,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.walk),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: const Text('Skip'),
+                        selected: current == TransportType.unknown,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations.remove(i)),
+                        selectedColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        if (ordered.length < 2)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
+            child: Text('Add at least 2 destinations to set transport.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
+        const SizedBox(height: AppTheme.spacingLg),
+        FilledButton.icon(
+          onPressed: _nextPage,
+          icon: const Icon(Icons.arrow_forward, size: 20),
+          label: const Text('Next: Add Details'),
+          style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+        ),
+      ],
+    );
+  }
+
+  List<_DestinationEntry> get _orderedDestinations {
+    final list = _destinations.where((d) => d.name.isNotEmpty).toList();
+    list.sort((a, b) {
+      final aMin = a.days?.isNotEmpty == true ? a.days!.reduce((x, y) => x < y ? x : y) : 1;
+      final bMin = b.days?.isNotEmpty == true ? b.days!.reduce((x, y) => x < y ? x : y) : 1;
+      return aMin.compareTo(bMin);
+    });
+    return list;
+  }
+
+  int _destIndexForOrdered(int orderedIndex) {
+    final d = _orderedDestinations[orderedIndex];
+    return _destinations.indexOf(d);
+  }
 
   Widget _buildStep5() {
+    final ordered = _orderedDestinations;
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
         Text('Add Details to Each Destination', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: AppTheme.spacingXs),
-        Text('Tap a destination below to add restaurants, hotels, guides, and drinks.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        const SizedBox(height: AppTheme.spacingMd),
-        ..._destinations.asMap().entries.where((e) => e.value.name.isNotEmpty).map((entry) {
-              final i = entry.key;
-              final d = entry.value;
-              final isSelected = _selectedDestForDetails == i;
-              return Card(
-                margin: const EdgeInsets.only(bottom: AppTheme.spacingSm),
-                color: isSelected ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3) : null,
-                child: InkWell(
-                  onTap: () => setState(() => _selectedDestForDetails = _selectedDestForDetails == i ? null : i),
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppTheme.spacingMd),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.place, size: 22, color: Theme.of(context).colorScheme.primary),
-                            const SizedBox(width: 8),
-                            Text(d.name, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                          ],
+        Text('Add restaurants, hotels, guides, and drinks to each location.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: AppTheme.spacingLg),
+        ...List.generate(ordered.length, (i) {
+          final d = ordered[i];
+          final destIndex = _destIndexForOrdered(i);
+          final day = d.days?.isNotEmpty == true ? d.days!.reduce((a, b) => a < b ? a : b) : 1;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            key: ValueKey('${d.name}_$i'),
+            children: [
+              _EditableLocationCard(
+                day: day,
+                destinationName: d.name,
+                venues: d.venues ?? [],
+                countryCodes: _selectedCountries,
+                locationLatLng: d.lat != null && d.lng != null ? (d.lat!, d.lng!) : null,
+                onAddVenue: (cat) => _addVenue(destIndex, cat),
+                onRemoveVenue: (vi) => _removeVenue(destIndex, vi),
+                onVenueSelected: (v, name, lat, lng, url) {
+                  v.name = name;
+                  v.lat = lat;
+                  v.lng = lng;
+                  v.externalUrl = url;
+                  setState(() {});
+                },
+              ),
+              if (i < ordered.length - 1)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(width: 56),
+                    const SizedBox(width: AppTheme.spacingMd),
+                    Expanded(
+                      child: Center(
+                        child: TimelineConnector(
+                          transport: _transportBetweenDestinations[i] ?? TransportType.unknown,
                         ),
-                        if (isSelected) ...[
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              FilledButton.tonal(
-                                onPressed: () => _addVenue(i, 'restaurant'),
-                                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), SizedBox(width: 6), Text('Restaurant')]),
-                              ),
-                              FilledButton.tonal(
-                                onPressed: () => _addVenue(i, 'hotel'),
-                                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), SizedBox(width: 6), Text('Hotel')]),
-                              ),
-                              FilledButton.tonal(
-                                onPressed: () => _addVenue(i, 'guide'),
-                                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), SizedBox(width: 6), Text('Guide')]),
-                              ),
-                              FilledButton.tonal(
-                                onPressed: () => _addVenue(i, 'bar'),
-                                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), SizedBox(width: 6), Text('Drinks')]),
-                              ),
-                            ],
-                          ),
-                          if (d.venues != null && d.venues!.isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            ...d.venues!.asMap().entries.map((ve) {
-                              final vi = ve.key;
-                              final v = ve.value;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: v.name.isEmpty
-                                    ? Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: PlacesField(
-                                              hint: 'Search ${v.category}…',
-                                              countryCodes: _selectedCountries,
-                                              locationLatLng: d.lat != null && d.lng != null ? (d.lat!, d.lng!) : null,
-                                              onSelected: (name, lat, lng, locationUrl) {
-                                                v.name = name;
-                                                v.lat = lat;
-                                                v.lng = lng;
-                                                v.externalUrl = locationUrl;
-                                                setState(() {});
-                                              },
-                                            ),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.close, size: 20),
-                                            onPressed: () => _removeVenue(i, vi),
-                                          ),
-                                        ],
-                                      )
-                                    : Chip(
-                                        label: Text(v.name),
-                                        deleteIcon: const Icon(Icons.close, size: 18),
-                                        onDeleted: () => _removeVenue(i, vi),
-                                      ),
-                              );
-                            }),
-                          ],
-                        ],
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              );
-            }).toList(),
+            ],
+          );
+        }),
+        if (ordered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
+            child: Text('Add destinations first.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
         const SizedBox(height: AppTheme.spacingLg),
         FilledButton.icon(
           onPressed: _nextPage,
@@ -1026,15 +1167,17 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           child: Row(
             children: [
               OutlinedButton(
-                onPressed: () => _goToPage(4),
+                onPressed: () => _goToPage(5),
                 child: const Text('Edit details'),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: _nextPage,
-                  icon: const Icon(Icons.save, size: 20),
-                  label: const Text('Save Trip'),
+                  onPressed: _isLoading ? null : _save,
+                  icon: _isLoading
+                      ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
+                      : const Icon(Icons.save, size: 20),
+                  label: Text(_isLoading ? 'Saving…' : 'Save Trip'),
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 ),
               ),
@@ -1064,32 +1207,142 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     }
   }
 
-  Widget _buildStep7() {
-    return Padding(
-      padding: const EdgeInsets.all(AppTheme.spacingMd),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+}
+
+class _EditableLocationCard extends StatelessWidget {
+  final int day;
+  final String destinationName;
+  final List<_VenueEntry> venues;
+  final List<String> countryCodes;
+  final (double, double)? locationLatLng;
+  final void Function(String category) onAddVenue;
+  final void Function(int venueIndex) onRemoveVenue;
+  final void Function(_VenueEntry v, String name, double? lat, double? lng, String? url) onVenueSelected;
+
+  const _EditableLocationCard({
+    required this.day,
+    required this.destinationName,
+    required this.venues,
+    required this.countryCodes,
+    this.locationLatLng,
+    required this.onAddVenue,
+    required this.onRemoveVenue,
+    required this.onVenueSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-              shape: BoxShape.circle,
+          SizedBox(
+            width: 56,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'Day $day',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            child: Icon(Icons.check_circle_outline, size: 80, color: Theme.of(context).colorScheme.primary),
           ),
-          const SizedBox(height: AppTheme.spacingLg),
-          Text('Ready to save', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          Text('Your trip will be added to your profile and ready to view or share.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
-          const SizedBox(height: AppTheme.spacingXl),
-          FilledButton.icon(
-            onPressed: _isLoading ? null : _save,
-            icon: _isLoading
-                ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
-                : const Icon(Icons.save, size: 22),
-            label: Text(_isLoading ? 'Saving…' : 'Save Trip'),
-            style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 52)),
+          const SizedBox(width: AppTheme.spacingMd),
+          Expanded(
+            child: Card(
+              margin: EdgeInsets.zero,
+              child: Padding(
+                padding: const EdgeInsets.all(AppTheme.spacingMd),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        destinationName,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: AppTheme.spacingMd),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          FilledButton.tonal(
+                            onPressed: () => onAddVenue('restaurant'),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), SizedBox(width: 6), Text('Restaurant')]),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () => onAddVenue('hotel'),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), SizedBox(width: 6), Text('Hotel')]),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () => onAddVenue('guide'),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), SizedBox(width: 6), Text('Guide')]),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () => onAddVenue('bar'),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), SizedBox(width: 6), Text('Drinks')]),
+                          ),
+                        ],
+                      ),
+                      if (venues.isNotEmpty) ...[
+                        const SizedBox(height: AppTheme.spacingMd),
+                        ...venues.asMap().entries.map((ve) {
+                          final vi = ve.key;
+                          final v = ve.value;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: v.name.isEmpty
+                                ? Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: PlacesField(
+                                          hint: 'Search ${v.category}…',
+                                          countryCodes: countryCodes,
+                                          locationLatLng: locationLatLng,
+                                          onSelected: (name, lat, lng, locationUrl) => onVenueSelected(v, name, lat, lng, locationUrl),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.close, size: 20),
+                                        onPressed: () => onRemoveVenue(vi),
+                                      ),
+                                    ],
+                                  )
+                                : Chip(
+                                    label: Text(v.name),
+                                    deleteIcon: const Icon(Icons.close, size: 18),
+                                    onDeleted: () => onRemoveVenue(vi),
+                                  ),
+                          );
+                        }),
+                      ],
+                      if (venues.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppTheme.spacingSm),
+                          child: Text('No places added', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),

@@ -72,10 +72,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
   List<LatLng> get _displayPointsList {
     if (_displayPoints != null) return _displayPoints!;
-    final venue = _venueStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
-    if (venue.isNotEmpty) return _displayPoints = venue;
-    final loc = _locationStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
-    if (loc.isNotEmpty) return _displayPoints = loc;
+    final all = _allStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
+    if (all.isNotEmpty) return _displayPoints = all;
     return _displayPoints = _geocodedCityPoints ?? [];
   }
 
@@ -203,17 +201,12 @@ class _ItineraryMapState extends State<ItineraryMap> {
   }
 
   List<Marker> _buildMarkers(Color primaryColor) {
-    final venueStops = _venueStopsWithCoordsList;
-    final locStops = _locationStopsWithCoordsList;
-    final useVenue = venueStops.isNotEmpty;
-    final useLoc = !useVenue && locStops.isNotEmpty;
-    final useGeocoded = !useVenue && !useLoc && (_geocodedCityPoints?.isNotEmpty ?? false);
-
-    if (useVenue) {
-      return venueStops.asMap().entries.map((e) {
+    final allStops = _allStopsWithCoordsList;
+    if (allStops.isNotEmpty) {
+      return allStops.asMap().entries.map((e) {
         final i = e.key + 1;
         final s = e.value;
-        final snippet = s.category != null && s.category != 'location'
+        final snippet = s.isVenue && s.category != null && s.category != 'location'
             ? '${s.category} • Stop $i'
             : 'Stop $i';
         return Marker(
@@ -227,18 +220,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
         );
       }).toList();
     }
-    if (useLoc) {
-      return locStops.map((s) => Marker(
-        point: LatLng(s.lat!, s.lng!),
-        width: 40,
-        height: 40,
-        child: GestureDetector(
-          onTap: () => _showMarkerInfo(s.name, 'City'),
-          child: Icon(Icons.place, color: primaryColor, size: 40),
-        ),
-      )).toList();
-    }
-    if (useGeocoded && _geocodedCityPoints != null) {
+    if (_geocodedCityPoints != null && _geocodedCityPoints!.isNotEmpty) {
       final names = _geocodedCityNames ?? List.filled(_geocodedCityPoints!.length, '');
       return _geocodedCityPoints!.asMap().entries.map((e) {
         final p = e.value;
