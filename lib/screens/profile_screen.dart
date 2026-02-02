@@ -166,7 +166,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Analytics.logScreenView('profile');
     if (_isLoading && _profile == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(title: Text(_profile?.name ?? 'Profile')),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -181,7 +181,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        appBar: AppBar(title: Text(_profile?.name ?? 'Profile')),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(AppTheme.spacingLg),
@@ -203,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userId = Supabase.instance.client.auth.currentUser?.id ?? p.id;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: Text(p.name ?? 'Profile'),
         actions: [
           IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _showEditProfileSheet(p)),
           IconButton(icon: const Icon(Icons.logout), onPressed: () => _signOut()),

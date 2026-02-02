@@ -89,6 +89,33 @@ Estimated monthly costs for the Travel App at **10,000 monthly active users (MAU
 
 ---
 
+## Incremental Costs by User Base
+
+Monthly costs as MAU increases. Assumes ~62.5 Geoapify credits per MAU (static maps + tiles). Photon, Nominatim, Carto, Natural Earth remain $0 at all scales.
+
+| MAU | Supabase | Geoapify | Geoapify credits/day | Total/month |
+|-----|----------|----------|----------------------|-------------|
+| **1k** | $0 (Free) or $25 (Pro) | $0 (Free) | ~2k | **$0–25** |
+| **2.5k** | $25 (Pro) | $59 (API 10) | ~5k | **$84** |
+| **5k** | $25 | $59 (API 10) | ~10k | **$84** |
+| **7.5k** | $25 | $109 (API 25) | ~16k | **$134** |
+| **10k** | $25 | $109 (API 25) | ~21k | **$134** |
+| **25k** | $25 | $179 (API 50) | ~52k | **$204** |
+| **50k** | $25 | $299 (API 100) | ~104k | **$324** |
+| **100k** | $25 | $609 (API 250) | ~208k | **$634** |
+| **150k** | $187 | $860+ (Custom) | ~312k | **~$1,050** |
+| **250k** | $512 | $860+ (Custom) | ~520k | **~$1,400** |
+| **500k** | $1,300 | Custom | ~1M/day | **~$2,000+** |
+| **1M** | $3,025 | Custom | ~2M/day | **~$4,000+** |
+
+**Notes:**
+- **Supabase Free:** 50k MAU, 500MB DB, 5GB egress. Fine for early beta; Pro recommended for production.
+- **Supabase Pro:** 100k MAU included; beyond that: **$0.00325 per MAU**.
+- **Geoapify Free:** 3k credits/day (~90k/month). Covers ~1.5k MAU.
+- **Geoapify tiers:** API 10 (10k/day), API 25 (25k/day), API 50 (50k/day), API 100 (100k/day), API 250 (250k/day), Custom (contact).
+
+---
+
 ## Cost Optimization Tips
 
 1. **Geoapify:** Use API 10 ($59) if usage stays under ~300k credits/month; monitor and upgrade to API 25 if needed.

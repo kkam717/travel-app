@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../core/theme.dart';
+import '../core/web_tile_provider.dart';
 import '../models/itinerary.dart';
 
 /// Interactive itinerary map using flutter_map (Geoapify/Carto tiles).
@@ -182,17 +184,21 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
   TileLayer _buildTileLayer() {
     final key = _geoapifyKey;
+    // On web, use WebTileProvider (NetworkImage) to bypass CORS; default uses HTTP which can fail
+    final tileProvider = kIsWeb ? WebTileProvider() : null;
     if (key != null && key.trim().isNotEmpty) {
       return TileLayer(
         urlTemplate: 'https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}.png?apiKey=$key',
         userAgentPackageName: 'com.footprint.travel',
         maxNativeZoom: 20,
+        tileProvider: tileProvider,
       );
     }
     return TileLayer(
       urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
+      tileProvider: tileProvider,
     );
   }
 
