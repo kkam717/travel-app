@@ -1,4 +1,5 @@
 name: Deploy Develop to Vercel
+# Deploys develop branch to Vercel preview
 
 on:
   push:
