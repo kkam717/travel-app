@@ -126,6 +126,12 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.qr_code_2_outlined),
+            onPressed: () => context.push('/author/${widget.authorId}/qr', extra: {'userName': _profile?.name}),
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(

@@ -19,6 +19,8 @@ import 'screens/my_trips_screen.dart';
 import 'screens/followers_screen.dart';
 import 'screens/profile_stats_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/profile_qr_screen.dart';
+import 'screens/profile_qr_view_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -112,6 +114,17 @@ GoRouter createRouter() {
           final id = state.pathParameters['id']!;
           return AuthorProfileScreen(authorId: id);
         },
+        routes: [
+          GoRoute(
+            path: 'qr',
+            builder: (_, state) {
+              final id = state.pathParameters['id']!;
+              final extra = state.extra as Map<String, dynamic>?;
+              final userName = extra?['userName'] as String?;
+              return ProfileQRViewScreen(userId: id, userName: userName);
+            },
+          ),
+        ],
       ),
       GoRoute(
         path: '/city/:cityName',
@@ -157,6 +170,15 @@ GoRouter createRouter() {
       GoRoute(
         path: '/profile/settings',
         builder: (_, __) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/profile/qr',
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final userId = extra?['userId'] as String? ?? Supabase.instance.client.auth.currentUser?.id ?? '';
+          final userName = extra?['userName'] as String?;
+          return ProfileQRScreen(userId: userId, userName: userName);
+        },
       ),
       GoRoute(
         path: '/profile/followers',

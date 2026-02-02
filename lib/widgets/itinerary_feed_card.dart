@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../core/app_link.dart';
 import '../models/itinerary.dart';
 import 'static_map_image.dart';
 
@@ -94,6 +95,11 @@ class ItineraryFeedCard extends StatelessWidget {
                         )
                       else
                         const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.share_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        onPressed: () => shareItineraryLink(it.id, title: it.title),
+                        style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                      ),
                       if (onBookmark != null)
                         IconButton(
                           icon: Icon(
