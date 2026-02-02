@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../core/profile_refresh_notifier.dart';
+import '../core/search_focus_notifier.dart';
 
 class _AddTripButton extends StatefulWidget {
   final VoidCallback onPressed;
@@ -107,9 +108,13 @@ class _NavItem extends StatelessWidget {
     final color = isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: () {
-        context.go(path);
-        if (path == '/profile') {
-          WidgetsBinding.instance.addPostFrameCallback((_) => ProfileRefreshNotifier.notify());
+        if (path == '/search' && isSelected) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => SearchFocusNotifier.notify());
+        } else {
+          context.go(path);
+          if (path == '/profile') {
+            WidgetsBinding.instance.addPostFrameCallback((_) => ProfileRefreshNotifier.notify());
+          }
         }
       },
       borderRadius: BorderRadius.circular(14),

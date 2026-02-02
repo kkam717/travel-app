@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/app_link.dart';
+import '../core/search_focus_notifier.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
 import '../data/countries.dart';
+
+const String _recentSearchesKey = 'search_recent_searches';
+const int _recentSearchesMax = 12;
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,6 +25,7 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
   List<ProfileSearchResult> _profileResults = [];
   List<Itinerary> _placeResults = [];
   Set<String> _followedProfileIds = {};
@@ -30,22 +36,61 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   String? _filterMode;
   Timer? _placesSearchDebounce;
   Timer? _profileSearchDebounce;
+  List<String> _recentSearches = [];
+
+  void _focusSearchBar() {
+    if (mounted) {
+      FocusScope.of(context).requestFocus(_searchFocusNode);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_onTabChanged);
+    SearchFocusNotifier.addListener(_focusSearchBar);
+    _loadRecentSearches();
     _search();
+  }
+
+  Future<void> _loadRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    final list = prefs.getStringList(_recentSearchesKey);
+    if (mounted) setState(() => _recentSearches = list ?? []);
+  }
+
+  Future<void> _addRecentSearch(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    final next = [q, ..._recentSearches.where((s) => s != q)].take(_recentSearchesMax).toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_recentSearchesKey, next);
+    if (mounted) setState(() => _recentSearches = next);
+  }
+
+  Future<void> _removeRecentSearch(String query) async {
+    final next = _recentSearches.where((s) => s != query).toList();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_recentSearchesKey, next);
+    if (mounted) setState(() => _recentSearches = next);
+  }
+
+  Future<void> _clearAllRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_recentSearchesKey, []);
+    if (mounted) setState(() => _recentSearches = []);
   }
 
   @override
   void dispose() {
+    SearchFocusNotifier.removeListener(_focusSearchBar);
     _placesSearchDebounce?.cancel();
     _profileSearchDebounce?.cancel();
     _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -171,6 +216,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             padding: const EdgeInsets.all(AppTheme.spacingMd),
             child: TextField(
               controller: _searchController,
+              focusNode: _searchFocusNode,
               decoration: InputDecoration(
                 hintText: _tabController.index == 0 ? 'Search by name...' : 'Destination or keywords...',
                 prefixIcon: const Icon(Icons.search_rounded),
@@ -182,7 +228,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                   },
                 ),
               ),
-              onSubmitted: (_) => _search(),
+              onSubmitted: (_) {
+                _addRecentSearch(_searchController.text.trim());
+                _search();
+              },
               onChanged: (_) {
                 if (_tabController.index == 0) {
                   _profileSearchDebounce?.cancel();
@@ -210,6 +259,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     }
     if (_profileResults.isEmpty) {
       final searchEmpty = _searchController.text.trim().isEmpty;
+      if (searchEmpty && _recentSearches.isNotEmpty) {
+        return _buildRecentSearches();
+      }
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -235,7 +287,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           profile: p,
           isFollowing: _followedProfileIds.contains(p.id),
           isOwnProfile: currentUserId == p.id,
-          onTap: () => context.push('/author/${p.id}'),
+          onTap: () {
+            _addRecentSearch(p.name?.trim() ?? 'Profile');
+            context.push('/author/${p.id}');
+          },
           onFollowTap: null,
         );
       },
@@ -251,6 +306,9 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     }
     if (_placeResults.isEmpty) {
       final searchEmpty = _searchController.text.trim().isEmpty;
+      if (searchEmpty && _recentSearches.isNotEmpty) {
+        return _buildRecentSearches();
+      }
       final hasFilters = _filterDays != null || _filterStyles.isNotEmpty || _filterMode != null;
       return Center(
         child: Padding(
@@ -298,9 +356,55 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       itemCount: _placeResults.length,
       itemBuilder: (_, i) => _ItineraryCard(
         itinerary: _placeResults[i],
-        onTap: () => context.push('/itinerary/${_placeResults[i].id}'),
+        onTap: () {
+          final it = _placeResults[i];
+          _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
+          context.push('/itinerary/${it.id}');
+        },
         onAuthorTap: () => context.push('/author/${_placeResults[i].authorId}'),
       ),
+    );
+  }
+
+  Widget _buildRecentSearches() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+            itemCount: _recentSearches.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final query = _recentSearches[i];
+              return ListTile(
+                leading: Icon(Icons.history_rounded, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                title: Text(query, style: Theme.of(context).textTheme.bodyLarge),
+                trailing: IconButton(
+                  icon: Icon(Icons.close, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  onPressed: () => _removeRecentSearch(query),
+                  style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                ),
+                onTap: () {
+                  _searchController.text = query;
+                  _search();
+                },
+              );
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingSm, AppTheme.spacingMd, AppTheme.spacingLg),
+          child: OutlinedButton.icon(
+            onPressed: _clearAllRecentSearches,
+            icon: const Icon(Icons.clear_all_rounded, size: 20),
+            label: const Text('Clear all searches'),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
