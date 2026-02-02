@@ -149,12 +149,13 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     );
   }
 
-  /// No labels: Carto light_nolabels removes all map text (country names, etc.).
+  /// No labels: Carto light_nolabels (day) / dark_nolabels (night) removes all map text.
   /// On web, use WebTileProvider to bypass CORS.
   /// tileBounds restricts tiles to single world (-180..180) so underlying map doesn't spill.
-  TileLayer _buildTileLayer() {
+  TileLayer _buildTileLayer(Brightness brightness) {
+    final style = brightness == Brightness.dark ? 'dark_nolabels' : 'light_nolabels';
     return TileLayer(
-      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$style/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: kIsWeb ? WebTileProvider() : null,
@@ -271,6 +272,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
         ),
       );
     }
+    final brightness = Theme.of(context).brightness;
     return FlutterMap(
       mapController: _mapController,
       options: MapOptions(
@@ -295,7 +297,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
         interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
       ),
       children: [
-        _buildTileLayer(),
+        _buildTileLayer(brightness),
         PolylineLayer(
           polylines: _countryBorders,
           drawInSingleWorld: true,
@@ -316,7 +318,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
                 alignment: Alignment.bottomRight,
                   child: Text(
                   '© CARTO | OSM',
-                  style: TextStyle(fontSize: 8, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 8, color: brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade600),
                 ),
               ),
             ),

@@ -28,6 +28,7 @@ class StaticMapImage extends StatefulWidget {
 class _StaticMapImageState extends State<StaticMapImage> {
   String? _geocodedUrl;
   bool _geocoding = false;
+  Brightness? _lastBrightness;
 
   static String? get _geoapifyKey => dotenv.env['GEOAPIFY_API_KEY'];
 
@@ -38,9 +39,19 @@ class _StaticMapImageState extends State<StaticMapImage> {
       widget.itinerary.stops.where((s) => s.lat != null && s.lng != null).toList();
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final brightness = Theme.of(context).brightness;
+    if (_lastBrightness != brightness) {
+      _lastBrightness = brightness;
+      _buildUrl();
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
-    _buildUrl();
+    // _buildUrl called from didChangeDependencies when we have context for brightness
   }
 
   @override
@@ -98,10 +109,11 @@ class _StaticMapImageState extends State<StaticMapImage> {
     final padLng = lngSpan * 0.25; // 25% padding left/right
     final rect = 'rect:${(minLng - padLng).clamp(-180.0, 180.0)},${(maxLat + padLat).clamp(-90.0, 90.0)},${(maxLng + padLng).clamp(-180.0, 180.0)},${(minLat - padLat).clamp(-90.0, 90.0)}';
 
-    // klokantech-basic: clean, minimal style
+    // positron (light) / dark-matter (night) to match app theme
+    final style = (_lastBrightness ?? Brightness.light) == Brightness.dark ? 'dark-matter' : 'positron';
     final sb = StringBuffer(
       'https://maps.geoapify.com/v1/staticmap?'
-      'style=positron'
+      'style=$style'
       '&width=$w'
       '&height=$h'
       '&scaleFactor=2'
