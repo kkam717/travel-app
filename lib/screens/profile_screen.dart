@@ -4,10 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
-import '../core/home_cache.dart';
 import '../core/profile_cache.dart';
 import '../core/profile_refresh_notifier.dart';
-import '../core/saved_cache.dart';
 import '../models/profile.dart';
 import '../models/itinerary.dart';
 import '../models/user_city.dart';
@@ -206,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: Text(p.name ?? 'Profile'),
         actions: [
           IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _showEditProfileSheet(p)),
-          IconButton(icon: const Icon(Icons.logout), onPressed: () => _signOut()),
+          IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => context.push('/profile/settings')),
         ],
       ),
       body: RefreshIndicator(
@@ -219,21 +217,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _signOut() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      await Supabase.instance.client.auth.signOut();
-      if (userId != null) {
-        HomeCache.clear(userId);
-        SavedCache.clear(userId);
-        ProfileCache.clear(userId);
-      }
-      if (mounted) context.go('/');
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not sign out. Please try again.')));
-    }
   }
 
   Widget _buildProfileHeaderContent(Profile p, String userId) {

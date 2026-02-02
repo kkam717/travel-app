@@ -4,8 +4,11 @@ import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FlutterAuthClientOptions, AuthFlowType;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
+import 'core/theme_mode_notifier.dart';
 import 'core/analytics.dart';
 import 'router.dart';
+
+final themeModeNotifier = ThemeModeNotifier.instance;
 
 void main() {
   runZonedGuarded(() async {
@@ -42,8 +45,27 @@ void main() {
   });
 }
 
-class TravelApp extends StatelessWidget {
+class TravelApp extends StatefulWidget {
   const TravelApp({super.key});
+
+  @override
+  State<TravelApp> createState() => _TravelAppState();
+}
+
+class _TravelAppState extends State<TravelApp> {
+  @override
+  void initState() {
+    super.initState();
+    themeModeNotifier.addListener(_onThemeChanged);
+  }
+
+  @override
+  void dispose() {
+    themeModeNotifier.removeListener(_onThemeChanged);
+    super.dispose();
+  }
+
+  void _onThemeChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
@@ -51,6 +73,8 @@ class TravelApp extends StatelessWidget {
       title: 'Travel App',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeModeNotifier.themeMode,
       routerConfig: createRouter(),
     );
   }

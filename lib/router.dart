@@ -18,6 +18,7 @@ import 'screens/visited_countries_map_screen.dart';
 import 'screens/my_trips_screen.dart';
 import 'screens/followers_screen.dart';
 import 'screens/profile_stats_screen.dart';
+import 'screens/settings_screen.dart';
 
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -152,6 +153,10 @@ GoRouter createRouter() {
           final userId = state.pathParameters['userId'] ?? state.uri.pathSegments.lastOrNull;
           return MyTripsScreen(userId: userId?.isEmpty == true ? null : userId);
         },
+      ),
+      GoRoute(
+        path: '/profile/settings',
+        builder: (_, __) => const SettingsScreen(),
       ),
       GoRoute(
         path: '/profile/followers',

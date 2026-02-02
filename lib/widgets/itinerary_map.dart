@@ -194,20 +194,23 @@ class _ItineraryMapState extends State<ItineraryMap> {
     } catch (_) {}
   }
 
-  TileLayer _buildTileLayer() {
+  TileLayer _buildTileLayer(Brightness brightness) {
     final key = _geoapifyKey;
+    final isDark = brightness == Brightness.dark;
     // On web, use WebTileProvider (NetworkImage) to bypass CORS; default uses HTTP which can fail
     final tileProvider = kIsWeb ? WebTileProvider() : null;
     if (key != null && key.trim().isNotEmpty) {
+      final style = isDark ? 'dark-matter' : 'positron';
       return TileLayer(
-        urlTemplate: 'https://maps.geoapify.com/v1/tile/positron/{z}/{x}/{y}.png?apiKey=$key',
+        urlTemplate: 'https://maps.geoapify.com/v1/tile/$style/{z}/{x}/{y}.png?apiKey=$key',
         userAgentPackageName: 'com.footprint.travel',
         maxNativeZoom: 20,
         tileProvider: tileProvider,
       );
     }
+    final cartoStyle = isDark ? 'dark_nolabels' : 'light_nolabels';
     return TileLayer(
-      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/light_nolabels/{z}/{x}/{y}.png',
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$cartoStyle/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: tileProvider,
@@ -341,6 +344,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   }
 
   Widget _buildMap(BuildContext context, Color primaryColor) {
+    final brightness = Theme.of(context).brightness;
     final initialPos = _polylinePointsList.isNotEmpty ? _polylinePointsList.first : _defaultCenter;
     final bounds = _bounds();
     final CameraFit? initialFit = bounds != null && !_isZeroAreaBounds(bounds)
@@ -373,7 +377,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
           ),
         ),
         children: [
-          _buildTileLayer(),
+          _buildTileLayer(brightness),
           if (_polylinePointsList.length >= 2)
             PolylineLayer(
               polylines: [
@@ -393,9 +397,9 @@ class _ItineraryMapState extends State<ItineraryMap> {
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.bottomRight,
-                  child: Text(
+                    child: Text(
                     (_geoapifyKey ?? '').trim().isNotEmpty ? 'Geoapify | OSM' : '© CARTO | OSM',
-                    style: TextStyle(fontSize: 8, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 8, color: Theme.of(context).brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade600),
                   ),
                 ),
               ),
