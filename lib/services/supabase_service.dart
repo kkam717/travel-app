@@ -257,7 +257,7 @@ class SupabaseService {
     int?     durationYear,
     int? durationMonth,
     String? durationSeason,
-    List<String>? transportTransitions,
+    List<TransportTransition>? transportTransitions,
   }) async {
     try {
       final insertData = <String, dynamic>{
@@ -276,7 +276,8 @@ class SupabaseService {
       if (durationYear != null) insertData['duration_year'] = durationYear;
       if (durationMonth != null) insertData['duration_month'] = durationMonth;
       if (durationSeason != null) insertData['duration_season'] = durationSeason;
-      if (transportTransitions != null && transportTransitions.isNotEmpty) insertData['transport_transitions'] = transportTransitions;
+      if (transportTransitions != null && transportTransitions.isNotEmpty)
+        insertData['transport_transitions'] = transportTransitions.map((t) => t.toJson()).toList();
       final res = await _client.from('itineraries').insert(insertData).select().single();
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);

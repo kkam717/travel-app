@@ -10,7 +10,7 @@ import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
 import '../utils/map_urls.dart';
 import '../widgets/itinerary_map.dart';
-import '../widgets/itinerary_timeline.dart' show ItineraryTimeline, TransportOverrides, TransportType, transportTypeFromString;
+import '../widgets/itinerary_timeline.dart' show ItineraryTimeline, TransportDescriptions, TransportOverrides, TransportType, transportTypeFromString;
 
 class ItineraryDetailScreen extends StatefulWidget {
   final String itineraryId;
@@ -127,9 +127,20 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     if (list == null || list.isEmpty) return null;
     final overrides = <int, TransportType>{};
     for (var i = 0; i < list.length; i++) {
-      overrides[i] = transportTypeFromString(list[i]);
+      overrides[i] = transportTypeFromString(list[i].type);
     }
     return overrides;
+  }
+
+  TransportDescriptions? _transportDescriptionsFor(Itinerary it) {
+    final list = it.transportTransitions;
+    if (list == null || list.isEmpty) return null;
+    final descs = <int, String>{};
+    for (var i = 0; i < list.length; i++) {
+      final d = list[i].description;
+      if (d != null && d.trim().isNotEmpty) descs[i] = d;
+    }
+    return descs.isEmpty ? null : descs;
   }
 
   Future<void> _forkItinerary() async {
@@ -321,6 +332,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           ItineraryTimeline(
             itinerary: it,
             transportOverrides: _transportOverridesFor(it),
+            transportDescriptions: _transportDescriptionsFor(it),
             onOpenInMaps: _openInMaps,
           ),
         ],

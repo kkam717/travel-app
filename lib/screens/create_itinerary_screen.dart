@@ -9,7 +9,7 @@ import '../services/supabase_service.dart';
 import '../widgets/places_field.dart';
 import '../widgets/itinerary_map.dart';
 import '../widgets/itinerary_timeline.dart' show TransportType, TimelineConnector, transportTypeFromString, transportTypeToString;
-import '../models/itinerary.dart';
+import '../models/itinerary.dart' show ItineraryStop, TransportTransition;
 
 const List<String> _seasons = ['Spring', 'Summer', 'Fall', 'Winter'];
 const List<String> _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -51,6 +51,8 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
 
   // Transport between destinations (transition index -> TransportType)
   final Map<int, TransportType> _transportBetweenDestinations = {};
+  // Optional description per transport (transition index -> description)
+  final Map<int, String> _transportDescriptions = {};
 
   bool _isLoading = false;
   bool _isLoadingData = false;
@@ -129,14 +131,14 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               ..lat = s.lat
               ..lng = s.lng
               ..externalUrl = s.externalUrl
-              ..days = {s.day}
-              ..venues = [];
+              ..days = {s.day};
             destByKey[key] = currentDest;
           } else {
             currentDest.days!.add(s.day);
           }
         } else if (s.isVenue && currentDest != null) {
-          currentDest.venues!.add(_VenueEntry()
+          currentDest.venuesByDay[s.day] ??= [];
+          currentDest.venuesByDay[s.day]!.add(_VenueEntry()
             ..name = s.name
             ..lat = s.lat
             ..lng = s.lng
@@ -152,10 +154,13 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       });
 
       _transportBetweenDestinations.clear();
+      _transportDescriptions.clear();
       final trans = it.transportTransitions;
       if (trans != null) {
         for (var i = 0; i < trans.length; i++) {
-          _transportBetweenDestinations[i] = transportTypeFromString(trans[i]);
+          _transportBetweenDestinations[i] = transportTypeFromString(trans[i].type);
+          final d = trans[i].description;
+          if (d != null && d.trim().isNotEmpty) _transportDescriptions[i] = d;
         }
       }
     } catch (e) {
@@ -204,23 +209,25 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     setState(() => _destinations.removeAt(index));
   }
 
-  void _addVenue(int destIndex, String category) {
+  void _addVenue(int destIndex, String category, int day) {
     setState(() {
       final d = _destinations[destIndex];
-      d.venues ??= [];
-      d.venues!.add(_VenueEntry()..category = category);
+      d.venuesByDay[day] ??= [];
+      d.venuesByDay[day]!.add(_VenueEntry()..category = category);
     });
   }
 
-  void _removeVenue(int destIndex, int venueIndex) {
-    setState(() => _destinations[destIndex].venues!.removeAt(venueIndex));
+  void _removeVenue(int destIndex, int day, int venueIndex) {
+    setState(() => _destinations[destIndex].venuesByDay[day]?.removeAt(venueIndex));
   }
 
   bool get _hasUnsavedData {
     if (_titleController.text.trim().isNotEmpty || _selectedCountries.isNotEmpty) return true;
     if (_destinations.any((d) => d.name.isNotEmpty)) return true;
     for (final d in _destinations) {
-      if (d.venues != null && d.venues!.any((v) => v.name.isNotEmpty)) return true;
+      for (final list in d.venuesByDay.values) {
+        if (list.any((v) => v.name.isNotEmpty)) return true;
+      }
     }
     return false;
   }
@@ -289,25 +296,23 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     final stopsData = <Map<String, dynamic>>[];
     var position = 0;
 
-    for (final d in _destinations.where((x) => x.name.isNotEmpty)) {
-      final days = (d.days ?? {1}).where((day) => day >= 1 && day <= _daysCount).toList()..sort();
-      if (days.isEmpty) continue;
-      for (final day in days) {
-        stopsData.add({
-          'name': d.name,
-          'category': 'location',
-          'stop_type': 'location',
-          'lat': d.lat,
-          'lng': d.lng,
-          'external_url': d.externalUrl,
-          'day': day,
-          'position': position++,
-        });
-      }
-      final anchorDay = days.first;
-      for (final v in d.venues ?? []) {
+    // Chronological order: each (destination, day) in position - enables loops (e.g. airport Day 1 & Day 7)
+    for (final pair in _chronologicalDestDayPairs) {
+      final d = pair.d;
+      final day = pair.day;
+      if (day < 1 || day > _daysCount) continue;
+      stopsData.add({
+        'name': d.name,
+        'category': 'location',
+        'stop_type': 'location',
+        'lat': d.lat,
+        'lng': d.lng,
+        'external_url': d.externalUrl,
+        'day': day,
+        'position': position++,
+      });
+      for (final v in d.venuesByDay[day] ?? []) {
         if (v.name.isNotEmpty) {
-          // DB category constraint: 'guide' not in schema yet; map to 'experience'
           final cat = v.category ?? 'restaurant';
           final dbCat = cat == 'guide' ? 'experience' : cat;
           stopsData.add({
@@ -317,7 +322,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             'lat': v.lat,
             'lng': v.lng,
             'external_url': v.externalUrl,
-            'day': anchorDay,
+            'day': day,
             'position': position++,
           });
         }
@@ -349,11 +354,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           updateData['duration_month'] = _selectedMonth;
           updateData['duration_season'] = _selectedSeason;
         }
-        final ordered = _orderedDestinations;
-        if (ordered.length >= 2) {
-          updateData['transport_transitions'] = List.generate(ordered.length - 1, (i) {
+        final pairs = _chronologicalDestDayPairs;
+        if (pairs.length >= 2) {
+          updateData['transport_transitions'] = List.generate(pairs.length - 1, (i) {
             final t = _transportBetweenDestinations[i] ?? TransportType.unknown;
-            return transportTypeToString(t);
+            final d = _transportDescriptions[i]?.trim();
+            return {'type': transportTypeToString(t), if (d != null && d.isNotEmpty) 'description': d};
           });
         }
         await SupabaseService.updateItinerary(id, updateData);
@@ -377,8 +383,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           durationYear: _useDates ? null : _selectedYear,
           durationMonth: _useDates ? null : _selectedMonth,
           durationSeason: _useDates ? null : _selectedSeason,
-          transportTransitions: _orderedDestinations.length >= 2
-              ? List.generate(_orderedDestinations.length - 1, (i) => transportTypeToString(_transportBetweenDestinations[i] ?? TransportType.unknown))
+          transportTransitions: _chronologicalDestDayPairs.length >= 2
+              ? List.generate(_chronologicalDestDayPairs.length - 1, (i) {
+                  final t = _transportBetweenDestinations[i] ?? TransportType.unknown;
+                  final d = _transportDescriptions[i]?.trim();
+                  return TransportTransition(type: transportTypeToString(t), description: d != null && d.isNotEmpty ? d : null);
+                })
               : null,
         );
         Analytics.logEvent('itinerary_created', {'id': it.id});
@@ -400,14 +410,15 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
 
   List<ItineraryStop> get _stopsForMap {
     final stops = <ItineraryStop>[];
-    for (final d in _destinations.where((x) => x.name.isNotEmpty)) {
-      final days = d.days ?? {1};
-      final firstDay = days.isNotEmpty ? days.reduce((a, b) => a < b ? a : b) : 1;
+    // Chronological order for map polyline - enables loops (e.g. airport Day 1 & Day 7)
+    for (final pair in _chronologicalDestDayPairs) {
+      final d = pair.d;
+      final day = pair.day;
       stops.add(ItineraryStop(
-        id: 'temp_${d.name}_$firstDay',
+        id: 'temp_${d.name}_$day',
         itineraryId: '',
         position: 0,
-        day: firstDay,
+        day: day,
         name: d.name,
         category: 'location',
         stopType: 'location',
@@ -415,13 +426,13 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         lng: d.lng,
         externalUrl: d.externalUrl,
       ));
-      for (final v in d.venues ?? []) {
+      for (final v in d.venuesByDay[day] ?? []) {
         if (v.name.isNotEmpty && v.lat != null && v.lng != null) {
           stops.add(ItineraryStop(
-            id: 'temp_${v.name}_${d.name}',
+            id: 'temp_${v.name}_${d.name}_$day',
             itineraryId: '',
             position: 0,
-            day: firstDay,
+            day: day,
             name: v.name,
             category: v.category ?? 'restaurant',
             stopType: 'venue',
@@ -918,12 +929,16 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
   }
 
   Widget _buildStepTransport() {
-    final ordered = _destinations.where((d) => d.name.isNotEmpty).toList()
-      ..sort((a, b) {
-        final aMin = a.days?.isNotEmpty == true ? a.days!.reduce((x, y) => x < y ? x : y) : 1;
-        final bMin = b.days?.isNotEmpty == true ? b.days!.reduce((x, y) => x < y ? x : y) : 1;
-        return aMin.compareTo(bMin);
-      });
+    final pairs = _chronologicalDestDayPairs;
+    // Only show transport between different places (same place = no transport segment)
+    final segments = <int, ({_DestinationEntry from, _DestinationEntry to, int dayFrom, int dayTo})>{};
+    for (var i = 0; i < pairs.length - 1; i++) {
+      final from = pairs[i];
+      final to = pairs[i + 1];
+      if (from.d != to.d) segments[i] = (from: from.d, to: to.d, dayFrom: from.day, dayTo: to.day);
+    }
+    final segmentIndices = segments.keys.toList()..sort();
+
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
@@ -931,10 +946,20 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         const SizedBox(height: AppTheme.spacingSm),
         Text('How did you travel between each location?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
-        ...List.generate(ordered.length - 1, (i) {
-          final from = ordered[i];
-          final to = ordered[i + 1];
-          final current = _transportBetweenDestinations[i] ?? TransportType.unknown;
+        if (segmentIndices.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
+            child: Text(
+              pairs.length >= 2
+                  ? 'All your destinations are in the same place—no transport needed.'
+                  : 'Add at least 2 different destinations to choose transport between them.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          )
+        else
+          ...segmentIndices.map((origIdx) {
+          final seg = segments[origIdx]!;
+          final current = _transportBetweenDestinations[origIdx] ?? TransportType.unknown;
           return Card(
             margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
             child: Padding(
@@ -946,12 +971,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                     children: [
                       Icon(Icons.place, size: 20, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(from.name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                      Expanded(child: Text('${seg.from.name} (Day ${seg.dayFrom})', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
                       Icon(Icons.arrow_downward, size: 20, color: Theme.of(context).colorScheme.outline),
                       const SizedBox(width: 8),
                       Icon(Icons.place, size: 20, color: Theme.of(context).colorScheme.primary),
                       const SizedBox(width: 8),
-                      Expanded(child: Text(to.name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                      Expanded(child: Text('${seg.to.name} (Day ${seg.dayTo})', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
                     ],
                   ),
                   const SizedBox(height: AppTheme.spacingMd),
@@ -962,56 +987,77 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                       FilterChip(
                         label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.flight_rounded, size: 18, color: current == TransportType.plane ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Plane')]),
                         selected: current == TransportType.plane,
-                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.plane),
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.plane),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
                         label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.train_rounded, size: 18, color: current == TransportType.train ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Train')]),
                         selected: current == TransportType.train,
-                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.train),
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.train),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
                         label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_car_rounded, size: 18, color: current == TransportType.car ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Car')]),
                         selected: current == TransportType.car,
-                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.car),
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.car),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_boat_rounded, size: 18, color: current == TransportType.ferry ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Ferry')]),
-                        selected: current == TransportType.ferry,
-                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.ferry),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_bus_rounded, size: 18, color: current == TransportType.bus ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Bus')]),
+                        selected: current == TransportType.bus,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.bus),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_boat_rounded, size: 18, color: current == TransportType.boat ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Boat')]),
+                        selected: current == TransportType.boat,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.boat),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
                         label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_walk_rounded, size: 18, color: current == TransportType.walk ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Walk')]),
                         selected: current == TransportType.walk,
-                        onSelected: (_) => setState(() => _transportBetweenDestinations[i] = TransportType.walk),
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.walk),
+                        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+                        checkmarkColor: Theme.of(context).colorScheme.primary,
+                      ),
+                      FilterChip(
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.help_outline_rounded, size: 18, color: current == TransportType.other ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Other')]),
+                        selected: current == TransportType.other,
+                        onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.other),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
                         label: const Text('Skip'),
                         selected: current == TransportType.unknown,
-                        onSelected: (_) => setState(() => _transportBetweenDestinations.remove(i)),
+                        onSelected: (_) => setState(() => _transportBetweenDestinations.remove(origIdx)),
                         selectedColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                       ),
                     ],
+                  ),
+                  const SizedBox(height: AppTheme.spacingMd),
+                  TextFormField(
+                    initialValue: _transportDescriptions[origIdx] ?? '',
+                    onChanged: (v) => _transportDescriptions[origIdx] = v,
+                    decoration: const InputDecoration(
+                      labelText: 'Description (optional)',
+                      hintText: 'e.g. Flight BA 123, rental car pickup',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    maxLines: 2,
                   ),
                 ],
               ),
             ),
           );
         }),
-        if (ordered.length < 2)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
-            child: Text('Add at least 2 destinations to set transport.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ),
         const SizedBox(height: AppTheme.spacingLg),
         FilledButton.icon(
           onPressed: _nextPage,
@@ -1033,13 +1079,23 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return list;
   }
 
-  int _destIndexForOrdered(int orderedIndex) {
-    final d = _orderedDestinations[orderedIndex];
-    return _destinations.indexOf(d);
+  /// Chronological (destination, day) pairs - each place appears once per day it's visited.
+  /// Enables loops: e.g. airport on Day 1 and Day 7 appears twice in position.
+  List<({_DestinationEntry d, int day})> get _chronologicalDestDayPairs {
+    final pairs = <({_DestinationEntry d, int day})>[];
+    for (final d in _destinations.where((x) => x.name.isNotEmpty)) {
+      final days = (d.days ?? {1}).toList()..sort();
+      if (days.isEmpty) pairs.add((d: d, day: 1));
+      for (final day in days) {
+        pairs.add((d: d, day: day));
+      }
+    }
+    pairs.sort((a, b) => a.day.compareTo(b.day));
+    return pairs;
   }
 
   Widget _buildStep5() {
-    final ordered = _orderedDestinations;
+    final pairs = _chronologicalDestDayPairs;
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
@@ -1047,22 +1103,24 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         const SizedBox(height: AppTheme.spacingXs),
         Text('Add restaurants, hotels, guides, and drinks to each location.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
-        ...List.generate(ordered.length, (i) {
-          final d = ordered[i];
-          final destIndex = _destIndexForOrdered(i);
-          final day = d.days?.isNotEmpty == true ? d.days!.reduce((a, b) => a < b ? a : b) : 1;
+        ...List.generate(pairs.length, (i) {
+          final pair = pairs[i];
+          final d = pair.d;
+          final day = pair.day;
+          final destIndex = _destinations.indexOf(d);
+          final venues = d.venuesByDay[day] ?? [];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            key: ValueKey('${d.name}_$i'),
+            key: ValueKey('${d.name}_${day}_$i'),
             children: [
               _EditableLocationCard(
-                day: day,
                 destinationName: d.name,
-                venues: d.venues ?? [],
+                day: day,
+                venues: venues,
                 countryCodes: _selectedCountries,
                 locationLatLng: d.lat != null && d.lng != null ? (d.lat!, d.lng!) : null,
-                onAddVenue: (cat) => _addVenue(destIndex, cat),
-                onRemoveVenue: (vi) => _removeVenue(destIndex, vi),
+                onAddVenue: (cat) => _addVenue(destIndex, cat, day),
+                onRemoveVenue: (vi) => _removeVenue(destIndex, day, vi),
                 onVenueSelected: (v, name, lat, lng, url) {
                   v.name = name;
                   v.lat = lat;
@@ -1071,7 +1129,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   setState(() {});
                 },
               ),
-              if (i < ordered.length - 1)
+              if (i < pairs.length - 1 && pair.d != pairs[i + 1].d)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -1089,7 +1147,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             ],
           );
         }),
-        if (ordered.isEmpty)
+        if (pairs.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
             child: Text('Add destinations first.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
@@ -1138,13 +1196,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             children: [
               Text('All destinations & details', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              ...(_destinations.where((d) => d.name.isNotEmpty).expand((d) => [
+              ...(_chronologicalDestDayPairs.expand((pair) => [
                 ListTile(
                   leading: Icon(Icons.place, color: Theme.of(context).colorScheme.primary),
-                  title: Text('${d.name} (Days ${_formatDays(d.days)})'),
+                  title: Text('${pair.d.name} (Day ${pair.day})'),
                 ),
-                if (d.venues != null)
-                  ...d.venues!.where((v) => v.name.isNotEmpty).map((v) => Padding(
+                ...(pair.d.venuesByDay[pair.day] ?? []).where((v) => v.name.isNotEmpty).map((v) => Padding(
                     padding: const EdgeInsets.only(left: 40, bottom: 4),
                     child: Row(
                       children: [
@@ -1154,7 +1211,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                           child: Text(v.name, style: Theme.of(context).textTheme.bodyMedium, overflow: TextOverflow.ellipsis),
                         ),
                         const SizedBox(width: 4),
-                        Text('(${_displayCategory(v.category)})', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        Text(_displayCategory(v.category), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   )),
@@ -1210,8 +1267,8 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
 }
 
 class _EditableLocationCard extends StatelessWidget {
-  final int day;
   final String destinationName;
+  final int day;
   final List<_VenueEntry> venues;
   final List<String> countryCodes;
   final (double, double)? locationLatLng;
@@ -1220,8 +1277,8 @@ class _EditableLocationCard extends StatelessWidget {
   final void Function(_VenueEntry v, String name, double? lat, double? lng, String? url) onVenueSelected;
 
   const _EditableLocationCard({
-    required this.day,
     required this.destinationName,
+    required this.day,
     required this.venues,
     required this.countryCodes,
     this.locationLatLng,
@@ -1233,118 +1290,116 @@ class _EditableLocationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: 56,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      'Day $day',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: AppTheme.spacingMd),
-          Expanded(
-            child: Card(
-              margin: EdgeInsets.zero,
-              child: Padding(
-                padding: const EdgeInsets.all(AppTheme.spacingMd),
-                child: SingleChildScrollView(
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.spacingMd),
+        child: SingleChildScrollView(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 56,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Text(
-                        destinationName,
-                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: AppTheme.spacingMd),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          FilledButton.tonal(
-                            onPressed: () => onAddVenue('restaurant'),
-                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), SizedBox(width: 6), Text('Restaurant')]),
-                          ),
-                          FilledButton.tonal(
-                            onPressed: () => onAddVenue('hotel'),
-                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), SizedBox(width: 6), Text('Hotel')]),
-                          ),
-                          FilledButton.tonal(
-                            onPressed: () => onAddVenue('guide'),
-                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), SizedBox(width: 6), Text('Guide')]),
-                          ),
-                          FilledButton.tonal(
-                            onPressed: () => onAddVenue('bar'),
-                            child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), SizedBox(width: 6), Text('Drinks')]),
-                          ),
-                        ],
-                      ),
-                      if (venues.isNotEmpty) ...[
-                        const SizedBox(height: AppTheme.spacingMd),
-                        ...venues.asMap().entries.map((ve) {
-                          final vi = ve.key;
-                          final v = ve.value;
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: v.name.isEmpty
-                                ? Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: PlacesField(
-                                          hint: 'Search ${v.category}…',
-                                          countryCodes: countryCodes,
-                                          locationLatLng: locationLatLng,
-                                          onSelected: (name, lat, lng, locationUrl) => onVenueSelected(v, name, lat, lng, locationUrl),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close, size: 20),
-                                        onPressed: () => onRemoveVenue(vi),
-                                      ),
-                                    ],
-                                  )
-                                : Chip(
-                                    label: Text(v.name),
-                                    deleteIcon: const Icon(Icons.close, size: 18),
-                                    onDeleted: () => onRemoveVenue(vi),
-                                  ),
-                          );
-                        }),
-                      ],
-                      if (venues.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: AppTheme.spacingSm),
-                          child: Text('No places added', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
+                        child: Text(
+                          'Day $day',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-            ),
+              const SizedBox(width: AppTheme.spacingMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      destinationName,
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: AppTheme.spacingMd),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.tonal(
+                          onPressed: () => onAddVenue('restaurant'),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), SizedBox(width: 6), Text('Restaurant')]),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () => onAddVenue('hotel'),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), SizedBox(width: 6), Text('Hotel')]),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () => onAddVenue('guide'),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), SizedBox(width: 6), Text('Guide')]),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () => onAddVenue('bar'),
+                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), SizedBox(width: 6), Text('Drinks')]),
+                        ),
+                      ],
+                    ),
+                    if (venues.isNotEmpty) ...[
+                      const SizedBox(height: AppTheme.spacingMd),
+                      ...venues.asMap().entries.map((ve) {
+                        final vi = ve.key;
+                        final v = ve.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: v.name.isEmpty
+                              ? Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: PlacesField(
+                                        hint: 'Search ${v.category}…',
+                                        countryCodes: countryCodes,
+                                        locationLatLng: locationLatLng,
+                                        onSelected: (name, lat, lng, locationUrl) => onVenueSelected(v, name, lat, lng, locationUrl),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close, size: 20),
+                                      onPressed: () => onRemoveVenue(vi),
+                                    ),
+                                  ],
+                                )
+                              : Chip(
+                                  label: Text(v.name),
+                                  deleteIcon: const Icon(Icons.close, size: 18),
+                                  onDeleted: () => onRemoveVenue(vi),
+                                ),
+                        );
+                      }),
+                    ],
+                    if (venues.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: AppTheme.spacingSm),
+                        child: Text('No places added', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1356,7 +1411,8 @@ class _DestinationEntry {
   double? lng;
   String? externalUrl;
   Set<int>? days; // specific days user was at this destination (non-contiguous)
-  List<_VenueEntry>? venues;
+  /// Venues per day: day number -> list of venues for that day.
+  Map<int, List<_VenueEntry>> venuesByDay = {};
 }
 
 class _VenueEntry {

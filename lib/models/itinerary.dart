@@ -5,6 +5,33 @@ bool? _parseBool(dynamic v) {
   return null;
 }
 
+/// A single transport transition between consecutive locations.
+/// Supports legacy format (string only) and new format (type + description).
+class TransportTransition {
+  final String type; // plane, train, car, bus, boat, walk, other, unknown
+  final String? description;
+
+  const TransportTransition({required this.type, this.description});
+
+  factory TransportTransition.fromJson(dynamic json) {
+    if (json == null) return const TransportTransition(type: 'unknown');
+    if (json is String) return TransportTransition(type: json);
+    if (json is Map<String, dynamic>) {
+      return TransportTransition(
+        type: json['type'] as String? ?? 'unknown',
+        description: json['description'] as String?,
+      );
+    }
+    return const TransportTransition(type: 'unknown');
+  }
+
+  Map<String, dynamic> toJson() {
+    final m = <String, dynamic>{'type': type};
+    if (description != null && description!.trim().isNotEmpty) m['description'] = description;
+    return m;
+  }
+}
+
 class Itinerary {
   final String id;
   final String authorId;
@@ -28,7 +55,7 @@ class Itinerary {
   final int? durationYear;
   final int? durationMonth;
   final String? durationSeason;
-  final List<String>? transportTransitions;
+  final List<TransportTransition>? transportTransitions;
 
   const Itinerary({
     required this.id,
@@ -81,7 +108,7 @@ class Itinerary {
       durationMonth: (json['duration_month'] as num?)?.toInt(),
       durationSeason: json['duration_season'] as String?,
       transportTransitions: json['transport_transitions'] != null
-          ? List<String>.from(json['transport_transitions'] as List)
+          ? (json['transport_transitions'] as List).map((e) => TransportTransition.fromJson(e)).toList()
           : null,
     );
   }
@@ -103,7 +130,8 @@ class Itinerary {
       if (durationYear != null) 'duration_year': durationYear,
       if (durationMonth != null) 'duration_month': durationMonth,
       if (durationSeason != null) 'duration_season': durationSeason,
-      if (transportTransitions != null) 'transport_transitions': transportTransitions,
+      if (transportTransitions != null && transportTransitions!.isNotEmpty)
+        'transport_transitions': transportTransitions!.map((t) => t.toJson()).toList(),
     };
   }
 
@@ -119,7 +147,7 @@ class Itinerary {
     int? durationYear,
     int? durationMonth,
     String? durationSeason,
-    List<String>? transportTransitions,
+    List<TransportTransition>? transportTransitions,
   }) =>
       Itinerary(
         id: id,

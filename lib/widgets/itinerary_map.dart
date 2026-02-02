@@ -27,7 +27,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
   static const _defaultCenter = LatLng(40.0, -3.0);
 
   List<LatLng>? _geocodedCityPoints;
-  List<String>? _geocodedCityNames;
   bool _geocodingCities = false;
 
   List<ItineraryStop>? _venueStopsWithCoords;
@@ -66,7 +65,14 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
   List<LatLng> get _polylinePointsList {
     if (_polylinePoints != null) return _polylinePoints!;
-    final fromStops = _allStopsWithCoordsList.map((s) => LatLng(s.lat!, s.lng!)).toList();
+    // Use all stops with coords (location + venue) in day/position order for full route
+    final allWithCoords = _allStopsWithCoordsList;
+    final ordered = List<ItineraryStop>.from(allWithCoords)
+      ..sort((a, b) {
+        final dayCmp = a.day.compareTo(b.day);
+        return dayCmp != 0 ? dayCmp : a.position.compareTo(b.position);
+      });
+    final fromStops = ordered.map((s) => LatLng(s.lat!, s.lng!)).toList();
     return _polylinePoints = fromStops.isNotEmpty ? fromStops : (_geocodedCityPoints ?? []);
   }
 
@@ -107,14 +113,12 @@ class _ItineraryMapState extends State<ItineraryMap> {
       final destination = (widget.destination ?? '').trim();
       final uniqueNames = locationStops.map((s) => s.name.trim()).where((n) => n.isNotEmpty).toSet().toList();
       final points = <LatLng>[];
-      final names = <String>[];
 
       for (final name in uniqueNames) {
         final address = destination.isNotEmpty ? '$name, $destination' : name;
         final coords = await _geocodeNominatim(address);
         if (coords != null) {
           points.add(LatLng(coords.$1, coords.$2));
-          names.add(name);
         }
         await Future<void>.delayed(const Duration(milliseconds: 1100));
       }
@@ -122,7 +126,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
       if (mounted && points.isNotEmpty) {
         setState(() {
           _geocodedCityPoints = points;
-          _geocodedCityNames = names;
           _geocodingCities = false;
           _invalidateStopsCache();
         });
@@ -167,16 +170,27 @@ class _ItineraryMapState extends State<ItineraryMap> {
     return LatLngBounds.fromPoints(points);
   }
 
+  /// True if bounds would be zero-area (single point or collapsed), which causes infinite zoom.
+  bool _isZeroAreaBounds(LatLngBounds bounds) {
+    final sw = bounds.southWest;
+    final ne = bounds.northEast;
+    return sw.latitude == ne.latitude && sw.longitude == ne.longitude;
+  }
+
   void _fitBounds() {
     final bounds = _bounds();
     if (bounds == null) return;
     try {
-      _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: bounds,
-          padding: const EdgeInsets.all(50),
-        ),
-      );
+      if (_isZeroAreaBounds(bounds)) {
+        _mapController.move(bounds.center, 12);
+      } else {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(50),
+          ),
+        );
+      }
     } catch (_) {}
   }
 
@@ -197,55 +211,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: tileProvider,
-    );
-  }
-
-  List<Marker> _buildMarkers(Color primaryColor) {
-    final allStops = _allStopsWithCoordsList;
-    if (allStops.isNotEmpty) {
-      return allStops.asMap().entries.map((e) {
-        final i = e.key + 1;
-        final s = e.value;
-        final snippet = s.isVenue && s.category != null && s.category != 'location'
-            ? '${s.category} • Stop $i'
-            : 'Stop $i';
-        return Marker(
-          point: LatLng(s.lat!, s.lng!),
-          width: 40,
-          height: 40,
-          child: GestureDetector(
-            onTap: () => _showMarkerInfo(s.name, snippet),
-            child: Icon(Icons.place, color: primaryColor, size: 40),
-          ),
-        );
-      }).toList();
-    }
-    if (_geocodedCityPoints != null && _geocodedCityPoints!.isNotEmpty) {
-      final names = _geocodedCityNames ?? List.filled(_geocodedCityPoints!.length, '');
-      return _geocodedCityPoints!.asMap().entries.map((e) {
-        final p = e.value;
-        final name = e.key < names.length ? names[e.key] : '';
-        return Marker(
-          point: p,
-          width: 40,
-          height: 40,
-          child: GestureDetector(
-            onTap: () => _showMarkerInfo(name, 'City'),
-            child: Icon(Icons.place, color: primaryColor, size: 40),
-          ),
-        );
-      }).toList();
-    }
-    return [];
-  }
-
-  void _showMarkerInfo(String title, String snippet) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$title — $snippet'),
-        behavior: SnackBarBehavior.floating,
-      ),
     );
   }
 
@@ -309,20 +274,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
             if (!hasCoords && !_geocodingCities) _buildEmptyState(context)
             else if (_geocodingCities) _buildLoadingState(context)
             else _buildMap(context, primaryColor),
-            if (hasCoords)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingXs),
-                child: Row(
-                  children: [
-                    Icon(Icons.touch_app, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Tap markers for place details',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
@@ -392,6 +343,9 @@ class _ItineraryMapState extends State<ItineraryMap> {
   Widget _buildMap(BuildContext context, Color primaryColor) {
     final initialPos = _polylinePointsList.isNotEmpty ? _polylinePointsList.first : _defaultCenter;
     final bounds = _bounds();
+    final CameraFit? initialFit = bounds != null && !_isZeroAreaBounds(bounds)
+        ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50))
+        : null;
     return SizedBox(
       height: widget.height,
       child: FlutterMap(
@@ -399,9 +353,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
         options: MapOptions(
           initialCenter: initialPos,
           initialZoom: 12,
-          initialCameraFit: bounds != null
-              ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50))
-              : null,
+          initialCameraFit: initialFit,
           onMapReady: () {
             if (bounds == null) _fitBounds();
             // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
@@ -432,7 +384,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
                 ),
               ],
             ),
-          MarkerLayer(markers: _buildMarkers(primaryColor)),
           Align(
             alignment: Alignment.bottomRight,
             child: Padding(

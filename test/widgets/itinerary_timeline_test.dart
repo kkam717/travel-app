@@ -213,12 +213,12 @@ void main() {
       expect(find.byIcon(Icons.directions_car_rounded), findsOneWidget);
     });
 
-    testWidgets('renders ferry icon', (WidgetTester tester) async {
+    testWidgets('renders boat icon', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp(
           theme: AppTheme.light,
           home: const Scaffold(
-            body: TimelineConnector(transport: TransportType.ferry),
+            body: TimelineConnector(transport: TransportType.boat),
           ),
         ),
       );
@@ -235,6 +235,18 @@ void main() {
         ),
       );
       expect(find.byIcon(Icons.directions_walk_rounded), findsOneWidget);
+    });
+
+    testWidgets('renders other icon (question mark)', (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(
+            body: TimelineConnector(transport: TransportType.other),
+          ),
+        ),
+      );
+      expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
     });
   });
 
