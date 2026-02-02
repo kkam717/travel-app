@@ -31,6 +31,9 @@ jobs:
       - name: Pull Vercel env
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
+      - name: Pull Vercel env vars to .env
+        run: vercel env pull .env --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Build web
         env:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
