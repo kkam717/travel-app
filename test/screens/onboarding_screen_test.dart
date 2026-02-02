@@ -17,7 +17,7 @@ void main() {
       );
     });
 
-    testWidgets('renders step 1 - Countries visited', (WidgetTester tester) async {
+    testWidgets('renders Travel preferences', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp.router(
           routerConfig: router,
@@ -26,11 +26,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Countries visited'), findsOneWidget);
-      expect(find.text('Next'), findsOneWidget);
+      expect(find.text('Travel preferences'), findsOneWidget);
+      expect(find.text('Get started'), findsOneWidget);
     });
 
-    testWidgets('shows step indicator with 2 steps', (WidgetTester tester) async {
+    testWidgets('shows Sign out', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp.router(
           routerConfig: router,
@@ -42,7 +42,7 @@ void main() {
       expect(find.text('Sign out'), findsOneWidget);
     });
 
-    testWidgets('advances to step 2 when Next tapped on Countries', (WidgetTester tester) async {
+    testWidgets('shows travel styles and mode options', (WidgetTester tester) async {
       await tester.pumpWidget(
         MaterialApp.router(
           routerConfig: router,
@@ -51,25 +51,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Travel preferences'), findsOneWidget);
-    });
-
-    testWidgets('step 2 shows travel styles and mode options', (WidgetTester tester) async {
-      await tester.pumpWidget(
-        MaterialApp.router(
-          routerConfig: router,
-          theme: AppTheme.light,
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Get started'), findsOneWidget);
+      expect(find.text('Travel styles'), findsOneWidget);
+      expect(find.text('Travel mode'), findsOneWidget);
     });
   });
 }

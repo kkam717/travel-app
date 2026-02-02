@@ -341,6 +341,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: 'Countries',
                   color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.primary,
+                  showBadge: visitedCountries.isEmpty,
                   onTap: () async {
                     await context.push('/map/countries?codes=${visitedCountries.join(',')}&editable=1');
                     if (mounted) _load();
@@ -577,6 +578,7 @@ class _StatCard extends StatelessWidget {
   final String label;
   final Color color;
   final Color iconColor;
+  final bool showBadge;
   final VoidCallback? onTap;
 
   const _StatCard({
@@ -585,11 +587,23 @@ class _StatCard extends StatelessWidget {
     required this.label,
     required this.color,
     required this.iconColor,
+    this.showBadge = false,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 26, color: iconColor),
+        const SizedBox(height: AppTheme.spacingSm),
+        Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
+        const SizedBox(height: 2),
+        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      ],
+    );
     final child = Container(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       decoration: BoxDecoration(
@@ -597,16 +611,27 @@ class _StatCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 26, color: iconColor),
-          const SizedBox(height: AppTheme.spacingSm),
-          Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface)),
-          const SizedBox(height: 2),
-          Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        ],
-      ),
+      child: showBadge
+          ? Stack(
+              clipBehavior: Clip.none,
+              children: [
+                content,
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Theme.of(context).colorScheme.surface, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : content,
     );
     if (onTap != null) {
       return InkWell(

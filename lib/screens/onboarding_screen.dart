@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
-import '../data/countries.dart';
+import '../data/countries.dart' show travelStyles, travelModes;
 import '../services/supabase_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -14,27 +14,9 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  int _step = 0;
-  final _searchController = TextEditingController();
-  Set<String> _selectedCountries = {};
   Set<String> _selectedStyles = {};
   String? _selectedMode;
   bool _isLoading = false;
-  String _searchQuery = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  List<MapEntry<String, String>> get _filteredCountries {
-    if (_searchQuery.isEmpty) return countries.entries.toList();
-    final q = _searchQuery.toLowerCase();
-    return countries.entries
-        .where((e) => e.value.toLowerCase().contains(q) || e.key.toLowerCase().contains(q))
-        .toList();
-  }
 
   Future<void> _completeOnboarding() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
@@ -42,7 +24,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isLoading = true);
     try {
       await SupabaseService.updateProfile(userId, {
-        'visited_countries': _selectedCountries.toList(),
         'travel_styles': _selectedStyles.map((s) => s.toLowerCase()).toList(),
         'travel_mode': _selectedMode?.toLowerCase(),
         'onboarding_complete': true,
@@ -70,10 +51,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stepTitles = ['Countries visited', 'Travel preferences'];
     return Scaffold(
       appBar: AppBar(
-        title: Text(stepTitles[_step.clamp(0, 1)]),
+        title: const Text('Travel preferences'),
         actions: [
           TextButton(
             onPressed: _signOut,
@@ -82,100 +62,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ],
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Step indicator
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg, vertical: AppTheme.spacingMd),
-              child: Row(
-                children: List.generate(2, (i) {
-                  final active = i <= _step;
-                  return Expanded(
-                    child: Container(
-                      margin: EdgeInsets.only(right: i < 1 ? 8 : 0),
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: active
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  );
-                }),
-              ),
-            ),
-            Expanded(
-              child: _step == 0 ? _buildCountriesStep() : _buildStylesStep(),
-            ),
-          ],
-        ),
+        child: _buildStylesStep(),
       ),
-    );
-  }
-
-  Widget _buildCountriesStep() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingMd),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search countries...',
-              prefixIcon: const Icon(Icons.search_rounded),
-              filled: true,
-            ),
-            onChanged: (v) => setState(() => _searchQuery = v),
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-            itemCount: _filteredCountries.length,
-            itemBuilder: (_, i) {
-              final e = _filteredCountries[i];
-              final selected = _selectedCountries.contains(e.key);
-              return Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      if (selected) {
-                        _selectedCountries.remove(e.key);
-                      } else {
-                        _selectedCountries.add(e.key);
-                      }
-                    });
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-                    child: Row(
-                      children: [
-                        Icon(
-                          selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                          color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.outline,
-                          size: 24,
-                        ),
-                        const SizedBox(width: AppTheme.spacingMd),
-                        Text(e.value, style: Theme.of(context).textTheme.bodyLarge),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingMd),
-          child: FilledButton(
-            onPressed: () => setState(() => _step = 1),
-            child: const Text('Next'),
-          ),
-        ),
-      ],
     );
   }
 
