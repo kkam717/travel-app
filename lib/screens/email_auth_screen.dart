@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../l10n/app_strings.dart';
 
 class EmailAuthScreen extends StatefulWidget {
   const EmailAuthScreen({super.key});
@@ -45,7 +46,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         Analytics.logEvent('auth_signup_success');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Account created')),
+            SnackBar(content: Text(AppStrings.t(context, 'account_created'))),
           );
           context.go('/onboarding');
         }
@@ -66,7 +67,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     } catch (e, st) {
       debugPrint('Signup error: $e\n$st');
       setState(() {
-        _errorMessage = e is AuthException ? e.message : 'Something went wrong. Please try again.';
+        _errorMessage = e is AuthException ? e.message : AppStrings.t(context, 'something_went_wrong');
         _isLoading = false;
       });
     }
@@ -76,7 +77,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Email'),
+        title: Text(AppStrings.t(context, 'email')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
@@ -92,12 +93,12 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
               children: [
                 const SizedBox(height: AppTheme.spacingMd),
                 Text(
-                  _isSignUp ? 'Create account' : 'Welcome back',
+                  _isSignUp ? AppStrings.t(context, 'create_account') : AppStrings.t(context, 'welcome_back'),
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: AppTheme.spacingSm),
                 Text(
-                  _isSignUp ? 'Enter your name, email and password to get started' : 'Sign in to continue planning your trips',
+                  _isSignUp ? AppStrings.t(context, 'create_account_subtitle') : AppStrings.t(context, 'sign_in_subtitle'),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -108,24 +109,24 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                     controller: _nameController,
                     textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'Name',
-                      hintText: 'Your name',
+                    decoration: InputDecoration(
+                      labelText: AppStrings.t(context, 'name'),
+                      hintText: AppStrings.t(context, 'your_name'),
                       prefixIcon: Icon(Icons.person_outline_rounded),
                     ),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Enter your name' : null,
+                    validator: (v) => v == null || v.trim().isEmpty ? AppStrings.t(context, 'please_enter_name') : null,
                   ),
                 if (_isSignUp) const SizedBox(height: AppTheme.spacingMd),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'you@example.com',
+                  decoration: InputDecoration(
+                    labelText: AppStrings.t(context, 'email'),
+                    hintText: AppStrings.t(context, 'you_example_email'),
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
-                  validator: (v) => v == null || v.isEmpty ? 'Enter your email' : null,
+                  validator: (v) => v == null || v.isEmpty ? AppStrings.t(context, 'enter_email') : null,
                 ),
                 const SizedBox(height: AppTheme.spacingMd),
                 TextFormField(
@@ -134,13 +135,13 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _submit(),
                   decoration: InputDecoration(
-                    labelText: 'Password',
-                    hintText: _isSignUp ? 'Min 6 characters' : null,
+                    labelText: AppStrings.t(context, 'password'),
+                    hintText: _isSignUp ? AppStrings.t(context, 'min_6_characters') : null,
                     prefixIcon: const Icon(Icons.lock_outline_rounded),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Enter your password';
-                    if (_isSignUp && v.length < 6) return 'Password must be at least 6 characters';
+                    if (v == null || v.isEmpty) return AppStrings.t(context, 'enter_password');
+                    if (_isSignUp && v.length < 6) return AppStrings.t(context, 'password_min_6');
                     return null;
                   },
                 ),
@@ -178,7 +179,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                             color: Theme.of(context).colorScheme.onPrimary,
                           ),
                         )
-                      : Text(_isSignUp ? 'Create account' : 'Sign in'),
+                      : Text(_isSignUp ? AppStrings.t(context, 'create_account') : AppStrings.t(context, 'sign_in')),
                 ),
                 const SizedBox(height: AppTheme.spacingMd),
                 TextButton(
@@ -192,7 +193,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                           });
                         },
                   child: Text(
-                    _isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up",
+                    _isSignUp ? AppStrings.t(context, 'already_have_account') : AppStrings.t(context, 'dont_have_account'),
                   ),
                 ),
               ],

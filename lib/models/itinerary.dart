@@ -49,6 +49,7 @@ class Itinerary {
   final DateTime? updatedAt;
   final int? stopsCount;
   final int? bookmarkCount;
+  final int? likeCount;
   final bool? useDates;
   final DateTime? startDate;
   final DateTime? endDate;
@@ -74,6 +75,7 @@ class Itinerary {
     this.updatedAt,
     this.stopsCount,
     this.bookmarkCount,
+    this.likeCount,
     this.useDates,
     this.startDate,
     this.endDate,
@@ -99,6 +101,7 @@ class Itinerary {
       stops: stops ?? [],
       stopsCount: json['stops_count'] as int?,
       bookmarkCount: (json['bookmark_count'] as num?)?.toInt(),
+      likeCount: (json['like_count'] as num?)?.toInt(),
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at'] as String) : null,
       updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at'] as String) : null,
       useDates: _parseBool(json['use_dates']),
@@ -141,6 +144,7 @@ class Itinerary {
     List<ItineraryStop>? stops,
     int? stopsCount,
     int? bookmarkCount,
+    int? likeCount,
     bool? useDates,
     DateTime? startDate,
     DateTime? endDate,
@@ -166,6 +170,7 @@ class Itinerary {
         updatedAt: updatedAt,
         stopsCount: stopsCount ?? this.stopsCount,
         bookmarkCount: bookmarkCount ?? this.bookmarkCount,
+        likeCount: likeCount ?? this.likeCount,
         useDates: useDates ?? this.useDates,
         startDate: startDate ?? this.startDate,
         endDate: endDate ?? this.endDate,

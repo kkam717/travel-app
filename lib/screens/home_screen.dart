@@ -9,6 +9,9 @@ import '../core/home_cache.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
+import '../core/locale_notifier.dart';
+import '../l10n/app_strings.dart';
+import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
 import '../widgets/static_map_image.dart';
 
 const int _pageSize = 20;
@@ -29,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   bool _hasMore = true;
   String? _error;
   final Map<String, bool> _bookmarked = {};
+  final Map<String, bool> _liked = {};
   final ScrollController _scrollController = ScrollController();
   final ScrollController _scrollControllerForYou = ScrollController();
   late TabController _tabController;
@@ -79,6 +83,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _feed = cached.feed;
           _bookmarked.clear();
           _bookmarked.addAll(cached.bookmarked);
+          _liked.clear();
+          _liked.addAll(cached.liked);
           _isLoading = false;
           _error = null;
         });
@@ -112,20 +118,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final discoverList = results[3] as List<Itinerary>;
       final allIds = [...feedList.map((i) => i.id), ...discoverList.map((i) => i.id)];
       final bookmarkedIds = allIds.isEmpty ? <String>{} : await SupabaseService.getBookmarkedItineraryIds(userId, allIds);
+      final likedIds = allIds.isEmpty ? <String>{} : await SupabaseService.getLikedItineraryIds(userId, allIds);
       if (!mounted) return;
       final bookmarkedMap = {for (final it in [...feedList, ...discoverList]) it.id: bookmarkedIds.contains(it.id)};
+      final likedMap = {for (final it in [...feedList, ...discoverList]) it.id: likedIds.contains(it.id)};
       HomeCache.put(
         userId,
         profile: profileResult,
         myItineraries: myItinerariesList,
         feed: feedList,
         bookmarked: bookmarkedMap,
+        liked: likedMap,
       );
       setState(() {
         _feed = feedList;
         _discover = discoverList;
         _bookmarked.clear();
         _bookmarked.addAll(bookmarkedMap);
+        _liked.clear();
+        _liked.addAll(likedMap);
         _isLoading = false;
         _hasMore = feedList.length >= _pageSize;
       });
@@ -133,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (e) {
       if (!mounted) return;
       if (silent) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not refresh. Pull down to retry.')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
         return;
       }
       setState(() {
@@ -204,8 +215,74 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
     } catch (e) {
       if (mounted) setState(() => _bookmarked[itineraryId] = wasBookmarked);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update bookmark. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_update_bookmark'))));
     }
+  }
+
+  Future<void> _toggleLike(String itineraryId) async {
+    HapticFeedback.lightImpact();
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    final wasLiked = _liked[itineraryId] ?? false;
+    if (!mounted) return;
+    setState(() {
+      _liked[itineraryId] = !wasLiked;
+      final delta = wasLiked ? -1 : 1;
+      void updateCount(List<Itinerary> list) {
+        final idx = list.indexWhere((i) => i.id == itineraryId);
+        if (idx >= 0) {
+          final it = list[idx];
+          list[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + delta);
+        }
+      }
+      updateCount(_feed);
+      updateCount(_discover);
+    });
+    try {
+      if (wasLiked) {
+        await SupabaseService.removeLike(userId, itineraryId);
+      } else {
+        await SupabaseService.addLike(userId, itineraryId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _liked[itineraryId] = wasLiked;
+          final delta = wasLiked ? 1 : -1;
+          void updateCount(List<Itinerary> list) {
+            final idx = list.indexWhere((i) => i.id == itineraryId);
+            if (idx >= 0) {
+              final it = list[idx];
+              list[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + delta);
+            }
+          }
+          updateCount(_feed);
+          updateCount(_discover);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
+      }
+    }
+  }
+
+  void _onReturnFromItinerary(String itineraryId, dynamic result) {
+    if (!mounted) return;
+    if (result is! Map) return;
+    final liked = result['liked'] as bool?;
+    final likeCount = result['likeCount'] as int?;
+    final bookmarked = result['bookmarked'] as bool?;
+    if (liked == null && likeCount == null && bookmarked == null) return;
+    setState(() {
+      if (liked != null) _liked[itineraryId] = liked;
+      if (likeCount != null) {
+        void updateIn(List<Itinerary> list) {
+          final idx = list.indexWhere((i) => i.id == itineraryId);
+          if (idx >= 0) list[idx] = list[idx].copyWith(likeCount: likeCount);
+        }
+        updateIn(_feed);
+        updateIn(_discover);
+      }
+      if (bookmarked != null) _bookmarked[itineraryId] = bookmarked;
+    });
   }
 
   String _descriptionFor(Itinerary it) {
@@ -237,9 +314,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       SliverToBoxAdapter(
                         child: TabBar(
                           controller: _tabController,
-                          tabs: const [
-                            Tab(text: 'For you'),
-                            Tab(text: 'Following'),
+                          tabs: [
+                            Tab(text: AppStrings.t(context, 'for_you')),
+                            Tab(text: AppStrings.t(context, 'following')),
                           ],
                         ),
                       ),
@@ -274,6 +351,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     return _buildLoadMoreOrEnd();
                   }
                   final it = _feed[i];
+                  final userId = Supabase.instance.client.auth.currentUser?.id;
+                  final isOthersPost = userId != null && it.authorId != userId;
                   return RepaintBoundary(
                     child: _SwipeableFeedCard(
                     itinerary: it,
@@ -281,7 +360,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     locations: _locationsFor(it),
                     isBookmarked: _bookmarked[it.id] ?? false,
                     onBookmark: () => _toggleBookmark(it.id),
-                    onTap: () => context.push('/itinerary/${it.id}'),
+                    isLiked: _liked[it.id] ?? false,
+                    likeCount: it.likeCount ?? 0,
+                    onLike: isOthersPost ? () => _toggleLike(it.id) : null,
+                    onTap: () => context.push('/itinerary/${it.id}').then((result) => _onReturnFromItinerary(it.id, result)),
                     onAuthorTap: () => context.push('/author/${it.authorId}'),
                     variant: _CardVariant.standard,
                     index: i,
@@ -353,6 +435,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         return _buildLoadMoreOrEnd(displayCount: items.length);
                       }
                       final it = items[i];
+                      final userId = Supabase.instance.client.auth.currentUser?.id;
+                      final isOthersPost = userId != null && it.authorId != userId;
                       return RepaintBoundary(
                         child: _SwipeableFeedCard(
                         itinerary: it,
@@ -360,7 +444,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         locations: _locationsFor(it),
                         isBookmarked: _bookmarked[it.id] ?? false,
                         onBookmark: () => _toggleBookmark(it.id),
-                        onTap: () => context.push('/itinerary/${it.id}'),
+                        isLiked: _liked[it.id] ?? false,
+                        likeCount: it.likeCount ?? 0,
+                        onLike: isOthersPost ? () => _toggleLike(it.id) : null,
+                        onTap: () => context.push('/itinerary/${it.id}').then((result) => _onReturnFromItinerary(it.id, result)),
                         onAuthorTap: () => context.push('/author/${it.authorId}'),
                         variant: _CardVariant.standard,
                         index: i,
@@ -383,9 +470,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         SliverToBoxAdapter(
           child: TabBar(
             controller: _tabController,
-            tabs: const [
-              Tab(text: 'For you'),
-              Tab(text: 'Following'),
+            tabs: [
+              Tab(text: AppStrings.t(context, 'for_you')),
+              Tab(text: AppStrings.t(context, 'following')),
             ],
           ),
         ),
@@ -439,12 +526,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Welcome back',
+            AppStrings.t(context, 'welcome_back'),
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
-            'Discover your next adventure',
+            AppStrings.t(context, 'discover_adventure'),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
@@ -483,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             FilledButton.icon(
               onPressed: () => context.go('/search'),
               icon: const Icon(Icons.search_rounded, size: 20),
-              label: const Text('Discover trips'),
+              label: Text(AppStrings.t(context, 'discover_trips')),
             ),
           ],
         ),
@@ -502,7 +589,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             const SizedBox(height: AppTheme.spacingLg),
             Text(_error!, style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
             const SizedBox(height: AppTheme.spacingLg),
-            FilledButton(onPressed: () => _load(silent: false), child: const Text('Retry')),
+            FilledButton(onPressed: () => _load(silent: false), child: Text(AppStrings.t(context, 'retry'))),
           ],
         ),
       ),
@@ -518,6 +605,9 @@ class _SwipeableFeedCard extends StatelessWidget {
   final String locations;
   final bool isBookmarked;
   final VoidCallback onBookmark;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
@@ -529,6 +619,9 @@ class _SwipeableFeedCard extends StatelessWidget {
     required this.locations,
     required this.isBookmarked,
     required this.onBookmark,
+    required this.isLiked,
+    required this.likeCount,
+    this.onLike,
     required this.onTap,
     required this.onAuthorTap,
     required this.variant,
@@ -580,6 +673,9 @@ class _SwipeableFeedCard extends StatelessWidget {
             locations: locations,
             isBookmarked: isBookmarked,
             onBookmark: onBookmark,
+            isLiked: isLiked,
+            likeCount: likeCount,
+            onLike: onLike,
             onTap: onTap,
             onAuthorTap: onAuthorTap,
             variant: variant,
@@ -627,12 +723,15 @@ class _EdgeZone extends StatelessWidget {
   }
 }
 
-class _FeedCard extends StatelessWidget {
+class _FeedCard extends StatefulWidget {
   final Itinerary itinerary;
   final String description;
   final String locations;
   final bool isBookmarked;
   final VoidCallback onBookmark;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
@@ -644,6 +743,9 @@ class _FeedCard extends StatelessWidget {
     required this.locations,
     required this.isBookmarked,
     required this.onBookmark,
+    required this.isLiked,
+    required this.likeCount,
+    this.onLike,
     required this.onTap,
     required this.onAuthorTap,
     required this.variant,
@@ -651,15 +753,38 @@ class _FeedCard extends StatelessWidget {
   });
 
   @override
+  State<_FeedCard> createState() => _FeedCardState();
+}
+
+class _FeedCardState extends State<_FeedCard> {
+  String? _translatedText;
+  bool _isTranslating = false;
+  bool? _showTranslate;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkShowTranslate();
+  }
+
+  Future<void> _checkShowTranslate() async {
+    final text = widget.description.isNotEmpty ? '${widget.itinerary.title}\n\n${widget.description}' : widget.itinerary.title;
+    final different = await isContentInDifferentLanguage(text, LocaleNotifier.instance.localeCode);
+    if (mounted) setState(() => _showTranslate = different);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final it = itinerary;
-    final isCompact = variant == _CardVariant.compact;
-    final mapHeight = variant == _CardVariant.tall ? 240.0 : (isCompact ? 88.0 : 200.0);
+    final it = widget.itinerary;
+    final description = widget.description;
+    final locations = widget.locations;
+    final isCompact = widget.variant == _CardVariant.compact;
+    final mapHeight = widget.variant == _CardVariant.tall ? 240.0 : (isCompact ? 88.0 : 200.0);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
@@ -675,74 +800,121 @@ class _FeedCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: onAuthorTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Row(
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
-                                ? NetworkImage(it.authorPhotoUrl!)
-                                : null,
-                            child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
-                                ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              it.authorName ?? 'Unknown',
-                              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                              overflow: TextOverflow.ellipsis,
+                            child: InkWell(
+                              onTap: widget.onAuthorTap,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
+                                        ? NetworkImage(it.authorPhotoUrl!)
+                                        : null,
+                                    child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
+                                        ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      it.authorName ?? 'Unknown',
+                                      style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                          ),
+                          if (_showTranslate == true)
+                            IconButton(
+                              icon: _isTranslating
+                                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onSurfaceVariant))
+                                  : Icon(Icons.translate_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              onPressed: _isTranslating
+                                  ? null
+                                  : _translatedText != null
+                                      ? () => setState(() => _translatedText = null)
+                                      : () async {
+                                          final text = description.isNotEmpty ? '${it.title}\n\n$description' : it.title;
+                                          setState(() => _isTranslating = true);
+                                          final result = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                                          if (mounted) {
+                                            setState(() {
+                                              _translatedText = result;
+                                              _isTranslating = false;
+                                            });
+                                          }
+                                        },
+                              style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                            ),
+                          if (widget.onLike != null)
+                            IconButton(
+                              icon: Icon(
+                                widget.isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                                color: widget.isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              onPressed: widget.onLike,
+                              style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                            ),
+                          IconButton(
+                            icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            onPressed: () => shareItineraryLink(it.id, title: it.title),
+                            style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                          ),
+                          IconButton(
+                            icon: Icon(widget.isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: widget.isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                            onPressed: widget.onBookmark,
+                            style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    onPressed: () => shareItineraryLink(it.id, title: it.title),
-                    style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                  ),
-                  IconButton(
-                    icon: Icon(isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
-                    onPressed: onBookmark,
-                    style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                  ),
-                ],
-              ),
-              if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
-                const SizedBox(height: 2),
+                      if (widget.onLike != null && widget.likeCount > 0) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${widget.likeCount} ${AppStrings.t(context, 'likes')}',
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                      if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${it.bookmarkCount} ${AppStrings.t(context, 'saved_count')}',
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                      if (it.updatedAt != null) ...[
+                        const SizedBox(height: 2),
+                        Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      ],
+                      SizedBox(height: isCompact ? 4 : AppTheme.spacingSm),
+              if (_translatedText != null) ...[
                 Text(
-                  '${it.bookmarkCount} saved',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+                  _translatedText!,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
+                  maxLines: isCompact ? 1 : 4,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-              if (it.updatedAt != null) ...[
-                const SizedBox(height: 2),
-                Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              ],
-              SizedBox(height: isCompact ? 4 : AppTheme.spacingSm),
-              Text(
-                it.title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
-                maxLines: isCompact ? 1 : 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (description.isNotEmpty) ...[
-                SizedBox(height: isCompact ? 2 : 4),
+              ] else ...[
                 Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: isCompact ? 1.2 : 1.4, fontSize: isCompact ? 12 : null),
+                  it.title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
                   maxLines: isCompact ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (description.isNotEmpty) ...[
+                  SizedBox(height: isCompact ? 2 : 4),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: isCompact ? 1.2 : 1.4, fontSize: isCompact ? 12 : null),
+                    maxLines: isCompact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ],
               SizedBox(height: isCompact ? 6 : AppTheme.spacingMd),
               Wrap(
@@ -753,9 +925,9 @@ class _FeedCard extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text('${it.daysCount} days', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                  Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
                   ),
                   if (it.mode != null)

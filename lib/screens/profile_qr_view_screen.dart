@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../core/theme.dart';
 import '../core/app_link.dart';
+import '../l10n/app_strings.dart';
 
 /// View-only screen: shows a user's profile QR code and share link (no scan option).
 class ProfileQRViewScreen extends StatelessWidget {
@@ -67,7 +68,7 @@ class ProfileQRViewScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg),
               child: Text(
-                'Scan to view profile, even if they don\'t have the app',
+                AppStrings.t(context, 'scan_to_view_profile'),
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -78,7 +79,7 @@ class ProfileQRViewScreen extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: () => shareProfileLink(userId, name: userName),
               icon: const Icon(Icons.share_outlined, size: 20),
-              label: const Text('Share link'),
+              label: Text(AppStrings.t(context, 'share_link')),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
               ),

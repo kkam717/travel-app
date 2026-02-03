@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
 
@@ -64,7 +65,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
     Analytics.logScreenView('my_trips');
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isOwnTrips ? 'My Trips' : 'Trips'),
+        title: Text(_isOwnTrips ? AppStrings.t(context, 'my_trips') : AppStrings.t(context, 'trips')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -81,7 +82,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
                   ),
                   const SizedBox(height: AppTheme.spacingLg),
-                  Text('Loading trips…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text(AppStrings.t(context, 'loading_trips'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             )
@@ -96,7 +97,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                         const SizedBox(height: AppTheme.spacingLg),
                         Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: AppTheme.spacingLg),
-                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
                       ],
                     ),
                   ),
@@ -110,7 +111,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                           children: [
                             Icon(Icons.route_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
                             const SizedBox(height: AppTheme.spacingLg),
-                            Text('No trips yet', style: Theme.of(context).textTheme.titleMedium),
+                            Text(AppStrings.t(context, 'no_trips_yet'), style: Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: AppTheme.spacingSm),
                             Text(
                               _isOwnTrips ? 'Create your first trip to get started' : 'No trips yet',
@@ -122,7 +123,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                               FilledButton.icon(
                                 onPressed: () => context.go('/create'),
                                 icon: const Icon(Icons.add, size: 20),
-                                label: const Text('Create Trip'),
+                                label: Text(AppStrings.t(context, 'create_trip')),
                               ),
                             ],
                           ],
@@ -144,7 +145,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                                 child: Icon(Icons.route_outlined, color: Theme.of(context).colorScheme.onPrimaryContainer),
                               ),
                               title: Text(it.title, style: Theme.of(context).textTheme.titleSmall),
-                              subtitle: Text('${it.destination} • ${it.daysCount} days', style: Theme.of(context).textTheme.bodySmall),
+                              subtitle: Text('${it.destination} • ${it.daysCount} ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodySmall),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [

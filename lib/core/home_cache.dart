@@ -10,6 +10,7 @@ class HomeCache {
   static int _followersCount = 0;
   static List<Itinerary> _feed = [];
   static Map<String, bool> _bookmarked = {};
+  static Map<String, bool> _liked = {};
 
   static bool hasData(String userId) => _userId == userId && (_profile != null || _feed.isNotEmpty || _myItineraries.isNotEmpty);
 
@@ -21,6 +22,7 @@ class HomeCache {
     int? followersCount,
     List<Itinerary>? feed,
     Map<String, bool>? bookmarked,
+    Map<String, bool>? liked,
   }) {
     _userId = userId;
     if (profile != null) _profile = profile;
@@ -29,10 +31,11 @@ class HomeCache {
     if (followersCount != null) _followersCount = followersCount;
     if (feed != null) _feed = feed;
     if (bookmarked != null) _bookmarked = Map.from(bookmarked);
+    if (liked != null) _liked = Map.from(liked);
   }
 
-  static ({Profile? profile, List<Itinerary> myItineraries, int tripsCount, int followersCount, List<Itinerary> feed, Map<String, bool> bookmarked}) get(String userId) {
-    if (_userId != userId) return (profile: null, myItineraries: [], tripsCount: 0, followersCount: 0, feed: [], bookmarked: {});
+  static ({Profile? profile, List<Itinerary> myItineraries, int tripsCount, int followersCount, List<Itinerary> feed, Map<String, bool> bookmarked, Map<String, bool> liked}) get(String userId) {
+    if (_userId != userId) return (profile: null, myItineraries: [], tripsCount: 0, followersCount: 0, feed: [], bookmarked: {}, liked: {});
     return (
       profile: _profile,
       myItineraries: List.from(_myItineraries),
@@ -40,6 +43,7 @@ class HomeCache {
       followersCount: _followersCount,
       feed: List.from(_feed),
       bookmarked: Map.from(_bookmarked),
+      liked: Map.from(_liked),
     );
   }
 
@@ -52,6 +56,7 @@ class HomeCache {
       _followersCount = 0;
       _feed = [];
       _bookmarked = {};
+      _liked = {};
     }
   }
 }

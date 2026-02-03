@@ -25,6 +25,7 @@ class PlacesField extends StatefulWidget {
 
 class _PlacesFieldState extends State<PlacesField> {
   final _controller = TextEditingController();
+  final _focusNode = FocusNode();
   List<PlacePrediction> _predictions = [];
   bool _isLoading = false;
   Timer? _debounce;
@@ -33,6 +34,7 @@ class _PlacesFieldState extends State<PlacesField> {
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -56,6 +58,16 @@ class _PlacesFieldState extends State<PlacesField> {
             _predictions = results;
             _isLoading = false;
           });
+          if (results.isNotEmpty) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && _predictions.isNotEmpty) {
+                Scrollable.ensureVisible(context, alignment: 0.0, duration: const Duration(milliseconds: 200), curve: Curves.easeInOut);
+                Future.delayed(const Duration(milliseconds: 220), () {
+                  if (mounted) _focusNode.requestFocus();
+                });
+              }
+            });
+          }
         }
       } catch (_) {
         if (mounted) setState(() => _isLoading = false);
@@ -81,6 +93,7 @@ class _PlacesFieldState extends State<PlacesField> {
       children: [
         TextField(
           controller: _controller,
+          focusNode: _focusNode,
           decoration: InputDecoration(
             hintText: widget.hint,
             prefixIcon: const Icon(Icons.search_outlined),

@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/app_link.dart';
 import '../core/search_focus_notifier.dart';
+import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
@@ -28,6 +29,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   final _searchFocusNode = FocusNode();
   List<ProfileSearchResult> _profileResults = [];
   List<Itinerary> _placeResults = [];
+  final Map<String, bool> _placeLiked = {};
   Set<String> _followedProfileIds = {};
   bool _isLoading = false;
   String? _error;
@@ -128,7 +130,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           _followedProfileIds = next;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update follow status. Please try again.')),
+          SnackBar(content: Text(AppStrings.t(context, 'could_not_update_follow_status'))),
         );
       }
     }
@@ -167,17 +169,33 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         });
         Analytics.logEvent('profile_search_performed', {'result_count': profiles.length});
       } else {
-        final places = await SupabaseService.searchItineraries(
+        var places = await SupabaseService.searchItineraries(
           query: query,
           daysCount: _filterDays,
           styles: _filterStyles.isEmpty ? null : _filterStyles,
           mode: _filterMode,
         );
-        if (!mounted) return;
-        setState(() {
-          _placeResults = places;
-          _isLoading = false;
-        });
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (places.isNotEmpty && userId != null) {
+          final ids = places.map((i) => i.id).toList();
+          final likeCounts = await SupabaseService.getLikeCounts(ids);
+          final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+          places = places.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+          if (!mounted) return;
+          setState(() {
+            _placeResults = places;
+            _placeLiked.clear();
+            _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
+            _isLoading = false;
+          });
+        } else {
+          if (!mounted) return;
+          setState(() {
+            _placeResults = places;
+            _placeLiked.clear();
+            _isLoading = false;
+          });
+        }
         Analytics.logEvent('place_search_performed', {'result_count': places.length});
       }
     } catch (e) {
@@ -189,17 +207,48 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> _togglePlaceLike(String itineraryId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    final wasLiked = _placeLiked[itineraryId] ?? false;
+    if (!mounted) return;
+    setState(() => _placeLiked[itineraryId] = !wasLiked);
+    final idx = _placeResults.indexWhere((i) => i.id == itineraryId);
+    if (idx >= 0) {
+      final it = _placeResults[idx];
+      _placeResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? -1 : 1));
+    }
+    try {
+      if (wasLiked) {
+        await SupabaseService.removeLike(userId, itineraryId);
+      } else {
+        await SupabaseService.addLike(userId, itineraryId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _placeLiked[itineraryId] = wasLiked;
+          if (idx >= 0) {
+            final it = _placeResults[idx];
+            _placeResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? 1 : -1));
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     Analytics.logScreenView('search');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Search'),
+        title: Text(AppStrings.t(context, 'search')),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.person_outline_rounded), text: 'Profiles'),
-            Tab(icon: Icon(Icons.place_outlined), text: 'Trips'),
+          tabs: [
+            Tab(icon: const Icon(Icons.person_outline_rounded), text: AppStrings.t(context, 'profiles')),
+            Tab(icon: const Icon(Icons.place_outlined), text: AppStrings.t(context, 'trips')),
           ],
         ),
         actions: [
@@ -218,7 +267,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               controller: _searchController,
               focusNode: _searchFocusNode,
               decoration: InputDecoration(
-                hintText: _tabController.index == 0 ? 'Search by name...' : 'Destination or keywords...',
+                hintText: _tabController.index == 0 ? AppStrings.t(context, 'search_by_name') : AppStrings.t(context, 'destination_or_keywords'),
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear_rounded),
@@ -269,7 +318,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             Icon(Icons.person_search_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
             const SizedBox(height: AppTheme.spacingLg),
             Text(
-              searchEmpty ? 'Type to search for profiles' : 'No profiles found',
+              searchEmpty ? AppStrings.t(context, 'type_to_search_profiles') : AppStrings.t(context, 'no_profiles_found'),
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
@@ -288,7 +337,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           isFollowing: _followedProfileIds.contains(p.id),
           isOwnProfile: currentUserId == p.id,
           onTap: () {
-            _addRecentSearch(p.name?.trim() ?? 'Profile');
+            _addRecentSearch(p.name?.trim() ?? AppStrings.t(context, 'profile'));
             context.push('/author/${p.id}');
           },
           onFollowTap: null,
@@ -309,6 +358,22 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       if (searchEmpty && _recentSearches.isNotEmpty) {
         return _buildRecentSearches();
       }
+      if (searchEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+              const SizedBox(height: AppTheme.spacingLg),
+              Text(
+                AppStrings.t(context, 'type_to_search_trips'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+      }
       final hasFilters = _filterDays != null || _filterStyles.isNotEmpty || _filterMode != null;
       return Center(
         child: Padding(
@@ -319,50 +384,55 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
               const SizedBox(height: AppTheme.spacingLg),
               Text(
-                searchEmpty ? 'Type to search for trips' : 'No trips found',
+                AppStrings.t(context, 'no_trips_found'),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
-              if (!searchEmpty) ...[
-                const SizedBox(height: AppTheme.spacingSm),
-                Text(
-                  hasFilters ? 'Try clearing filters or a different search.' : 'Only public itineraries appear.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  textAlign: TextAlign.center,
+              const SizedBox(height: AppTheme.spacingSm),
+              Text(
+                hasFilters ? 'Try clearing filters or a different search.' : 'Only public itineraries appear.',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+              if (hasFilters) ...[
+                const SizedBox(height: AppTheme.spacingMd),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _filterDays = null;
+                      _filterStyles = [];
+                      _filterMode = null;
+                    });
+                    _search();
+                  },
+                  icon: const Icon(Icons.clear_all_rounded, size: 18),
+                  label: Text(AppStrings.t(context, 'clear_filters')),
                 ),
-                if (hasFilters) ...[
-                  const SizedBox(height: AppTheme.spacingMd),
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _filterDays = null;
-                        _filterStyles = [];
-                        _filterMode = null;
-                      });
-                      _search();
-                    },
-                    icon: const Icon(Icons.clear_all_rounded, size: 18),
-                    label: const Text('Clear filters'),
-                  ),
-                ],
               ],
             ],
           ),
         ),
       );
     }
+    final userId = Supabase.instance.client.auth.currentUser?.id;
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
       itemCount: _placeResults.length,
-      itemBuilder: (_, i) => _ItineraryCard(
-        itinerary: _placeResults[i],
-        onTap: () {
-          final it = _placeResults[i];
-          _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
-          context.push('/itinerary/${it.id}');
-        },
-        onAuthorTap: () => context.push('/author/${_placeResults[i].authorId}'),
-      ),
+      itemBuilder: (_, i) {
+        final it = _placeResults[i];
+        final isOthersPost = userId != null && it.authorId != userId;
+        return _ItineraryCard(
+          itinerary: it,
+          isLiked: _placeLiked[it.id] ?? false,
+          likeCount: it.likeCount ?? 0,
+          onLike: isOthersPost ? () => _togglePlaceLike(it.id) : null,
+          onTap: () {
+            _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
+            context.push('/itinerary/${it.id}');
+          },
+          onAuthorTap: () => context.push('/author/${it.authorId}'),
+        );
+      },
     );
   }
 
@@ -398,7 +468,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           child: OutlinedButton.icon(
             onPressed: _clearAllRecentSearches,
             icon: const Icon(Icons.clear_all_rounded, size: 20),
-            label: const Text('Clear all searches'),
+            label: Text(AppStrings.t(context, 'clear_all_searches')),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
@@ -419,7 +489,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             const SizedBox(height: AppTheme.spacingLg),
             Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(height: AppTheme.spacingLg),
-            FilledButton(onPressed: _search, child: const Text('Retry')),
+            FilledButton(onPressed: _search, child: Text(AppStrings.t(context, 'retry'))),
           ],
         ),
       ),
@@ -429,91 +499,103 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   void _showFilters() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) {
         int? days = _filterDays;
         List<String> styles = List.from(_filterStyles);
         String? mode = _filterMode;
         return StatefulBuilder(
           builder: (_, setModal) {
-            return Padding(
-              padding: const EdgeInsets.all(AppTheme.spacingLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Duration', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    children: [7, 10, 14, 21].map((d) {
-                      final selected = days == d;
-                      return FilterChip(
-                        label: Text('$d days'),
-                        selected: selected,
-                        onSelected: (_) => setModal(() => days = selected ? null : d),
-                      );
-                    }).toList(),
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingLg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          children: [7, 10, 14, 21].map((d) {
+                            final selected = days == d;
+                            return FilterChip(
+                              label: Text('$d ${AppStrings.t(context, 'days')}'),
+                              selected: selected,
+                              onSelected: (_) => setModal(() => days = selected ? null : d),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: travelStyles.map((s) {
+                            final selected = styles.contains(s);
+                            return FilterChip(
+                              label: Text(s),
+                              selected: selected,
+                              onSelected: (_) => setModal(() {
+                                if (selected) styles.remove(s);
+                                else styles.add(s);
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          children: travelModes.map((m) {
+                            final selected = mode == m;
+                            return ChoiceChip(
+                              label: Text(m),
+                              selected: selected,
+                              onSelected: (_) => setModal(() => mode = selected ? null : m),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => setModal(() {
+                                days = null;
+                                styles = [];
+                                mode = null;
+                              }),
+                              child: Text(AppStrings.t(context, 'clear')),
+                            ),
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: () {
+                                setState(() {
+                                  _filterDays = days;
+                                  _filterStyles = styles;
+                                  _filterMode = mode;
+                                });
+                                Navigator.pop(ctx);
+                                _search();
+                              },
+                              child: Text(AppStrings.t(context, 'apply')),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Text('Travel style', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: travelStyles.map((s) {
-                      final selected = styles.contains(s);
-                      return FilterChip(
-                        label: Text(s),
-                        selected: selected,
-                        onSelected: (_) => setModal(() {
-                          if (selected) styles.remove(s);
-                          else styles.add(s);
-                        }),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Text('Mode', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    children: travelModes.map((m) {
-                      final selected = mode == m;
-                      return ChoiceChip(
-                        label: Text(m),
-                        selected: selected,
-                        onSelected: (_) => setModal(() => mode = selected ? null : m),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => setModal(() {
-                          days = null;
-                          styles = [];
-                          mode = null;
-                        }),
-                        child: const Text('Clear'),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: () {
-                          setState(() {
-                            _filterDays = days;
-                            _filterStyles = styles;
-                            _filterMode = mode;
-                          });
-                          Navigator.pop(ctx);
-                          _search();
-                        },
-                        child: const Text('Apply'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -560,7 +642,7 @@ class _ProfileCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      profile.name ?? 'Unknown',
+                      profile.name ?? AppStrings.t(context, 'unknown'),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -571,13 +653,13 @@ class _ProfileCard extends StatelessWidget {
                       children: [
                         Icon(Icons.map_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
-                        Text('${profile.tripsCount} trips', style: Theme.of(context).textTheme.bodySmall),
+                        Text('${profile.tripsCount} ${AppStrings.t(context, 'trips')}', style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(width: 12),
                         Icon(Icons.people_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            '${profile.followersCount} followers',
+                            '${profile.followersCount} ${AppStrings.t(context, 'followers')}',
                             style: Theme.of(context).textTheme.bodySmall,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -596,7 +678,7 @@ class _ProfileCard extends StatelessWidget {
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: Text(isFollowing ? 'Following' : 'Follow'),
+                    child: Text(isFollowing ? AppStrings.t(context, 'following') : AppStrings.t(context, 'follow')),
                   ),
                 )
               else
@@ -611,10 +693,20 @@ class _ProfileCard extends StatelessWidget {
 
 class _ItineraryCard extends StatelessWidget {
   final Itinerary itinerary;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback? onAuthorTap;
 
-  const _ItineraryCard({required this.itinerary, required this.onTap, this.onAuthorTap});
+  const _ItineraryCard({
+    required this.itinerary,
+    this.isLiked = false,
+    this.likeCount = 0,
+    this.onLike,
+    required this.onTap,
+    this.onAuthorTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -639,11 +731,15 @@ class _ItineraryCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: AppTheme.spacingSm),
+              if (likeCount > 0) ...[
+                const SizedBox(height: 4),
+                Text('$likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ],
               Row(
                 children: [
                   Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 4),
-                  Text('${it.daysCount} days', style: Theme.of(context).textTheme.bodySmall),
+                  Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(width: 12),
                   if (it.mode != null)
                     Container(
@@ -655,6 +751,16 @@ class _ItineraryCard extends StatelessWidget {
                       child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
                     ),
                   const Spacer(),
+                  if (onLike != null)
+                    IconButton(
+                      icon: Icon(
+                        isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                        size: 20,
+                        color: isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: onLike,
+                      style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(36, 36)),
+                    ),
                   IconButton(
                     icon: Icon(Icons.share_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onPressed: () => shareItineraryLink(it.id, title: it.title),
@@ -664,7 +770,7 @@ class _ItineraryCard extends StatelessWidget {
                     InkWell(
                       onTap: onAuthorTap,
                       borderRadius: BorderRadius.circular(4),
-                      child: Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodySmall),
+                      child: Text('${AppStrings.t(context, 'by')} ${it.authorName}', style: Theme.of(context).textTheme.bodySmall),
                     ),
                 ],
               ),
@@ -678,7 +784,7 @@ class _ItineraryCard extends StatelessWidget {
               ],
               if (it.stopsCount != null && it.stopsCount! > 0) ...[
                 const SizedBox(height: 4),
-                Text('${it.stopsCount} stops', style: Theme.of(context).textTheme.bodySmall),
+                Text('${it.stopsCount} ${AppStrings.t(context, 'stops')}', style: Theme.of(context).textTheme.bodySmall),
               ],
             ],
           ),

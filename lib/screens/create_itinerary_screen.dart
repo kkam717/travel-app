@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/constants.dart';
 import '../data/countries.dart' show countries, destinationToCountryCodes, travelModes;
+import '../l10n/app_strings.dart';
 import '../services/supabase_service.dart';
 import '../widgets/places_field.dart';
 import '../widgets/itinerary_map.dart';
@@ -164,7 +165,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         }
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load itinerary. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_load_itinerary'))));
     } finally {
       if (mounted) setState(() => _isLoadingData = false);
     }
@@ -241,11 +242,11 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         icon: Icon(Icons.warning_amber_rounded, size: 48, color: Theme.of(ctx).colorScheme.primary),
-        title: const Text('Discard changes?'),
-        content: const Text('You have unsaved data. Are you sure you want to go back?'),
+        title: Text(AppStrings.t(context, 'discard_changes')),
+        content: Text(AppStrings.t(context, 'unsaved_data_confirm')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Discard')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.t(context, 'cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.t(context, 'discard'))),
         ],
       ),
     );
@@ -262,26 +263,26 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
   void _nextPage() {
     if (_currentPage == 0 && (_formKey.currentState?.validate() != true || _selectedCountries.isEmpty)) {
       if (_selectedCountries.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add at least one country')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'add_at_least_one_country'))));
       }
       return;
     }
     if (_currentPage == 0 && _useDates && (_startDate == null || _endDate == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select start and end dates')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'select_start_end_dates'))));
       return;
     }
     if (_currentPage == 0 && !_useDates && _daysCountOverride < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter number of days')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'enter_number_of_days'))));
       return;
     }
     if (_currentPage == 1 && _destinations.every((d) => d.name.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Add at least one destination')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'add_at_least_one_destination'))));
       return;
     }
     if (_currentPage == 2) {
       final invalid = _destinations.where((d) => d.name.isNotEmpty && (d.days == null || d.days!.isEmpty));
       if (invalid.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select at least one day for each destination')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'select_day_per_destination'))));
         return;
       }
     }
@@ -396,16 +397,25 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not save trip. Please try again.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_save'))));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _pageTitle() {
-    final titles = ['New Trip', 'Add Destinations', 'Assign Days', 'Trip Map', 'Add Transport', 'Add Details', 'Review Trip'];
-    return _isEditMode && _currentPage == 0 ? 'Edit Trip' : titles[_currentPage.clamp(0, 6)];
+  String _pageTitle(BuildContext context) {
+    final keys = ['new_trip', 'add_destinations', 'assign_days', 'trip_map', 'add_transport', 'add_details', 'review_trip'];
+    return _isEditMode && _currentPage == 0 ? AppStrings.t(context, 'edit_trip') : AppStrings.t(context, keys[_currentPage.clamp(0, 6)]);
+  }
+
+  String _localizedMode(BuildContext context, String m) {
+    switch (m.toLowerCase()) {
+      case 'budget': return AppStrings.t(context, 'budget');
+      case 'standard': return AppStrings.t(context, 'standard');
+      case 'luxury': return AppStrings.t(context, 'luxury');
+      default: return m;
+    }
   }
 
   List<ItineraryStop> get _stopsForMap {
@@ -465,11 +475,11 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           final leave = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              title: const Text('Discard changes?'),
-              content: const Text('You have unsaved data. Are you sure you want to leave?'),
+              title: Text(AppStrings.t(context, 'discard_changes')),
+              content: Text(AppStrings.t(context, 'unsaved_data_confirm')),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Discard')),
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.t(context, 'cancel'))),
+                FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.t(context, 'discard'))),
               ],
             ),
           );
@@ -492,7 +502,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_pageTitle()),
+          title: Text(_pageTitle(context)),
           leading: _currentPage > 0
               ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => _handleBack())
               : null,
@@ -504,7 +514,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   children: [
                     SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                     const SizedBox(height: AppTheme.spacingLg),
-                    Text('Loading…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    Text(AppStrings.t(context, 'loading'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ],
                 ),
               )
@@ -531,19 +541,19 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       child: ListView(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         children: [
-          Text('Start a New Trip', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(AppStrings.t(context, 'start_new_trip'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: AppTheme.spacingLg),
           TextFormField(
             controller: _titleController,
-            decoration: const InputDecoration(
-              labelText: 'Trip name',
-              hintText: 'e.g. Summer in Asia',
-              prefixIcon: Icon(Icons.title_outlined),
+            decoration: InputDecoration(
+              labelText: AppStrings.t(context, 'trip_name'),
+              hintText: AppStrings.t(context, 'trip_name_hint'),
+              prefixIcon: const Icon(Icons.title_outlined),
             ),
-            validator: (v) => v == null || v.isEmpty ? 'Enter trip name' : null,
+            validator: (v) => v == null || v.isEmpty ? AppStrings.t(context, 'enter_trip_name') : null,
           ),
           const SizedBox(height: AppTheme.spacingLg),
-          Text('Countries visited', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          Text(AppStrings.t(context, 'countries_visited'), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppTheme.spacingSm),
           if (_selectedCountries.isNotEmpty)
             Wrap(
@@ -557,7 +567,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             ),
           const SizedBox(height: 8),
           TextField(
-            decoration: const InputDecoration(hintText: 'Search and add countries…', prefixIcon: Icon(Icons.search_outlined)),
+            decoration: InputDecoration(hintText: AppStrings.t(context, 'search_and_add_countries'), prefixIcon: const Icon(Icons.search_outlined)),
             onChanged: (v) => setState(() {
               _countryQuery = v;
               _showCountrySuggestions = v.isNotEmpty;
@@ -588,12 +598,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               ),
             ),
           const SizedBox(height: AppTheme.spacingLg),
-          Text('Trip duration', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          Text(AppStrings.t(context, 'trip_duration'), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppTheme.spacingSm),
           SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, icon: Icon(Icons.calendar_today, size: 18), label: Text('Dates')),
-              ButtonSegment(value: false, icon: Icon(Icons.wb_sunny_outlined, size: 18), label: Text('Month/Season')),
+            segments: [
+              ButtonSegment(value: true, icon: const Icon(Icons.calendar_today, size: 18), label: Text(AppStrings.t(context, 'dates'))),
+              ButtonSegment(value: false, icon: const Icon(Icons.wb_sunny_outlined, size: 18), label: Text(AppStrings.t(context, 'month_season'))),
             ],
             selected: {_useDates},
             onSelectionChanged: (s) => setState(() => _useDates = s.first),
@@ -602,8 +612,8 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           if (_useDates) ...[
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('Start date', style: Theme.of(context).textTheme.bodyMedium),
-              subtitle: Text(_startDate != null ? '${_startDate!.month}/${_startDate!.day}/${_startDate!.year}' : 'Tap to select'),
+              title: Text(AppStrings.t(context, 'start_date'), style: Theme.of(context).textTheme.bodyMedium),
+              subtitle: Text(_startDate != null ? '${_startDate!.month}/${_startDate!.day}/${_startDate!.year}' : AppStrings.t(context, 'tap_to_select')),
               trailing: const Icon(Icons.calendar_today),
               onTap: () async {
                 final d = await showDatePicker(context: context, initialDate: _startDate ?? DateTime.now(), firstDate: DateTime(2020), lastDate: DateTime(2030));
@@ -612,8 +622,8 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text('End date', style: Theme.of(context).textTheme.bodyMedium),
-              subtitle: Text(_endDate != null ? '${_endDate!.month}/${_endDate!.day}/${_endDate!.year}' : 'Tap to select'),
+              title: Text(AppStrings.t(context, 'end_date'), style: Theme.of(context).textTheme.bodyMedium),
+              subtitle: Text(_endDate != null ? '${_endDate!.month}/${_endDate!.day}/${_endDate!.year}' : AppStrings.t(context, 'tap_to_select')),
               trailing: const Icon(Icons.calendar_today),
               onTap: () async {
                 final d = await showDatePicker(context: context, initialDate: _endDate ?? _startDate ?? DateTime.now(), firstDate: _startDate ?? DateTime(2020), lastDate: DateTime(2030));
@@ -623,7 +633,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             if (_startDate != null && _endDate != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text('$_daysCount days', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
+                child: Text('$_daysCount ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
               ),
           ] else ...[
             Wrap(
@@ -640,7 +650,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             ),
             if (_selectedSeason == null) ...[
               const SizedBox(height: 8),
-              Text('Or select month', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(AppStrings.t(context, 'or_select_month'), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 6,
@@ -660,7 +670,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               children: [
                 Expanded(
                   child: InputDecorator(
-                    decoration: const InputDecoration(labelText: 'Year'),
+                    decoration: InputDecoration(labelText: AppStrings.t(context, 'year')),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<int>(
                         value: _selectedYear,
@@ -676,7 +686,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   child: TextFormField(
                     controller: _daysOverrideController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Number of days'),
+                    decoration: InputDecoration(labelText: AppStrings.t(context, 'number_of_days')),
                     onChanged: (v) => setState(() => _daysCountOverride = int.tryParse(v) ?? 7),
                   ),
                 ),
@@ -684,13 +694,13 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             ),
           ],
           const SizedBox(height: AppTheme.spacingLg),
-          Text('Travel style', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppTheme.spacingSm),
           Wrap(
             spacing: AppTheme.spacingSm,
             runSpacing: AppTheme.spacingSm,
             children: travelModes.map((m) => FilterChip(
-              label: Text(m),
+              label: Text(_localizedMode(context, m)),
               selected: _selectedMode == m.toLowerCase(),
               onSelected: (_) => setState(() => _selectedMode = m.toLowerCase()),
               selectedColor: Theme.of(context).colorScheme.primaryContainer,
@@ -698,12 +708,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             )).toList(),
           ),
           const SizedBox(height: AppTheme.spacingLg),
-          Text('Visibility', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          Text(AppStrings.t(context, 'visibility'), style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: AppTheme.spacingSm),
           SegmentedButton<String>(
-            segments: const [
-              ButtonSegment(value: visibilityFriends, icon: Icon(Icons.people_outline, size: 18), label: Text('Followers Only')),
-              ButtonSegment(value: visibilityPublic, icon: Icon(Icons.public, size: 18), label: Text('Public')),
+            segments: [
+              ButtonSegment(value: visibilityFriends, icon: const Icon(Icons.people_outline, size: 18), label: Text(AppStrings.t(context, 'followers_only'))),
+              ButtonSegment(value: visibilityPublic, icon: const Icon(Icons.public, size: 18), label: Text(AppStrings.t(context, 'public'))),
             ],
             selected: {_visibility},
             onSelectionChanged: (s) => setState(() => _visibility = s.first),
@@ -712,7 +722,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           FilledButton.icon(
             onPressed: _nextPage,
             icon: const Icon(Icons.arrow_forward, size: 20),
-            label: const Text('Next: Add Destinations'),
+            label: Text(AppStrings.t(context, 'next_add_destinations')),
           ),
         ],
       ),
@@ -723,9 +733,9 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text('Add Destinations', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'add_destinations'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: AppTheme.spacingSm),
-        Text('Add each place you visited (city or location). e.g. Tokyo, Singapore, Bali.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(AppStrings.t(context, 'add_destinations_hint'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
         ...List.generate(_destinations.length, (i) {
           final d = _destinations[i];
@@ -741,9 +751,8 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                       Expanded(
                         child: d.name.isEmpty
                             ? PlacesField(
-                                hint: 'Search city or location…',
-                                countryCodes: _selectedCountries,
-                                placeType: 'city',
+                                hint: AppStrings.t(context, 'search_city_or_location'),
+                                countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                                 onSelected: (name, lat, lng, locationUrl) {
                                   d.name = name;
                                   d.lat = lat;
@@ -782,14 +791,14 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         OutlinedButton.icon(
           onPressed: _addDestination,
           icon: const Icon(Icons.add),
-          label: const Text('Add destination'),
+          label: Text(AppStrings.t(context, 'add_destination')),
           style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
         ),
         const SizedBox(height: AppTheme.spacingLg),
         FilledButton.icon(
           onPressed: _nextPage,
           icon: const Icon(Icons.arrow_forward, size: 20),
-          label: const Text('Next: Assign Days'),
+          label: Text(AppStrings.t(context, 'next_assign_days')),
         ),
       ],
     );
@@ -799,9 +808,9 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text('Assign Days to Each Destination', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'assign_days_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: AppTheme.spacingSm),
-        Text('Select which day(s) you were at each destination. Tap days to toggle. You can select any combination—they don\'t need to be consecutive.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(AppStrings.t(context, 'assign_days_hint'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
         ...(_destinations.where((d) => d.name.isNotEmpty).map((d) {
           d.days ??= {};
@@ -821,7 +830,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                       final day = i + 1;
                       final selected = d.days!.contains(day);
                       return FilterChip(
-                        label: Text('Day $day'),
+                        label: Text('${AppStrings.t(context, 'day')} $day'),
                         selected: selected,
                         onSelected: (_) {
                           setState(() {
@@ -840,7 +849,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   if (d.days!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
-                      child: Text('Selected: ${_formatDays(d.days)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      child: Text('${AppStrings.t(context, 'selected')}: ${_formatDays(d.days)}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ),
                 ],
               ),
@@ -851,7 +860,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         FilledButton.icon(
           onPressed: _nextPage,
           icon: const Icon(Icons.arrow_forward, size: 20),
-          label: const Text('Next: View Map'),
+          label: Text(AppStrings.t(context, 'next_view_map')),
         ),
       ],
     );
@@ -886,7 +895,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                           children: [
                             Icon(Icons.map_outlined, size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             const SizedBox(height: 12),
-                            Text('Add destinations with locations to see the map', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
+                            Text(AppStrings.t(context, 'add_destinations_for_map'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
                           ],
                         ),
                       ),
@@ -902,7 +911,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Destinations', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(AppStrings.t(context, 'destinations'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               ...(_destinations.where((d) => d.name.isNotEmpty).map((d) => Padding(
                 padding: const EdgeInsets.only(bottom: 4),
@@ -918,7 +927,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
               FilledButton.icon(
                 onPressed: _nextPage,
                 icon: const Icon(Icons.arrow_forward, size: 20),
-                label: const Text('Next: Add Transport'),
+                label: Text(AppStrings.t(context, 'next_add_transport')),
                 style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
               ),
             ],
@@ -942,17 +951,17 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text('Add Transport Between Locations', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'add_transport_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: AppTheme.spacingSm),
-        Text('How did you travel between each location?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(AppStrings.t(context, 'add_transport_how'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
         if (segmentIndices.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
             child: Text(
               pairs.length >= 2
-                  ? 'All your destinations are in the same place—no transport needed.'
-                  : 'Add at least 2 different destinations to choose transport between them.',
+                  ? AppStrings.t(context, 'same_place_no_transport')
+                  : AppStrings.t(context, 'add_2_destinations_transport'),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           )
@@ -985,56 +994,56 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                     runSpacing: 8,
                     children: [
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.flight_rounded, size: 18, color: current == TransportType.plane ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Plane')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.flight_rounded, size: 18, color: current == TransportType.plane ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'plane'))]),
                         selected: current == TransportType.plane,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.plane),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.train_rounded, size: 18, color: current == TransportType.train ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Train')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.train_rounded, size: 18, color: current == TransportType.train ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'train'))]),
                         selected: current == TransportType.train,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.train),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_car_rounded, size: 18, color: current == TransportType.car ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Car')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_car_rounded, size: 18, color: current == TransportType.car ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'car'))]),
                         selected: current == TransportType.car,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.car),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_bus_rounded, size: 18, color: current == TransportType.bus ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Bus')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_bus_rounded, size: 18, color: current == TransportType.bus ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'bus'))]),
                         selected: current == TransportType.bus,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.bus),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_boat_rounded, size: 18, color: current == TransportType.boat ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Boat')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_boat_rounded, size: 18, color: current == TransportType.boat ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'boat'))]),
                         selected: current == TransportType.boat,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.boat),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_walk_rounded, size: 18, color: current == TransportType.walk ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Walk')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.directions_walk_rounded, size: 18, color: current == TransportType.walk ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'walk'))]),
                         selected: current == TransportType.walk,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.walk),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.help_outline_rounded, size: 18, color: current == TransportType.other ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), const Text('Other')]),
+                        label: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.help_outline_rounded, size: 18, color: current == TransportType.other ? Theme.of(context).colorScheme.onPrimaryContainer : Theme.of(context).colorScheme.onSurfaceVariant), const SizedBox(width: 6), Text(AppStrings.t(context, 'other'))]),
                         selected: current == TransportType.other,
                         onSelected: (_) => setState(() => _transportBetweenDestinations[origIdx] = TransportType.other),
                         selectedColor: Theme.of(context).colorScheme.primaryContainer,
                         checkmarkColor: Theme.of(context).colorScheme.primary,
                       ),
                       FilterChip(
-                        label: const Text('Skip'),
+                        label: Text(AppStrings.t(context, 'skip')),
                         selected: current == TransportType.unknown,
                         onSelected: (_) => setState(() => _transportBetweenDestinations.remove(origIdx)),
                         selectedColor: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -1045,11 +1054,11 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   TextFormField(
                     initialValue: _transportDescriptions[origIdx] ?? '',
                     onChanged: (v) => _transportDescriptions[origIdx] = v,
-                    decoration: const InputDecoration(
-                      labelText: 'Description (optional)',
-                      hintText: 'e.g. Flight BA 123, rental car pickup',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    decoration: InputDecoration(
+                      labelText: AppStrings.t(context, 'description_optional'),
+                      hintText: AppStrings.t(context, 'transport_hint'),
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
                     maxLines: 2,
                   ),
@@ -1062,7 +1071,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         FilledButton.icon(
           onPressed: _nextPage,
           icon: const Icon(Icons.arrow_forward, size: 20),
-          label: const Text('Next: Add Details'),
+          label: Text(AppStrings.t(context, 'next_add_details')),
           style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
         ),
       ],
@@ -1099,9 +1108,9 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text('Add Details to Each Destination', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'add_details_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: AppTheme.spacingXs),
-        Text('Add restaurants, hotels, guides, and drinks to each location.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        Text(AppStrings.t(context, 'add_details_subtitle'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
         ...List.generate(pairs.length, (i) {
           final pair = pairs[i];
@@ -1150,13 +1159,13 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         if (pairs.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingLg),
-            child: Text('Add destinations first.', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            child: Text(AppStrings.t(context, 'add_destinations_first'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ),
         const SizedBox(height: AppTheme.spacingLg),
         FilledButton.icon(
           onPressed: _nextPage,
           icon: const Icon(Icons.arrow_forward, size: 20),
-          label: const Text('Next: Review Trip'),
+          label: Text(AppStrings.t(context, 'next_review_trip')),
           style: FilledButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
         ),
       ],
@@ -1182,7 +1191,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                       : Container(
                           height: mapHeight,
                           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          child: Center(child: Text('No map data', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))),
+                          child: Center(child: Text(AppStrings.t(context, 'no_map_data'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant))),
                         ),
                 ),
               );
@@ -1194,7 +1203,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
             children: [
-              Text('All destinations & details', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(AppStrings.t(context, 'all_destinations_details'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               ...(_chronologicalDestDayPairs.expand((pair) => [
                 ListTile(
@@ -1225,7 +1234,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
             children: [
               OutlinedButton(
                 onPressed: () => _goToPage(5),
-                child: const Text('Edit details'),
+                child: Text(AppStrings.t(context, 'edit_details')),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1340,19 +1349,19 @@ class _EditableLocationCard extends StatelessWidget {
                       children: [
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('restaurant'),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), SizedBox(width: 6), Text('Restaurant')]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'restaurant'))]),
                         ),
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('hotel'),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), SizedBox(width: 6), Text('Hotel')]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'hotel'))]),
                         ),
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('guide'),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), SizedBox(width: 6), Text('Guide')]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'guide'))]),
                         ),
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('bar'),
-                          child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), SizedBox(width: 6), Text('Drinks')]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'drinks'))]),
                         ),
                       ],
                     ),
@@ -1392,7 +1401,7 @@ class _EditableLocationCard extends StatelessWidget {
                     if (venues.isEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: AppTheme.spacingSm),
-                        child: Text('No places added', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                        child: Text(AppStrings.t(context, 'no_places_added'), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                       ),
                   ],
                 ),

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -30,19 +32,19 @@ class _StaticMapImageState extends State<StaticMapImage> {
   bool _geocoding = false;
   Brightness? _lastBrightness;
 
-  static String? get _geoapifyKey => dotenv.env['GEOAPIFY_API_KEY'];
+  static String? get _geoapifyKey {
+    const fromDefine = String.fromEnvironment('GEOAPIFY_API_KEY', defaultValue: '');
+    if (fromDefine.trim().isNotEmpty) return fromDefine.trim();
+    return dotenv.env['GEOAPIFY_API_KEY']?.trim();
+  }
 
   bool get _useGeoapify => (_geoapifyKey ?? '').trim().isNotEmpty;
-
-  /// All stops with coordinates (locations + venues)
-  List<ItineraryStop> get _allStopsWithCoords =>
-      widget.itinerary.stops.where((s) => s.lat != null && s.lng != null).toList();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final brightness = Theme.of(context).brightness;
-    if (_lastBrightness != brightness) {
+    if (_lastBrightness != brightness || _geocodedUrl == null) {
       _lastBrightness = brightness;
       _buildUrl();
     }
@@ -65,11 +67,20 @@ class _StaticMapImageState extends State<StaticMapImage> {
   }
 
   void _buildUrl() {
+    if (!_useGeoapify) {
+      debugPrint('StaticMapImage: GEOAPIFY_API_KEY not found, cannot build map URL');
+      if (mounted) setState(() => _geocodedUrl = null);
+      return;
+    }
+    
     final url = _buildStaticMapUrl();
-    if (url != null) {
+    if (url != null && url.isNotEmpty) {
+      debugPrint('StaticMapImage: Built URL successfully (length: ${url.length})');
       if (mounted) setState(() => _geocodedUrl = url);
       return;
     }
+    
+    debugPrint('StaticMapImage: No stops with coordinates, attempting geocoding');
     final stopsNoCoords = widget.itinerary.stops
         .where((s) => s.lat == null || s.lng == null)
         .toList();
@@ -81,22 +92,77 @@ class _StaticMapImageState extends State<StaticMapImage> {
   }
 
   String? _buildStaticMapUrl() {
-    final points = _allStopsWithCoords.map((s) => (s.lat!, s.lng!)).toList();
-    if (points.isEmpty) return null;
+    // Separate cities (locations) from venues (spots)
+    final cityStops = widget.itinerary.stops.where((s) => s.isLocation && s.lat != null && s.lng != null).toList();
+    final venueStops = widget.itinerary.stops.where((s) => s.isVenue && s.lat != null && s.lng != null).toList();
+    
+    // Sort cities by day/position for polyline
+    final orderedCities = List<ItineraryStop>.from(cityStops)
+      ..sort((a, b) {
+        final dayCmp = a.day.compareTo(b.day);
+        return dayCmp != 0 ? dayCmp : a.position.compareTo(b.position);
+      });
+    
+    final cityPoints = orderedCities.map((s) => (s.lat!, s.lng!)).toList();
+    final venuePoints = venueStops.map((s) => (s.lat!, s.lng!)).toList();
+    
+    // Use cities for bounds calculation
+    final allPoints = [...cityPoints, ...venuePoints];
+    if (allPoints.isEmpty) return null;
 
     if (_useGeoapify && _geoapifyKey != null) {
-      return _buildGeoapifyUrl(points, path: points.length >= 2);
+      return _buildGeoapifyUrl(cityPoints, venuePoints: venuePoints, path: cityPoints.length >= 2);
     }
     return null;
   }
 
-  String _buildGeoapifyUrl(List<(double, double)> points, {bool path = true}) {
+  /// Builds a list of points forming a curved path through [cityPoints] using quadratic Bezier segments.
+  List<(double, double)> _createCurvedPolylinePoints(List<(double, double)> cityPoints) {
+    if (cityPoints.length < 2) return cityPoints;
+    final result = <(double, double)>[];
+    for (var i = 0; i < cityPoints.length - 1; i++) {
+      final from = cityPoints[i];
+      final to = cityPoints[i + 1];
+      final midLat = (from.$1 + to.$1) / 2;
+      final midLng = (from.$2 + to.$2) / 2;
+      final dx = to.$2 - from.$2;
+      final dy = to.$1 - from.$1;
+      final dist = math.sqrt(dx * dx + dy * dy);
+      if (dist < 1e-7) {
+        if (i == 0) result.add(from);
+        result.add(to);
+        continue;
+      }
+      final offset = dist * 0.3;
+      final perpX = -dy / dist * offset;
+      final perpY = dx / dist * offset;
+      final ctrlLat = midLat + perpY;
+      final ctrlLng = midLng + perpX;
+      const segments = 20;
+      final start = i == 0 ? 0 : 1;
+      for (var j = start; j <= segments; j++) {
+        final t = j / segments;
+        final lat = (1 - t) * (1 - t) * from.$1 + 2 * (1 - t) * t * ctrlLat + t * t * to.$1;
+        final lng = (1 - t) * (1 - t) * from.$2 + 2 * (1 - t) * t * ctrlLng + t * t * to.$2;
+        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          result.add((lat, lng));
+        }
+      }
+    }
+    return result.isEmpty ? cityPoints : result;
+  }
+
+  String _buildGeoapifyUrl(List<(double, double)> cityPoints, {List<(double, double)>? venuePoints, bool path = true}) {
     final w = (widget.width * 2).toInt().clamp(100, 640);
     final h = (widget.height * 2).toInt().clamp(100, 640);
 
-    double minLat = points.first.$1, maxLat = points.first.$1;
-    double minLng = points.first.$2, maxLng = points.first.$2;
-    for (final p in points) {
+    // Calculate bounds from all points (cities + venues)
+    final allPoints = [...cityPoints, ...(venuePoints ?? [])];
+    if (allPoints.isEmpty) return '';
+    
+    double minLat = allPoints.first.$1, maxLat = allPoints.first.$1;
+    double minLng = allPoints.first.$2, maxLng = allPoints.first.$2;
+    for (final p in allPoints) {
       if (p.$1 < minLat) minLat = p.$1;
       if (p.$1 > maxLat) maxLat = p.$1;
       if (p.$2 < minLng) minLng = p.$2;
@@ -109,27 +175,63 @@ class _StaticMapImageState extends State<StaticMapImage> {
     final padLng = lngSpan * 0.25; // 25% padding left/right
     final rect = 'rect:${(minLng - padLng).clamp(-180.0, 180.0)},${(maxLat + padLat).clamp(-90.0, 90.0)},${(maxLng + padLng).clamp(-180.0, 180.0)},${(minLat - padLat).clamp(-90.0, 90.0)}';
 
-    // positron (light) / dark-matter (night) to match app theme
-    final style = (_lastBrightness ?? Brightness.light) == Brightness.dark ? 'dark-matter' : 'positron';
+    // Same theme as interactive map (klokantech-basic)
+    const style = 'klokantech-basic';
+    final hex = (widget.pathColor.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toLowerCase();
+    
+    // Build geometry list - Geoapify requires multiple geometries in ONE parameter separated by |
+    final geometries = <String>[];
+    
+    // Add curved dotted polyline connecting cities only
+    if (path && cityPoints.length >= 2) {
+      final curvedPoints = _createCurvedPolylinePoints(cityPoints);
+      final polyline = curvedPoints.map((p) => '${p.$2},${p.$1}').join(',');
+      geometries.add('polyline:$polyline;linewidth:6;linecolor:#$hex;linestyle:dotted');
+    }
+    
+    // Add markers for cities (larger circles)
+    // Format: circle:lon,lat,radius;properties
+    for (final p in cityPoints) {
+      geometries.add('circle:${p.$2},${p.$1},8;fillcolor:#$hex;linecolor:#ffffff;linewidth:2');
+    }
+    
+    // Add markers for venues (small dots)
+    if (venuePoints != null && venuePoints.isNotEmpty) {
+      for (final p in venuePoints) {
+        geometries.add('circle:${p.$2},${p.$1},4;fillcolor:#$hex;linecolor:#ffffff;linewidth:1');
+      }
+    }
+    
+    // If no geometries, at least add a marker for the single point
+    if (geometries.isEmpty && allPoints.isNotEmpty) {
+      final p = allPoints.first;
+      geometries.add('circle:${p.$2},${p.$1},8;fillcolor:#$hex;linecolor:#ffffff;linewidth:2');
+    }
+
+    // Build URL - combine all geometries with pipe separator in single geometry parameter
     final sb = StringBuffer(
       'https://maps.geoapify.com/v1/staticmap?'
       'style=$style'
       '&width=$w'
       '&height=$h'
       '&scaleFactor=2'
-      '&area=${Uri.encodeComponent(rect)}'
-      '&apiKey=$_geoapifyKey',
+      '&area=${Uri.encodeComponent(rect)}',
     );
-
-    if (path && points.length >= 2) {
-      final polyline = points.map((p) => '${p.$2},${p.$1}').join(',');
-      final hex = (widget.pathColor.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toLowerCase();
-      // Use # not %23 so Uri.encodeComponent produces %23 (single encoding); %23 would become %2523
-      final geometry = 'polyline:$polyline;linewidth:6;linecolor:#$hex';
-      sb.write('&geometry=${Uri.encodeComponent(geometry)}');
+    
+    // Add single geometry parameter with all geometries separated by |
+    if (geometries.isNotEmpty) {
+      final combinedGeometry = geometries.join('|');
+      sb.write('&geometry=${Uri.encodeComponent(combinedGeometry)}');
     }
+    
+    sb.write('&apiKey=$_geoapifyKey');
 
-    return sb.toString();
+    final url = sb.toString();
+    // Debug: log if URL is very long (might hit limits)
+    if (url.length > 2000) {
+      debugPrint('StaticMapImage: URL length is ${url.length} characters (may exceed limits)');
+    }
+    return url;
   }
 
   Future<void> _geocodeStops(List<ItineraryStop> stops) async {
@@ -159,8 +261,12 @@ class _StaticMapImageState extends State<StaticMapImage> {
       }
       if (!mounted) return;
       if (points.isNotEmpty && _geoapifyKey != null) {
-        final pts = points.length >= 2 ? points : [...points, points.first];
-        final url = _buildGeoapifyUrl(pts, path: pts.length >= 2);
+        // Separate cities from venues
+        final cityPoints = <(double, double)>[];
+        final venuePoints = <(double, double)>[];
+        // Note: geocoded points are from location stops (cities), so they're all cities
+        cityPoints.addAll(points);
+        final url = _buildGeoapifyUrl(cityPoints, venuePoints: venuePoints, path: cityPoints.length >= 2);
         setState(() {
           _geocodedUrl = url;
           _geocoding = false;
@@ -215,7 +321,7 @@ class _StaticMapImageState extends State<StaticMapImage> {
       final coords = await _geocodeNominatim(widget.itinerary.destination);
       if (!mounted) return;
       if (coords != null && _geoapifyKey != null) {
-        final url = _buildGeoapifyUrl([coords], path: false);
+        final url = _buildGeoapifyUrl([coords], venuePoints: [], path: false);
         setState(() {
           _geocodedUrl = url;
           _geocoding = false;
@@ -318,6 +424,8 @@ class _StaticMapImageState extends State<StaticMapImage> {
           );
         },
         errorBuilder: (context, error, stackTrace) {
+          debugPrint('StaticMapImage: Image load error: $error');
+          debugPrint('StaticMapImage: URL was: ${_geocodedUrl?.substring(0, _geocodedUrl!.length.clamp(0, 200))}...');
           return Container(
             width: widget.width,
             height: widget.height,
@@ -326,7 +434,18 @@ class _StaticMapImageState extends State<StaticMapImage> {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Center(
-              child: Icon(Icons.map_outlined, size: 40, color: theme.colorScheme.outline),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.map_outlined, size: 40, color: theme.colorScheme.outline),
+                  const SizedBox(height: 8),
+                  if (kDebugMode)
+                    Text(
+                      'Map failed to load',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                ],
+              ),
             ),
           );
         },

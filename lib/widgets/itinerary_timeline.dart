@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
+import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 
 /// Transport type for timeline connectors.
@@ -161,7 +162,7 @@ class TimelineConnector extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close'),
+            child: Text(AppStrings.t(context, 'close')),
           ),
         ],
       ),
@@ -328,7 +329,7 @@ class LocationCard extends StatelessWidget {
                       if (locations.isNotEmpty && venues.isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: AppTheme.spacingSm),
-                          child: Text('No places added', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                          child: Text(AppStrings.t(context, 'no_places_added'), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                         ),
                     ],
                 ),
@@ -447,7 +448,7 @@ class ItineraryTimeline extends StatelessWidget {
             children: [
               Icon(Icons.place_outlined, size: 48, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: AppTheme.spacingMd),
-              Text('No places yet', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(AppStrings.t(context, 'no_places_yet'), style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
         ),

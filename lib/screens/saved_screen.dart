@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/saved_cache.dart';
 import '../models/itinerary.dart';
+import '../l10n/app_strings.dart';
 import '../services/supabase_service.dart';
 
 class SavedScreen extends StatefulWidget {
@@ -20,12 +21,19 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   List<Itinerary> _planning = [];
   bool _isLoading = false;
   String? _error;
+  ScaffoldMessengerState? _scaffoldMessenger;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _initOrLoad();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
   }
 
   @override
@@ -82,17 +90,19 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
     } catch (e) {
       if (!mounted) return;
       if (silent) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not refresh. Pull down to retry.')),
+        if (mounted && _scaffoldMessenger != null) {
+          _scaffoldMessenger!.showSnackBar(
+            SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))),
           );
         }
         return;
       }
-      setState(() {
-        _error = 'Something went wrong. Please try again.';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = AppStrings.t(context, 'something_went_wrong');
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -101,12 +111,12 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
     Analytics.logScreenView('saved');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Saved'),
+        title: Text(AppStrings.t(context, 'saved')),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.bookmark_outline), text: 'Bookmarked'),
-            Tab(icon: Icon(Icons.edit_road_outlined), text: 'Planning'),
+          tabs: [
+            Tab(icon: const Icon(Icons.bookmark_outline), text: AppStrings.t(context, 'bookmarked')),
+            Tab(icon: const Icon(Icons.edit_road_outlined), text: AppStrings.t(context, 'planning')),
           ],
         ),
       ),
@@ -117,7 +127,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
                 children: [
                   SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                   const SizedBox(height: AppTheme.spacingLg),
-                  Text('Loading…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text(AppStrings.t(context, 'loading'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             )
@@ -132,7 +142,7 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
                         const SizedBox(height: AppTheme.spacingLg),
                         Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: AppTheme.spacingLg),
-                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
                       ],
                     ),
                   ),
@@ -142,8 +152,8 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      _ItineraryList(itineraries: _bookmarked, emptyMessage: 'No bookmarked itineraries', canEdit: false),
-                      _ItineraryList(itineraries: _planning, emptyMessage: 'No itineraries in planning', canEdit: true),
+                      _ItineraryList(itineraries: _bookmarked, emptyMessage: AppStrings.t(context, 'no_bookmarked_trips'), canEdit: false),
+                      _ItineraryList(itineraries: _planning, emptyMessage: AppStrings.t(context, 'no_planning_trips'), canEdit: true),
                     ],
                   ),
                 ),
@@ -189,7 +199,7 @@ class _ItineraryList extends StatelessWidget {
               child: Icon(Icons.route_outlined, color: Theme.of(context).colorScheme.onPrimaryContainer),
             ),
             title: Text(it.title, style: Theme.of(context).textTheme.titleSmall),
-            subtitle: Text('${it.destination} • ${it.daysCount} days', style: Theme.of(context).textTheme.bodySmall),
+            subtitle: Text('${it.destination} • ${it.daysCount} ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodySmall),
             trailing: canEdit
                 ? IconButton(
                     icon: const Icon(Icons.edit_outlined),

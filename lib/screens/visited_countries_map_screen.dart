@@ -8,6 +8,7 @@ import '../core/theme.dart';
 import '../core/profile_cache.dart';
 import '../core/web_tile_provider.dart';
 import '../data/countries.dart';
+import '../l10n/app_strings.dart';
 import '../services/countries_geojson_service.dart';
 import '../services/supabase_service.dart';
 
@@ -94,9 +95,9 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
                   padding: const EdgeInsets.all(AppTheme.spacingMd),
                   child: Row(
                     children: [
-                      Text('Edit visited countries', style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      Text(AppStrings.t(context, 'edit_visited_countries'), style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                       const Spacer(),
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
                       const SizedBox(width: 8),
                       FilledButton(
                         onPressed: () async {
@@ -111,9 +112,9 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
                             _loadPolygons();
                           });
                           final messenger = ScaffoldMessenger.maybeOf(context);
-                          messenger?.showSnackBar(const SnackBar(content: Text('Countries updated')));
+                          messenger?.showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'countries_updated'))));
                         },
-                        child: const Text('Save'),
+                        child: Text(AppStrings.t(context, 'save')),
                       ),
                     ],
                   ),
@@ -184,7 +185,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Countries visited'),
+        title: Text(AppStrings.t(context, 'countries_visited')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -243,7 +244,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
           children: [
             SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
             const SizedBox(height: AppTheme.spacingLg),
-            Text('Loading map…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(AppStrings.t(context, 'loading_map'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       );
