@@ -32,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   bool _hasMore = true;
   String? _error;
   final Map<String, bool> _bookmarked = {};
+  final Map<String, bool> _liked = {};
   final ScrollController _scrollController = ScrollController();
   final ScrollController _scrollControllerForYou = ScrollController();
   late TabController _tabController;
@@ -82,6 +83,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _feed = cached.feed;
           _bookmarked.clear();
           _bookmarked.addAll(cached.bookmarked);
+          _liked.clear();
+          _liked.addAll(cached.liked);
           _isLoading = false;
           _error = null;
         });
@@ -115,20 +118,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final discoverList = results[3] as List<Itinerary>;
       final allIds = [...feedList.map((i) => i.id), ...discoverList.map((i) => i.id)];
       final bookmarkedIds = allIds.isEmpty ? <String>{} : await SupabaseService.getBookmarkedItineraryIds(userId, allIds);
+      final likedIds = allIds.isEmpty ? <String>{} : await SupabaseService.getLikedItineraryIds(userId, allIds);
       if (!mounted) return;
       final bookmarkedMap = {for (final it in [...feedList, ...discoverList]) it.id: bookmarkedIds.contains(it.id)};
+      final likedMap = {for (final it in [...feedList, ...discoverList]) it.id: likedIds.contains(it.id)};
       HomeCache.put(
         userId,
         profile: profileResult,
         myItineraries: myItinerariesList,
         feed: feedList,
         bookmarked: bookmarkedMap,
+        liked: likedMap,
       );
       setState(() {
         _feed = feedList;
         _discover = discoverList;
         _bookmarked.clear();
         _bookmarked.addAll(bookmarkedMap);
+        _liked.clear();
+        _liked.addAll(likedMap);
         _isLoading = false;
         _hasMore = feedList.length >= _pageSize;
       });
@@ -211,6 +219,72 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  Future<void> _toggleLike(String itineraryId) async {
+    HapticFeedback.lightImpact();
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    final wasLiked = _liked[itineraryId] ?? false;
+    if (!mounted) return;
+    setState(() {
+      _liked[itineraryId] = !wasLiked;
+      final delta = wasLiked ? -1 : 1;
+      void updateCount(List<Itinerary> list) {
+        final idx = list.indexWhere((i) => i.id == itineraryId);
+        if (idx >= 0) {
+          final it = list[idx];
+          list[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + delta);
+        }
+      }
+      updateCount(_feed);
+      updateCount(_discover);
+    });
+    try {
+      if (wasLiked) {
+        await SupabaseService.removeLike(userId, itineraryId);
+      } else {
+        await SupabaseService.addLike(userId, itineraryId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _liked[itineraryId] = wasLiked;
+          final delta = wasLiked ? 1 : -1;
+          void updateCount(List<Itinerary> list) {
+            final idx = list.indexWhere((i) => i.id == itineraryId);
+            if (idx >= 0) {
+              final it = list[idx];
+              list[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + delta);
+            }
+          }
+          updateCount(_feed);
+          updateCount(_discover);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
+      }
+    }
+  }
+
+  void _onReturnFromItinerary(String itineraryId, dynamic result) {
+    if (!mounted) return;
+    if (result is! Map) return;
+    final liked = result['liked'] as bool?;
+    final likeCount = result['likeCount'] as int?;
+    final bookmarked = result['bookmarked'] as bool?;
+    if (liked == null && likeCount == null && bookmarked == null) return;
+    setState(() {
+      if (liked != null) _liked[itineraryId] = liked;
+      if (likeCount != null) {
+        void updateIn(List<Itinerary> list) {
+          final idx = list.indexWhere((i) => i.id == itineraryId);
+          if (idx >= 0) list[idx] = list[idx].copyWith(likeCount: likeCount);
+        }
+        updateIn(_feed);
+        updateIn(_discover);
+      }
+      if (bookmarked != null) _bookmarked[itineraryId] = bookmarked;
+    });
+  }
+
   String _descriptionFor(Itinerary it) {
     if (it.styleTags.isNotEmpty) {
       return '${it.destination} • ${it.styleTags.take(2).join(', ').toLowerCase()}';
@@ -277,6 +351,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     return _buildLoadMoreOrEnd();
                   }
                   final it = _feed[i];
+                  final userId = Supabase.instance.client.auth.currentUser?.id;
+                  final isOthersPost = userId != null && it.authorId != userId;
                   return RepaintBoundary(
                     child: _SwipeableFeedCard(
                     itinerary: it,
@@ -284,7 +360,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     locations: _locationsFor(it),
                     isBookmarked: _bookmarked[it.id] ?? false,
                     onBookmark: () => _toggleBookmark(it.id),
-                    onTap: () => context.push('/itinerary/${it.id}'),
+                    isLiked: _liked[it.id] ?? false,
+                    likeCount: it.likeCount ?? 0,
+                    onLike: isOthersPost ? () => _toggleLike(it.id) : null,
+                    onTap: () => context.push('/itinerary/${it.id}').then((result) => _onReturnFromItinerary(it.id, result)),
                     onAuthorTap: () => context.push('/author/${it.authorId}'),
                     variant: _CardVariant.standard,
                     index: i,
@@ -356,6 +435,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         return _buildLoadMoreOrEnd(displayCount: items.length);
                       }
                       final it = items[i];
+                      final userId = Supabase.instance.client.auth.currentUser?.id;
+                      final isOthersPost = userId != null && it.authorId != userId;
                       return RepaintBoundary(
                         child: _SwipeableFeedCard(
                         itinerary: it,
@@ -363,7 +444,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         locations: _locationsFor(it),
                         isBookmarked: _bookmarked[it.id] ?? false,
                         onBookmark: () => _toggleBookmark(it.id),
-                        onTap: () => context.push('/itinerary/${it.id}'),
+                        isLiked: _liked[it.id] ?? false,
+                        likeCount: it.likeCount ?? 0,
+                        onLike: isOthersPost ? () => _toggleLike(it.id) : null,
+                        onTap: () => context.push('/itinerary/${it.id}').then((result) => _onReturnFromItinerary(it.id, result)),
                         onAuthorTap: () => context.push('/author/${it.authorId}'),
                         variant: _CardVariant.standard,
                         index: i,
@@ -521,6 +605,9 @@ class _SwipeableFeedCard extends StatelessWidget {
   final String locations;
   final bool isBookmarked;
   final VoidCallback onBookmark;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
@@ -532,6 +619,9 @@ class _SwipeableFeedCard extends StatelessWidget {
     required this.locations,
     required this.isBookmarked,
     required this.onBookmark,
+    required this.isLiked,
+    required this.likeCount,
+    this.onLike,
     required this.onTap,
     required this.onAuthorTap,
     required this.variant,
@@ -583,6 +673,9 @@ class _SwipeableFeedCard extends StatelessWidget {
             locations: locations,
             isBookmarked: isBookmarked,
             onBookmark: onBookmark,
+            isLiked: isLiked,
+            likeCount: likeCount,
+            onLike: onLike,
             onTap: onTap,
             onAuthorTap: onAuthorTap,
             variant: variant,
@@ -636,6 +729,9 @@ class _FeedCard extends StatefulWidget {
   final String locations;
   final bool isBookmarked;
   final VoidCallback onBookmark;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
@@ -647,6 +743,9 @@ class _FeedCard extends StatefulWidget {
     required this.locations,
     required this.isBookmarked,
     required this.onBookmark,
+    required this.isLiked,
+    required this.likeCount,
+    this.onLike,
     required this.onTap,
     required this.onAuthorTap,
     required this.variant,
@@ -753,6 +852,15 @@ class _FeedCardState extends State<_FeedCard> {
                                 },
                       style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                     ),
+                  if (widget.onLike != null)
+                    IconButton(
+                      icon: Icon(
+                        widget.isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                        color: widget.isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: widget.onLike,
+                      style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                    ),
                   IconButton(
                     icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onPressed: () => shareItineraryLink(it.id, title: it.title),
@@ -765,6 +873,13 @@ class _FeedCardState extends State<_FeedCard> {
                   ),
                 ],
               ),
+              if (widget.onLike != null && widget.likeCount > 0) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '${widget.likeCount} ${AppStrings.t(context, 'likes')}',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                ),
+              ],
               if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
                 const SizedBox(height: 2),
                 Text(

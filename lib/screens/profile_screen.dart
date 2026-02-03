@@ -100,8 +100,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         SupabaseService.getFollowerCount(userId),
         SupabaseService.getFollowingCount(userId),
       ]);
+      var myItineraries = results[1] as List<Itinerary>;
+      if (myItineraries.isNotEmpty) {
+        final ids = myItineraries.map((i) => i.id).toList();
+        final likeCounts = await SupabaseService.getLikeCounts(ids);
+        myItineraries = myItineraries.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+      }
       final profile = results[0] as Profile?;
-      final myItineraries = results[1] as List<Itinerary>;
       final pastCities = results[2] as List<UserPastCity>;
       final followersCount = results[3] as int;
       final followingCount = results[4] as int;
@@ -433,6 +438,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               locations: _locationsFor(it),
               onTap: () => context.push('/itinerary/${it.id}'),
               onEdit: () => context.push('/itinerary/${it.id}/edit'),
+              likeCount: it.likeCount ?? 0,
               translatedContent: _translatedContent[it.id],
               onTranslate: _showTranslate[it.id] == true
                   ? () async {

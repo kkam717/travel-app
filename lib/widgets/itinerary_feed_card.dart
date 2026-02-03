@@ -17,6 +17,9 @@ class ItineraryFeedCard extends StatelessWidget {
   final VoidCallback? onEdit;
   final String? translatedContent;
   final VoidCallback? onTranslate;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
 
   const ItineraryFeedCard({
     super.key,
@@ -30,6 +33,9 @@ class ItineraryFeedCard extends StatelessWidget {
     this.onEdit,
     this.translatedContent,
     this.onTranslate,
+    this.isLiked = false,
+    this.likeCount = 0,
+    this.onLike,
   });
 
   @override
@@ -91,6 +97,13 @@ class ItineraryFeedCard extends StatelessWidget {
                       style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
                     ),
                   ],
+                  if (likeCount > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '$likeCount ${AppStrings.t(context, 'likes')}',
+                      style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                    ),
+                  ],
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -100,6 +113,16 @@ class ItineraryFeedCard extends StatelessWidget {
                         )
                       else
                         const Spacer(),
+                      if (onLike != null)
+                        IconButton(
+                          icon: Icon(
+                            isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                            color: isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 20,
+                          ),
+                          onPressed: onLike,
+                          style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                        ),
                       if (onTranslate != null)
                         IconButton(
                           icon: Icon(Icons.translate_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
