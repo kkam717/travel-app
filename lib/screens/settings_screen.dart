@@ -6,6 +6,8 @@ import '../core/home_cache.dart';
 import '../core/profile_cache.dart';
 import '../core/saved_cache.dart';
 import '../core/theme_mode_notifier.dart';
+import '../core/locale_notifier.dart';
+import '../l10n/app_strings.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -23,7 +25,7 @@ class SettingsScreen extends StatelessWidget {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not sign out. Please try again.')),
+          SnackBar(content: Text(AppStrings.t(context, 'could_not_sign_out'))),
         );
       }
     }
@@ -34,13 +36,13 @@ class SettingsScreen extends StatelessWidget {
     Analytics.logScreenView('settings');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(AppStrings.t(context, 'settings')),
       ),
       body: ListView(
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-            child: Text('Appearance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+            child: Text(AppStrings.t(context, 'appearance'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ),
           ListenableBuilder(
             listenable: ThemeModeNotifier.instance,
@@ -49,23 +51,23 @@ class SettingsScreen extends StatelessWidget {
               return Column(
                 children: [
                   RadioListTile<ThemeMode>(
-                    title: const Text('Light'),
+                    title: Text(AppStrings.t(context, 'light')),
                     secondary: const Icon(Icons.light_mode_outlined),
                     value: ThemeMode.light,
                     groupValue: mode,
                     onChanged: (_) => ThemeModeNotifier.instance.setThemeMode(ThemeMode.light),
                   ),
                   RadioListTile<ThemeMode>(
-                    title: const Text('Dark'),
+                    title: Text(AppStrings.t(context, 'dark')),
                     secondary: const Icon(Icons.dark_mode_outlined),
                     value: ThemeMode.dark,
                     groupValue: mode,
                     onChanged: (_) => ThemeModeNotifier.instance.setThemeMode(ThemeMode.dark),
                   ),
                   RadioListTile<ThemeMode>(
-                    title: const Text('System'),
+                    title: Text(AppStrings.t(context, 'system')),
                     secondary: const Icon(Icons.brightness_auto_outlined),
-                    subtitle: const Text('Match device settings'),
+                    subtitle: Text(AppStrings.t(context, 'match_device')),
                     value: ThemeMode.system,
                     groupValue: mode,
                     onChanged: (_) => ThemeModeNotifier.instance.setThemeMode(ThemeMode.system),
@@ -75,13 +77,35 @@ class SettingsScreen extends StatelessWidget {
             },
           ),
           const Divider(height: 32),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text('Account', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text(AppStrings.t(context, 'language'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          ),
+          ListenableBuilder(
+            listenable: LocaleNotifier.instance,
+            builder: (context, _) {
+              final current = LocaleNotifier.instance.localeCode;
+              return Column(
+                children: supportedLocales.entries.map((e) {
+                  return RadioListTile<String>(
+                    title: Text(e.value),
+                    secondary: const Icon(Icons.language_outlined),
+                    value: e.key,
+                    groupValue: current,
+                    onChanged: (_) => LocaleNotifier.instance.setLocaleCode(e.key),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const Divider(height: 32),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text(AppStrings.t(context, 'account'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           ),
           ListTile(
             leading: const Icon(Icons.logout_outlined),
-            title: const Text('Sign out'),
+            title: Text(AppStrings.t(context, 'sign_out')),
             onTap: () => _signOut(context),
           ),
         ],

@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show Supabase, FlutterAuthClientOptions, AuthFlowType;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'core/theme.dart';
 import 'core/theme_mode_notifier.dart';
+import 'core/locale_notifier.dart';
 import 'core/analytics.dart';
+import 'l10n/app_strings.dart';
 import 'router.dart';
 
 final themeModeNotifier = ThemeModeNotifier.instance;
+final localeNotifier = LocaleNotifier.instance;
 
 void main() {
   runZonedGuarded(() async {
@@ -57,11 +61,13 @@ class _TravelAppState extends State<TravelApp> {
   void initState() {
     super.initState();
     themeModeNotifier.addListener(_onThemeChanged);
+    localeNotifier.addListener(_onThemeChanged);
   }
 
   @override
   void dispose() {
     themeModeNotifier.removeListener(_onThemeChanged);
+    localeNotifier.removeListener(_onThemeChanged);
     super.dispose();
   }
 
@@ -70,11 +76,18 @@ class _TravelAppState extends State<TravelApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Travel App',
+      title: AppStrings.s(localeNotifier.locale!.languageCode, 'app_name'),
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeModeNotifier.themeMode,
+      locale: localeNotifier.locale,
+      supportedLocales: supportedLocales.keys.map((k) => Locale(k)).toList(),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       routerConfig: createRouter(),
     );
   }
@@ -95,7 +108,7 @@ class SetupRequiredApp extends StatelessWidget {
               children: [
                 const Icon(Icons.settings, size: 64, color: Colors.orange),
                 const SizedBox(height: 24),
-                Text('Setup Required', style: Theme.of(context).textTheme.headlineSmall),
+                Text(AppStrings.s('en', 'setup_required'), style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 16),
                 Text(
                   'Add your Supabase credentials to .env:\n\nSUPABASE_URL=https://your-project.supabase.co\nSUPABASE_ANON_KEY=your-anon-key',
@@ -130,7 +143,7 @@ class ErrorApp extends StatelessWidget {
               children: [
                 const Icon(Icons.error_outline, size: 64, color: Colors.red),
                 const SizedBox(height: 24),
-                Text('Something went wrong', style: Theme.of(context).textTheme.headlineSmall),
+                Text(AppStrings.s(localeNotifier.locale?.languageCode ?? 'en', 'something_went_wrong'), style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 16),
                 Text(error, style: Theme.of(context).textTheme.bodySmall),
               ],

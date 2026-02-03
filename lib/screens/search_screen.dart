@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/app_link.dart';
 import '../core/search_focus_notifier.dart';
+import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
@@ -128,7 +129,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           _followedProfileIds = next;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update follow status. Please try again.')),
+          SnackBar(content: Text(AppStrings.t(context, 'could_not_update_follow_status'))),
         );
       }
     }
@@ -194,12 +195,12 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     Analytics.logScreenView('search');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Search'),
+        title: Text(AppStrings.t(context, 'search')),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(icon: Icon(Icons.person_outline_rounded), text: 'Profiles'),
-            Tab(icon: Icon(Icons.place_outlined), text: 'Trips'),
+          tabs: [
+            Tab(icon: const Icon(Icons.person_outline_rounded), text: AppStrings.t(context, 'profiles')),
+            Tab(icon: const Icon(Icons.place_outlined), text: AppStrings.t(context, 'trips')),
           ],
         ),
         actions: [
@@ -218,7 +219,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               controller: _searchController,
               focusNode: _searchFocusNode,
               decoration: InputDecoration(
-                hintText: _tabController.index == 0 ? 'Search by name...' : 'Destination or keywords...',
+                hintText: _tabController.index == 0 ? AppStrings.t(context, 'search_by_name') : AppStrings.t(context, 'destination_or_keywords'),
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear_rounded),
@@ -269,7 +270,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             Icon(Icons.person_search_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
             const SizedBox(height: AppTheme.spacingLg),
             Text(
-              searchEmpty ? 'Type to search for profiles' : 'No profiles found',
+              searchEmpty ? AppStrings.t(context, 'type_to_search_profiles') : AppStrings.t(context, 'no_profiles_found'),
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
@@ -288,7 +289,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           isFollowing: _followedProfileIds.contains(p.id),
           isOwnProfile: currentUserId == p.id,
           onTap: () {
-            _addRecentSearch(p.name?.trim() ?? 'Profile');
+            _addRecentSearch(p.name?.trim() ?? AppStrings.t(context, 'profile'));
             context.push('/author/${p.id}');
           },
           onFollowTap: null,
@@ -319,7 +320,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
               const SizedBox(height: AppTheme.spacingLg),
               Text(
-                searchEmpty ? 'Type to search for trips' : 'No trips found',
+                searchEmpty ? AppStrings.t(context, 'type_to_search_trips') : AppStrings.t(context, 'no_trips_found'),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
@@ -342,7 +343,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                       _search();
                     },
                     icon: const Icon(Icons.clear_all_rounded, size: 18),
-                    label: const Text('Clear filters'),
+                    label: Text(AppStrings.t(context, 'clear_filters')),
                   ),
                 ],
               ],
@@ -398,7 +399,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
           child: OutlinedButton.icon(
             onPressed: _clearAllRecentSearches,
             icon: const Icon(Icons.clear_all_rounded, size: 20),
-            label: const Text('Clear all searches'),
+            label: Text(AppStrings.t(context, 'clear_all_searches')),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
             ),
@@ -419,7 +420,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
             const SizedBox(height: AppTheme.spacingLg),
             Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
             const SizedBox(height: AppTheme.spacingLg),
-            FilledButton(onPressed: _search, child: const Text('Retry')),
+            FilledButton(onPressed: _search, child: Text(AppStrings.t(context, 'retry'))),
           ],
         ),
       ),
@@ -441,21 +442,21 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Duration', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: AppTheme.spacingSm),
                   Wrap(
                     spacing: 8,
                     children: [7, 10, 14, 21].map((d) {
                       final selected = days == d;
                       return FilterChip(
-                        label: Text('$d days'),
+                        label: Text('$d ${AppStrings.t(context, 'days')}'),
                         selected: selected,
                         onSelected: (_) => setModal(() => days = selected ? null : d),
                       );
                     }).toList(),
                   ),
                   const SizedBox(height: AppTheme.spacingLg),
-                  Text('Travel style', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: AppTheme.spacingSm),
                   Wrap(
                     spacing: 8,
@@ -473,7 +474,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                     }).toList(),
                   ),
                   const SizedBox(height: AppTheme.spacingLg),
-                  Text('Mode', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(height: AppTheme.spacingSm),
                   Wrap(
                     spacing: 8,
@@ -495,7 +496,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                           styles = [];
                           mode = null;
                         }),
-                        child: const Text('Clear'),
+                        child: Text(AppStrings.t(context, 'clear')),
                       ),
                       const Spacer(),
                       FilledButton(
@@ -508,7 +509,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                           Navigator.pop(ctx);
                           _search();
                         },
-                        child: const Text('Apply'),
+                        child: Text(AppStrings.t(context, 'apply')),
                       ),
                     ],
                   ),
@@ -560,7 +561,7 @@ class _ProfileCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      profile.name ?? 'Unknown',
+                      profile.name ?? AppStrings.t(context, 'unknown'),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -571,13 +572,13 @@ class _ProfileCard extends StatelessWidget {
                       children: [
                         Icon(Icons.map_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
-                        Text('${profile.tripsCount} trips', style: Theme.of(context).textTheme.bodySmall),
+                        Text('${profile.tripsCount} ${AppStrings.t(context, 'trips')}', style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(width: 12),
                         Icon(Icons.people_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
-                            '${profile.followersCount} followers',
+                            '${profile.followersCount} ${AppStrings.t(context, 'followers')}',
                             style: Theme.of(context).textTheme.bodySmall,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -596,7 +597,7 @@ class _ProfileCard extends StatelessWidget {
                       minimumSize: Size.zero,
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: Text(isFollowing ? 'Following' : 'Follow'),
+                    child: Text(isFollowing ? AppStrings.t(context, 'following') : AppStrings.t(context, 'follow')),
                   ),
                 )
               else
@@ -643,7 +644,7 @@ class _ItineraryCard extends StatelessWidget {
                 children: [
                   Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 4),
-                  Text('${it.daysCount} days', style: Theme.of(context).textTheme.bodySmall),
+                  Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(width: 12),
                   if (it.mode != null)
                     Container(
@@ -664,7 +665,7 @@ class _ItineraryCard extends StatelessWidget {
                     InkWell(
                       onTap: onAuthorTap,
                       borderRadius: BorderRadius.circular(4),
-                      child: Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodySmall),
+                      child: Text('${AppStrings.t(context, 'by')} ${it.authorName}', style: Theme.of(context).textTheme.bodySmall),
                     ),
                 ],
               ),
@@ -678,7 +679,7 @@ class _ItineraryCard extends StatelessWidget {
               ],
               if (it.stopsCount != null && it.stopsCount! > 0) ...[
                 const SizedBox(height: 4),
-                Text('${it.stopsCount} stops', style: Theme.of(context).textTheme.bodySmall),
+                Text('${it.stopsCount} ${AppStrings.t(context, 'stops')}', style: Theme.of(context).textTheme.bodySmall),
               ],
             ],
           ),

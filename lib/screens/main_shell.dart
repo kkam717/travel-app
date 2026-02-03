@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../core/profile_refresh_notifier.dart';
 import '../core/search_focus_notifier.dart';
+import '../l10n/app_strings.dart';
 
 class _AddTripButton extends StatefulWidget {
   final VoidCallback onPressed;
@@ -68,11 +69,11 @@ class MainShell extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: 'Home', path: '/home'),
-                _NavItem(icon: Icons.search_rounded, activeIcon: Icons.search_rounded, label: 'Search', path: '/search'),
+                _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: AppStrings.t(context, 'home'), path: '/home'),
+                _NavItem(icon: Icons.search_rounded, activeIcon: Icons.search_rounded, label: AppStrings.t(context, 'search'), path: '/search'),
                 const SizedBox(width: 64),
-                _NavItem(icon: Icons.bookmark_outline_rounded, activeIcon: Icons.bookmark_rounded, label: 'Saved', path: '/saved'),
-                _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: 'Profile', path: '/profile'),
+                _NavItem(icon: Icons.bookmark_outline_rounded, activeIcon: Icons.bookmark_rounded, label: AppStrings.t(context, 'saved'), path: '/saved'),
+                _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: AppStrings.t(context, 'profile'), path: '/profile'),
               ],
             ),
           ),

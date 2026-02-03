@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../l10n/app_strings.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -14,7 +15,7 @@ class WelcomeScreen extends StatelessWidget {
     if (email == null || email.isEmpty || password == null || password.isEmpty) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Add DEV_EMAIL and DEV_PASSWORD to .env')),
+          SnackBar(content: Text(AppStrings.t(context, 'add_dev_env'))),
         );
       }
       return;
@@ -26,13 +27,13 @@ class WelcomeScreen extends StatelessWidget {
     } on AuthException catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dev sign in failed: ${e.message}')),
+          SnackBar(content: Text('${AppStrings.t(context, 'dev_sign_in_failed')}: ${e.message}')),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dev sign in failed: $e')),
+          SnackBar(content: Text('${AppStrings.t(context, 'dev_sign_in_failed')}: $e')),
         );
       }
     }
@@ -66,7 +67,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppTheme.spacingXl),
               Text(
-                'Travel App',
+                AppStrings.t(context, 'app_name'),
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.5,
@@ -74,7 +75,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               const SizedBox(height: AppTheme.spacingSm),
               Text(
-                'Plan trips, discover places, share adventures',
+                AppStrings.t(context, 'app_tagline'),
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                       height: 1.4,
@@ -85,29 +86,29 @@ class WelcomeScreen extends StatelessWidget {
               // Auth buttons
               _AuthButton(
                 icon: Icons.apple_rounded,
-                label: 'Continue with Apple',
+                label: AppStrings.t(context, 'continue_with_apple'),
                 onPressed: () {
                   Analytics.logEvent('auth_apple_clicked');
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Apple Sign In coming soon')),
+                    SnackBar(content: Text(AppStrings.t(context, 'apple_sign_in_coming_soon'))),
                   );
                 },
               ),
               const SizedBox(height: AppTheme.spacingMd),
               _AuthButton(
                 icon: Icons.g_mobiledata_rounded,
-                label: 'Continue with Google',
+                label: AppStrings.t(context, 'continue_with_google'),
                 onPressed: () {
                   Analytics.logEvent('auth_google_clicked');
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Google Sign In coming soon')),
+                    SnackBar(content: Text(AppStrings.t(context, 'google_sign_in_coming_soon'))),
                   );
                 },
               ),
               const SizedBox(height: AppTheme.spacingMd),
               _AuthButton(
                 icon: Icons.email_rounded,
-                label: 'Continue with Email',
+                label: AppStrings.t(context, 'continue_with_email'),
                 filled: true,
                 onPressed: () {
                   Analytics.logEvent('auth_email_clicked');
@@ -118,7 +119,7 @@ class WelcomeScreen extends StatelessWidget {
                 const SizedBox(height: AppTheme.spacingMd),
                 _AuthButton(
                   icon: Icons.bug_report_rounded,
-                  label: 'Developer sign in',
+                  label: AppStrings.t(context, 'developer_sign_in'),
                   onPressed: () => _developerSignIn(context),
                 ),
               ],
