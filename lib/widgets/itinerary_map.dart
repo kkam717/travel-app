@@ -713,8 +713,11 @@ class _ItineraryMapState extends State<ItineraryMap> {
   TileLayer _buildTileLayer(Brightness brightness) {
     final key = _geoapifyKey;
     final isDark = brightness == Brightness.dark;
-    // On web, use WebTileProvider (NetworkImage) to bypass CORS; default uses HTTP which can fail
-    final tileProvider = kIsWeb ? WebTileProvider() : null;
+    // On web, use WebTileProvider to bypass CORS. On iOS simulator (and other platforms where
+    // path_provider_foundation/objective_c can fail), disable built-in tile cache to avoid native crash.
+    final TileProvider tileProvider = kIsWeb
+        ? WebTileProvider()
+        : NetworkTileProvider(cachingProvider: const DisabledMapCachingProvider());
     if (key != null && key.trim().isNotEmpty) {
       // Use different styles for full-screen maps vs card maps
       final style = widget.fullScreen

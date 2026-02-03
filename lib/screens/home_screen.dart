@@ -13,9 +13,22 @@ import '../core/locale_notifier.dart';
 import '../l10n/app_strings.dart';
 import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
 import '../widgets/static_map_image.dart';
+import '../widgets/itinerary_feed_card_2026.dart';
+import '../widgets/itinerary_feed_item_modern.dart';
+
+/// When true, use the editorial modern feed item (no card, edge-to-edge hero, no visible actions).
+const bool useFeedItemModern = true;
+
+/// When false and useFeedItemModern is false, use the 2026-style feed card.
+const bool useFeedCard2026 = !useFeedItemModern;
 
 const int _pageSize = 20;
 const int _discoverLimit = 5;
+
+/// Scroll distance over which header animates from expanded to collapsed (pixels).
+const double _kHeaderScrollRange = 100;
+const double _kHeaderExpandedHeight = 104;
+const double _kHeaderCollapsedHeight = 56;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,44 +46,70 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String? _error;
   final Map<String, bool> _bookmarked = {};
   final Map<String, bool> _liked = {};
-  final ScrollController _scrollController = ScrollController();
-  final ScrollController _scrollControllerForYou = ScrollController();
   late TabController _tabController;
   int _newTripsCount = 0;
+
+  /// 0 = expanded, 1 = collapsed. Driven by scroll offset.
+  double _headerCollapseT = 0;
+  final ScrollController _scrollForYou = ScrollController();
+  final ScrollController _scrollFollowing = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this, initialIndex: 0);
-    _scrollController.addListener(_onScroll);
-    _scrollControllerForYou.addListener(_onScrollForYou);
+    _tabController.addListener(_onTabChange);
+    _scrollForYou.addListener(_onScroll);
+    _scrollFollowing.addListener(_onScroll);
     _initOrLoad();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChange);
+    _scrollForYou.removeListener(_onScroll);
+    _scrollFollowing.removeListener(_onScroll);
+    _scrollForYou.dispose();
+    _scrollFollowing.dispose();
     _tabController.dispose();
-    _scrollController.removeListener(_onScroll);
-    _scrollController.dispose();
-    _scrollControllerForYou.removeListener(_onScrollForYou);
-    _scrollControllerForYou.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_isLoadingMore || !_hasMore || _feed.isEmpty) return;
-    final pos = _scrollController.position;
-    if (pos.pixels >= pos.maxScrollExtent - 400) {
-      _loadMore();
+  void _onTabChange() {
+    _syncHeaderFromActiveScroll();
+  }
+
+  void _syncHeaderFromActiveScroll() {
+    if (!mounted) return;
+    final offset = _tabController.index == 0
+        ? _scrollForYou.hasClients ? _scrollForYou.offset : 0
+        : _scrollFollowing.hasClients ? _scrollFollowing.offset : 0;
+    final t = (offset / _kHeaderScrollRange).clamp(0.0, 1.0);
+    if ((t - _headerCollapseT).abs() > 0.001) {
+      setState(() => _headerCollapseT = t);
     }
   }
 
-  void _onScrollForYou() {
-    if (_isLoadingMore || !_hasMore || _feed.isEmpty) return;
-    final pos = _scrollControllerForYou.position;
-    if (pos.pixels >= pos.maxScrollExtent - 400) {
-      _loadMore();
+  void _onScroll() {
+    if (_isLoadingMore || !_hasMore || _feed.isEmpty) {} else {
+      final c = _tabController.index == 0 ? _scrollForYou : _scrollFollowing;
+      if (c.hasClients && c.position.pixels >= c.position.maxScrollExtent - 400) {
+        _loadMore();
+      }
     }
+    final offset = _tabController.index == 0 ? _scrollForYou.offset : _scrollFollowing.offset;
+    final t = (offset / _kHeaderScrollRange).clamp(0.0, 1.0);
+    if ((t - _headerCollapseT).abs() > 0.001 && mounted) {
+      setState(() => _headerCollapseT = t);
+    }
+  }
+
+  bool _onScrollNotification(ScrollNotification notification) {
+    if (_isLoadingMore || !_hasMore || _feed.isEmpty) return false;
+    if (notification is! ScrollUpdateNotification && notification is! ScrollEndNotification) return false;
+    final m = notification.metrics;
+    if (m.pixels >= m.maxScrollExtent - 400) _loadMore();
+    return false;
   }
 
   void _initOrLoad() {
@@ -192,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       HapticFeedback.mediumImpact();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_newTripsCount == 1 ? '1 new trip' : '$_newTripsCount new trips'),
+          content: Text(_newTripsCount == 1 ? AppStrings.t(context, 'one_new_trip') : '$_newTripsCount ${AppStrings.t(context, 'new_trips')}'),
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -308,39 +347,66 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ? _buildSkeletonLoading()
             : _error != null
                 ? _buildErrorState()
-                : NestedScrollView(
-                    headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                      SliverToBoxAdapter(child: _buildHeader()),
-                      SliverToBoxAdapter(
-                        child: TabBar(
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _DiscoverHeader(collapseT: _headerCollapseT),
+                      Material(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TabBar(
+                              controller: _tabController,
+                              labelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                              unselectedLabelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w500,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              indicatorSize: TabBarIndicatorSize.label,
+                              indicator: UnderlineTabIndicator(
+                                borderSide: BorderSide(
+                                  width: 2,
+                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                                ),
+                              ),
+                              labelPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                              tabs: [
+                                Tab(text: AppStrings.t(context, 'for_you')),
+                                Tab(text: AppStrings.t(context, 'following')),
+                              ],
+                            ),
+                            Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.25)),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: TabBarView(
                           controller: _tabController,
-                          tabs: [
-                            Tab(text: AppStrings.t(context, 'for_you')),
-                            Tab(text: AppStrings.t(context, 'following')),
+                          children: [
+                            _buildForYouTab(context),
+                            _buildFollowingTab(context),
                           ],
                         ),
                       ),
                     ],
-                    body: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildForYouTab(),
-                        _buildFollowingTab(),
-                      ],
-                    ),
                   ),
       ),
     );
   }
 
-  Widget _buildFollowingTab() {
+  Widget _buildFollowingTab(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      child: CustomScrollView(
-        controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScrollNotification,
+        child: CustomScrollView(
+          controller: _scrollFollowing,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: SizedBox(height: useFeedItemModern ? AppTheme.spacingLg : AppTheme.spacingMd),
+            ),
           if (_feed.isEmpty)
             SliverFillRemaining(child: _buildEmptyState())
           else
@@ -375,7 +441,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ),
           SliverToBoxAdapter(child: _buildPeekPadding()),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -387,12 +454,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
   }
 
-  Widget _buildForYouTab() {
+  Widget _buildForYouTab(BuildContext context) {
     final items = _forYouItems;
     return RefreshIndicator(
       onRefresh: _onRefresh,
       child: items.isEmpty
           ? CustomScrollView(
+              controller: _scrollForYou,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
@@ -406,13 +474,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                           const SizedBox(height: AppTheme.spacingLg),
                           Text(
-                            'No recommendations yet',
+                            AppStrings.t(context, 'no_recommendations_yet'),
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: AppTheme.spacingSm),
                           Text(
-                            'Check back later for trips tailored to your interests',
+                            AppStrings.t(context, 'check_back_later_trips'),
                             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             textAlign: TextAlign.center,
                           ),
@@ -423,12 +491,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ],
             )
-          : CustomScrollView(
-              controller: _scrollControllerForYou,
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(child: SizedBox(height: AppTheme.spacingMd)),
-                SliverList(
+          : NotificationListener<ScrollNotification>(
+              onNotification: _onScrollNotification,
+              child: CustomScrollView(
+                controller: _scrollForYou,
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: useFeedItemModern ? AppTheme.spacingLg : AppTheme.spacingMd),
+                  ),
+                  SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (_, i) {
                       if (i == items.length) {
@@ -460,6 +532,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ],
             ),
+            ),
     );
   }
 
@@ -467,15 +540,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(child: _buildHeader()),
-        SliverToBoxAdapter(
-          child: TabBar(
-            controller: _tabController,
-            tabs: [
-              Tab(text: AppStrings.t(context, 'for_you')),
-              Tab(text: AppStrings.t(context, 'following')),
-            ],
-          ),
-        ),
+        SliverToBoxAdapter(child: _buildModernTabs(context)),
         SliverList(
           delegate: SliverChildBuilderDelegate(
             (_, i) => _SkeletonCard(variant: _CardVariant.values[i % 3]),
@@ -499,7 +564,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         child: Center(
           child: Text(
-            '$count trips so far • Keep scrolling for more',
+            '$count ${AppStrings.t(context, 'trips_so_far_keep_scrolling')}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
@@ -520,22 +585,53 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildHeader() {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingMd),
+      padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingXl, AppTheme.spacingLg, AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            AppStrings.t(context, 'welcome_back'),
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            AppStrings.t(context, 'discover'),
+            style: theme.textTheme.headlineLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+            ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
-            AppStrings.t(context, 'discover_adventure'),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            AppStrings.t(context, 'trips_from_people_with_taste'),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w400,
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildModernTabs(BuildContext context) {
+    final theme = Theme.of(context);
+    return TabBar(
+      controller: _tabController,
+      labelStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+      unselectedLabelStyle: theme.textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.w500,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      indicatorSize: TabBarIndicatorSize.label,
+      indicator: UnderlineTabIndicator(
+        borderSide: BorderSide(
+          width: 2,
+          color: theme.colorScheme.primary.withValues(alpha: 0.85),
+        ),
+      ),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      tabs: [
+        Tab(text: AppStrings.t(context, 'for_you')),
+        Tab(text: AppStrings.t(context, 'following')),
+      ],
     );
   }
 
@@ -556,13 +652,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             const SizedBox(height: AppTheme.spacingLg),
             Text(
-              'No trips in your feed yet',
+              AppStrings.t(context, 'no_trips_in_feed'),
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppTheme.spacingSm),
             Text(
-              'Follow people or create your first trip to get started',
+              AppStrings.t(context, 'follow_or_create_first_trip'),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
@@ -592,6 +688,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             FilledButton(onPressed: () => _load(silent: false), child: Text(AppStrings.t(context, 'retry'))),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Scroll-driven header: animates with scroll via collapseT in [0, 1].
+class _DiscoverHeader extends StatelessWidget {
+  final double collapseT;
+
+  const _DiscoverHeader({required this.collapseT});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surface = theme.colorScheme.surface;
+    final onSurface = theme.colorScheme.onSurface;
+    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
+    final t = collapseT.clamp(0.0, 1.0);
+
+    final height = _kHeaderExpandedHeight + t * (_kHeaderCollapsedHeight - _kHeaderExpandedHeight);
+    final titleSize = 32.0 - t * 12.0;
+    final subtitleOpacity = (1.0 - t).clamp(0.0, 1.0);
+
+    return Container(
+      height: height,
+      width: double.infinity,
+      decoration: BoxDecoration(color: surface),
+      clipBehavior: Clip.hardEdge,
+      alignment: Alignment.bottomLeft,
+      padding: EdgeInsets.only(
+        left: AppTheme.spacingLg,
+        right: AppTheme.spacingLg,
+        bottom: 8 + t * 4,
+        top: 12 * (1 - t),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.t(context, 'discover'),
+            style: theme.textTheme.headlineLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
+              fontSize: titleSize,
+              color: onSurface,
+            ),
+          ),
+          if (subtitleOpacity > 0.01) ...[
+            SizedBox(height: 6 * (1 - t)),
+            Opacity(
+              opacity: subtitleOpacity,
+              child: Text(
+                AppStrings.t(context, 'trips_from_people_with_taste'),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: onSurfaceVariant,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -643,46 +802,75 @@ class _SwipeableFeedCard extends StatelessWidget {
           ),
         );
       },
-      child: _EdgeAwareSwipeCard(
-        edgeZonePx: 24,
-        child: Dismissible(
-          key: Key('swipe-${itinerary.id}'),
-          direction: DismissDirection.horizontal,
-          background: Container(
-            margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: AppTheme.spacingLg),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
+      child: useFeedItemModern
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: AppTheme.spacingXl),
+              child: ItineraryFeedItemModern(
+                itinerary: itinerary,
+                description: description,
+                locations: locations,
+                isBookmarked: isBookmarked,
+                onBookmark: onBookmark,
+                isLiked: isLiked,
+                likeCount: likeCount,
+                onLike: onLike,
+                onTap: onTap,
+                onAuthorTap: onAuthorTap,
+              ),
+            )
+          : _EdgeAwareSwipeCard(
+              edgeZonePx: 24,
+              child: Dismissible(
+                key: Key('swipe-${itinerary.id}'),
+                direction: DismissDirection.horizontal,
+                background: Container(
+                  margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: AppTheme.spacingLg),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 32,
+                  ),
+                ),
+                confirmDismiss: (direction) async {
+                  HapticFeedback.mediumImpact();
+                  onBookmark();
+                  return false;
+                },
+                child: useFeedCard2026
+                    ? ItineraryFeedCard2026(
+                        itinerary: itinerary,
+                        description: description,
+                        locations: locations,
+                        isBookmarked: isBookmarked,
+                        onBookmark: onBookmark,
+                        isLiked: isLiked,
+                        likeCount: likeCount,
+                        onLike: onLike,
+                        onTap: onTap,
+                        onAuthorTap: onAuthorTap,
+                      )
+                    : _FeedCard(
+                        itinerary: itinerary,
+                        description: description,
+                        locations: locations,
+                        isBookmarked: isBookmarked,
+                        onBookmark: onBookmark,
+                        isLiked: isLiked,
+                        likeCount: likeCount,
+                        onLike: onLike,
+                        onTap: onTap,
+                        onAuthorTap: onAuthorTap,
+                        variant: variant,
+                        index: index,
+                      ),
+              ),
             ),
-            child: Icon(
-              isBookmarked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
-              color: Theme.of(context).colorScheme.primary,
-              size: 32,
-            ),
-          ),
-        confirmDismiss: (direction) async {
-          HapticFeedback.mediumImpact();
-          onBookmark();
-          return false;
-        },
-          child: _FeedCard(
-            itinerary: itinerary,
-            description: description,
-            locations: locations,
-            isBookmarked: isBookmarked,
-            onBookmark: onBookmark,
-            isLiked: isLiked,
-            likeCount: likeCount,
-            onLike: onLike,
-            onTap: onTap,
-            onAuthorTap: onAuthorTap,
-            variant: variant,
-            index: index,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -768,7 +956,11 @@ class _FeedCardState extends State<_FeedCard> {
   }
 
   Future<void> _checkShowTranslate() async {
-    final text = widget.description.isNotEmpty ? '${widget.itinerary.title}\n\n${widget.description}' : widget.itinerary.title;
+    // Use all visible user-generated text on the card so phrases like "(7 days)" and venue names are included
+    final parts = <String>[widget.itinerary.title];
+    if (widget.description.isNotEmpty) parts.add(widget.description);
+    if (widget.locations.isNotEmpty) parts.add(widget.locations);
+    final text = parts.join('\n\n');
     final different = await isContentInDifferentLanguage(text, LocaleNotifier.instance.localeCode);
     if (mounted) setState(() => _showTranslate = different);
   }
@@ -821,7 +1013,7 @@ class _FeedCardState extends State<_FeedCard> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      it.authorName ?? 'Unknown',
+                                      it.authorName ?? AppStrings.t(context, 'unknown'),
                                       style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -840,7 +1032,10 @@ class _FeedCardState extends State<_FeedCard> {
                                   : _translatedText != null
                                       ? () => setState(() => _translatedText = null)
                                       : () async {
-                                          final text = description.isNotEmpty ? '${it.title}\n\n$description' : it.title;
+                                          final textParts = [it.title];
+                                          if (description.isNotEmpty) textParts.add(description);
+                                          if (locations.isNotEmpty) textParts.add(locations);
+                                          final text = textParts.join('\n\n');
                                           setState(() => _isTranslating = true);
                                           final result = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
                                           if (mounted) {
@@ -950,14 +1145,11 @@ class _FeedCardState extends State<_FeedCard> {
                 ],
               ),
               SizedBox(height: isCompact ? 6 : AppTheme.spacingMd),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: StaticMapImage(
-                  itinerary: it,
-                  width: contentWidth,
-                  height: mapHeight,
-                  pathColor: Theme.of(context).colorScheme.primary,
-                ),
+              StaticMapImage(
+                itinerary: it,
+                width: contentWidth,
+                height: mapHeight,
+                pathColor: Theme.of(context).colorScheme.primary,
               ),
                 ],
               );

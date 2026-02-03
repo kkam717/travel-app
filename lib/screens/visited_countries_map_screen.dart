@@ -151,15 +151,18 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   }
 
   /// No labels: Carto light_nolabels (day) / dark_nolabels (night) removes all map text.
-  /// On web, use WebTileProvider to bypass CORS.
+  /// On web, use WebTileProvider to bypass CORS. On iOS simulator, disable tile cache to avoid native crash.
   /// tileBounds restricts tiles to single world (-180..180) so underlying map doesn't spill.
   TileLayer _buildTileLayer(Brightness brightness) {
     final style = brightness == Brightness.dark ? 'dark_nolabels' : 'light_nolabels';
+    final TileProvider tileProvider = kIsWeb
+        ? WebTileProvider()
+        : NetworkTileProvider(cachingProvider: const DisabledMapCachingProvider());
     return TileLayer(
       urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$style/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
-      tileProvider: kIsWeb ? WebTileProvider() : null,
+      tileProvider: tileProvider,
       tileBounds: LatLngBounds(
         const LatLng(-85, -180),
         const LatLng(85, 180),
@@ -195,7 +198,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
             IconButton(
               icon: const Icon(Icons.edit_outlined),
               onPressed: _showEditCountries,
-              tooltip: 'Edit countries',
+              tooltip: AppStrings.t(context, 'edit_countries'),
             ),
         ],
       ),
@@ -259,7 +262,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
               Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
               const SizedBox(height: 16),
               Text(
-                'Could not load map',
+                AppStrings.t(context, 'could_not_load_map'),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey[700]),
               ),
               const SizedBox(height: 8),

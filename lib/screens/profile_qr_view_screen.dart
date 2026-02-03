@@ -15,7 +15,7 @@ class ProfileQRViewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final link = profileShareLink(userId);
-    final name = userName ?? 'Profile';
+    final name = userName ?? AppStrings.t(context, 'profile');
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(

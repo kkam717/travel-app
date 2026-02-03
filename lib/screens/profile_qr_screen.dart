@@ -175,7 +175,7 @@ class _ProfileQRScreenState extends State<ProfileQRScreen> {
           children: [
             Expanded(
               child: _TabButton(
-                label: 'Scan',
+                label: AppStrings.t(context, 'scan'),
                 isSelected: _selectedTab == _tabScan,
                 onTap: () => setState(() => _selectedTab = _tabScan),
               ),

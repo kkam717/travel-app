@@ -36,8 +36,8 @@ class _AddTripButtonState extends State<_AddTripButton> {
       onPressed: _handleTap,
       backgroundColor: Theme.of(context).colorScheme.primary,
       foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      elevation: 4,
-      child: const Icon(Icons.add_rounded, size: 28),
+      elevation: 2,
+      child: const Icon(Icons.add_rounded, size: 24),
     );
   }
 }
@@ -83,7 +83,7 @@ class MainShell extends StatelessWidget {
       floatingActionButton: keyboardVisible
           ? null
           : Transform.translate(
-              offset: const Offset(0, 20),
+              offset: const Offset(0, 18),
               child: _AddTripButton(onPressed: () => context.go('/create')),
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -125,7 +125,7 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(isSelected ? activeIcon : icon, size: 26, color: color),
+            Icon(isSelected ? activeIcon : icon, size: 22, color: color),
             const SizedBox(height: 4),
             Text(
               label,

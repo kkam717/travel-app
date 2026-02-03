@@ -51,13 +51,29 @@ Future<String?> detectLanguage(String text) async {
 
 /// Returns true if [text] is detected to be in a different language than [appLanguageCode].
 /// Uses primary codes for comparison (e.g. en-US and en-GB both count as 'en').
-/// When detection fails, returns false so we don't show translate on same-language content (e.g. English on English UI).
+/// When detection fails, uses a lightweight fallback for common English markers so the
+/// translate button still appears (e.g. "(7 days)" on an Italian app).
 Future<bool> isContentInDifferentLanguage(String text, String appLanguageCode) async {
   final trimmed = text.trim();
   if (trimmed.length < 3) return false;
+  final appPrimary = _primaryLangCode(appLanguageCode);
   final detected = await detectLanguage(trimmed);
-  if (detected == null) return false; // only show button when we know content is different
-  return _primaryLangCode(detected) != _primaryLangCode(appLanguageCode);
+  if (detected != null) {
+    return _primaryLangCode(detected) != appPrimary;
+  }
+  // Fallback when API fails: if app is not English and text looks like English, show translate
+  if (appPrimary == 'en') return false;
+  return _looksLikeEnglish(trimmed);
+}
+
+/// Lightweight heuristic for English-like content when detection API is unavailable.
+bool _looksLikeEnglish(String text) {
+  final lower = text.toLowerCase();
+  const enMarkers = [
+    ' days)', ' day)', ' (7 days)', ' (1 day)', 'usa', 'budget', 'culture', 'food',
+    'hotel', 'market', 'terminal', 'street', 'avenue', 'road', 'new york', 'philadelphia', 'washington',
+  ];
+  return enMarkers.any((m) => lower.contains(m));
 }
 
 /// Translates [text] to [targetLanguageCode] (e.g. 'en', 'es').

@@ -7,7 +7,7 @@ import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../models/user_city.dart';
 import '../services/supabase_service.dart';
-import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
+import '../services/translation_service.dart' show translate;
 import '../core/locale_notifier.dart';
 import '../l10n/app_strings.dart';
 import '../widgets/itinerary_feed_card.dart';
@@ -42,7 +42,6 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   bool _isFollowing = false;
   bool _isMutualFriend = false;
   final Map<String, String> _translatedContent = {};
-  final Map<String, bool> _showTranslate = {};
   final Map<String, bool> _liked = {};
 
   bool get _isOwnProfile => Supabase.instance.client.auth.currentUser?.id == widget.authorId;
@@ -97,7 +96,6 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         _liked.addAll(likedMap);
         _isLoading = false;
       });
-      _checkShowTranslateForTrips(itineraries);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -287,7 +285,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                               Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
                               const SizedBox(width: 8),
                               Text(
-                                'Not set',
+                                AppStrings.t(context, 'not_set'),
                                 style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                               ),
                             ],
@@ -328,7 +326,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
             Padding(
               padding: const EdgeInsets.only(top: AppTheme.spacingSm),
               child: Text(
-                'You follow each other',
+                AppStrings.t(context, 'you_follow_each_other'),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w500,
@@ -342,7 +340,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                 child: _AuthorStatCard(
                   icon: Icons.public_outlined,
                   value: '${_mergedVisitedCountries(_profile, _itineraries).length}',
-                  label: 'Countries',
+                  label: AppStrings.t(context, 'countries'),
                   color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.primary,
                   onTap: () {
@@ -356,7 +354,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                 child: _AuthorStatCard(
                   icon: Icons.location_city_outlined,
                   value: '${(hasCity ? 1 : 0) + _pastCities.length}',
-                  label: 'Lived',
+                  label: AppStrings.t(context, 'lived'),
                   color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.secondary,
                   onTap: () => context.push('/profile/stats?userId=${widget.authorId}'),
@@ -378,7 +376,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                   child: InkWell(
                     onTap: () => context.push('/profile/followers?userId=${widget.authorId}'),
                     borderRadius: BorderRadius.circular(8),
-                    child: _StatChip(label: 'Followers', value: '$_followersCount'),
+                    child: _StatChip(label: AppStrings.t(context, 'followers'), value: '$_followersCount'),
                   ),
                 ),
                 Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
@@ -386,7 +384,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                   child: InkWell(
                     onTap: () => context.push('/profile/following?userId=${widget.authorId}'),
                     borderRadius: BorderRadius.circular(8),
-                    child: _StatChip(label: 'Following', value: '$_followingCount'),
+                    child: _StatChip(label: AppStrings.t(context, 'following'), value: '$_followingCount'),
                   ),
                 ),
               ],
@@ -412,7 +410,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         child: Padding(
           padding: const EdgeInsets.only(top: 8, left: AppTheme.spacingLg, right: AppTheme.spacingLg),
           child: Text(
-            'No trips yet',
+            AppStrings.t(context, 'no_trips_yet'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
@@ -435,16 +433,14 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
               likeCount: it.likeCount ?? 0,
               onLike: _isOwnProfile ? null : () => _toggleLike(it.id),
               translatedContent: _translatedContent[it.id],
-              onTranslate: _showTranslate[it.id] == true
-                  ? () async {
-                      if (_translatedContent[it.id] != null) {
-                        setState(() => _translatedContent.remove(it.id));
-                      } else {
-                        final r = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
-                        if (mounted && r != null) setState(() => _translatedContent[it.id] = r);
-                      }
-                    }
-                  : null,
+              onTranslate: () async {
+                  if (_translatedContent[it.id] != null) {
+                    setState(() => _translatedContent.remove(it.id));
+                  } else {
+                    final r = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                    if (mounted && r != null) setState(() => _translatedContent[it.id] = r);
+                  }
+                },
             ),
           );
         },
@@ -452,17 +448,6 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         addRepaintBoundaries: true,
       ),
     );
-  }
-
-  Future<void> _checkShowTranslateForTrips(List<Itinerary> itineraries) async {
-    final appLang = LocaleNotifier.instance.localeCode;
-    for (final it in itineraries) {
-      final desc = _descriptionFor(it);
-      final text = desc.isNotEmpty ? '${it.title}\n\n$desc' : it.title;
-      final different = await isContentInDifferentLanguage(text, appLang);
-      if (!mounted) return;
-      setState(() => _showTranslate[it.id] = different);
-    }
   }
 
   String _descriptionFor(Itinerary it) {

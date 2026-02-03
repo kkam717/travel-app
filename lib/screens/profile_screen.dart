@@ -12,7 +12,7 @@ import '../models/user_city.dart';
 import '../data/countries.dart';
 import '../widgets/itinerary_feed_card.dart';
 import '../services/supabase_service.dart';
-import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
+import '../services/translation_service.dart' show translate;
 import '../core/locale_notifier.dart';
 import '../l10n/app_strings.dart';
 
@@ -43,7 +43,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = true;
   String? _error;
   final Map<String, String> _translatedContent = {};
-  final Map<String, bool> _showTranslate = {};
 
   @override
   void initState() {
@@ -77,7 +76,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
           _error = null;
         });
-        _checkShowTranslateForTrips(_myItineraries);
       }
       _load(silent: true);
     } else {
@@ -128,7 +126,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = null;
         _isLoading = false;
       });
-      _checkShowTranslateForTrips(myItineraries);
     } catch (e) {
       if (!mounted) return;
       if (silent) {
@@ -440,16 +437,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onEdit: () => context.push('/itinerary/${it.id}/edit'),
               likeCount: it.likeCount ?? 0,
               translatedContent: _translatedContent[it.id],
-              onTranslate: _showTranslate[it.id] == true
-                  ? () async {
-                      if (_translatedContent[it.id] != null) {
-                        setState(() => _translatedContent.remove(it.id));
-                      } else {
-                        final r = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
-                        if (mounted && r != null) setState(() => _translatedContent[it.id] = r);
-                      }
-                    }
-                  : null,
+              onTranslate: () async {
+                  if (_translatedContent[it.id] != null) {
+                    setState(() => _translatedContent.remove(it.id));
+                  } else {
+                    final r = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                    if (mounted && r != null) setState(() => _translatedContent[it.id] = r);
+                  }
+                },
             ),
           );
         },
@@ -457,17 +452,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         addRepaintBoundaries: true,
       ),
     );
-  }
-
-  Future<void> _checkShowTranslateForTrips(List<Itinerary> itineraries) async {
-    final appLang = LocaleNotifier.instance.localeCode;
-    for (final it in itineraries) {
-      final desc = _descriptionFor(it);
-      final text = desc.isNotEmpty ? '${it.title}\n\n$desc' : it.title;
-      final different = await isContentInDifferentLanguage(text, appLang);
-      if (!mounted) return;
-      setState(() => _showTranslate[it.id] = different);
-    }
   }
 
   String _descriptionFor(Itinerary it) {

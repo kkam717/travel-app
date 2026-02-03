@@ -114,7 +114,7 @@ class _MyTripsScreenState extends State<MyTripsScreen> {
                             Text(AppStrings.t(context, 'no_trips_yet'), style: Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: AppTheme.spacingSm),
                             Text(
-                              _isOwnTrips ? 'Create your first trip to get started' : 'No trips yet',
+                              _isOwnTrips ? AppStrings.t(context, 'create_first_trip_to_start') : AppStrings.t(context, 'no_trips_yet'),
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),

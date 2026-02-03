@@ -15,6 +15,16 @@ import '../models/itinerary.dart' show ItineraryStop, TransportTransition;
 const List<String> _seasons = ['Spring', 'Summer', 'Fall', 'Winter'];
 const List<String> _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+String _venueCategoryLabel(BuildContext context, String? cat) {
+  switch (cat) {
+    case 'hotel': return AppStrings.t(context, 'hotel');
+    case 'guide': return AppStrings.t(context, 'guide');
+    case 'bar': return AppStrings.t(context, 'drinks');
+    case 'restaurant': return AppStrings.t(context, 'restaurant');
+    default: return AppStrings.t(context, 'restaurant');
+  }
+}
+
 class CreateItineraryScreen extends StatefulWidget {
   final String? itineraryId;
 
@@ -1220,7 +1230,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                           child: Text(v.name, style: Theme.of(context).textTheme.bodyMedium, overflow: TextOverflow.ellipsis),
                         ),
                         const SizedBox(width: 4),
-                        Text(_displayCategory(v.category), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                        Text(_venueCategoryLabel(context, v.category), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                       ],
                     ),
                   )),
@@ -1243,7 +1253,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                   icon: _isLoading
                       ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary))
                       : const Icon(Icons.save, size: 20),
-                  label: Text(_isLoading ? 'Saving…' : 'Save Trip'),
+                  label: Text(_isLoading ? AppStrings.t(context, 'saving') : AppStrings.t(context, 'save_trip')),
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 ),
               ),
@@ -1252,16 +1262,6 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
         ),
       ],
     );
-  }
-
-  String _displayCategory(String? cat) {
-    switch (cat) {
-      case 'hotel': return 'Hotel';
-      case 'guide': return 'Guide';
-      case 'bar': return 'Drinks';
-      case 'restaurant': return 'Restaurant';
-      default: return cat ?? 'Restaurant';
-    }
   }
 
   IconData _iconForCategory(String? cat) {
@@ -1321,7 +1321,7 @@ class _EditableLocationCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          'Day $day',
+                          '${AppStrings.t(context, 'day')} $day',
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w600,
@@ -1378,7 +1378,7 @@ class _EditableLocationCard extends StatelessWidget {
                                   children: [
                                     Expanded(
                                       child: PlacesField(
-                                        hint: 'Search ${v.category}…',
+                                        hint: '${AppStrings.t(context, 'search')} ${_venueCategoryLabel(context, v.category)}…',
                                         countryCodes: countryCodes,
                                         locationLatLng: locationLatLng,
                                         onSelected: (name, lat, lng, locationUrl) => onVenueSelected(v, name, lat, lng, locationUrl),

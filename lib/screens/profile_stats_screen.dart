@@ -194,7 +194,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                 Text(AppStrings.t(context, 'home_town'), style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: AppTheme.spacingLg),
                 PlacesField(
-                  hint: 'Search for your city…',
+                  hint: AppStrings.t(context, 'search_for_your_city'),
                   placeType: 'city',
                   countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
                       ? _profile!.visitedCountries
@@ -243,7 +243,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                   Text(AppStrings.t(context, 'lived_before'), style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   Text(
-                    'Cities you previously lived in',
+                    AppStrings.t(context, 'cities_previously_lived'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -272,7 +272,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                           Text(AppStrings.t(context, 'add_city'), style: Theme.of(dctx).textTheme.titleLarge),
                                           const SizedBox(height: 16),
                                           PlacesField(
-                                            hint: 'Search for a city…',
+                                            hint: AppStrings.t(context, 'search_for_city'),
                                             placeType: 'city',
                                             countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
                                                 ? _profile!.visitedCountries
@@ -419,7 +419,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                   ),
                   const SizedBox(height: AppTheme.spacingLg),
                   Text(
-                    'Loading…',
+                    AppStrings.t(context, 'loading'),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -449,10 +449,10 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                     padding: const EdgeInsets.all(AppTheme.spacingLg),
                     children: [
                       _buildSection(
-                        'Home Town',
+                        AppStrings.t(context, 'home_town'),
                         _profile?.currentCity?.trim().isNotEmpty == true
                             ? _profile!.currentCity!
-                            : 'Not set',
+                            : AppStrings.t(context, 'not_set'),
                         Icons.location_city,
                         onTap: _profile?.currentCity?.trim().isNotEmpty == true
                             ? () => context.push('/city/${Uri.encodeComponent(_profile!.currentCity!)}?userId=$_effectiveUserId')
@@ -464,8 +464,8 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                       ),
                       const SizedBox(height: AppTheme.spacingLg),
                       _buildSection(
-                        'Lived Before',
-                        _pastCities.isEmpty ? 'None' : _pastCities.map((c) => c.cityName).join(', '),
+                        AppStrings.t(context, 'lived_before'),
+                        _pastCities.isEmpty ? AppStrings.t(context, 'none') : _pastCities.map((c) => c.cityName).join(', '),
                         Icons.history_outlined,
                         chips: _pastCities.map((c) => ActionChip(
                               avatar: Icon(Icons.location_city_outlined, size: 18, color: Theme.of(context).colorScheme.primary),
@@ -480,8 +480,8 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                       ),
                       const SizedBox(height: AppTheme.spacingLg),
                       _buildSection(
-                        'Travel styles',
-                        (_profile?.travelStyles ?? []).isEmpty ? 'None' : (_profile!.travelStyles).join(', '),
+                        AppStrings.t(context, 'travel_styles'),
+                        (_profile?.travelStyles ?? []).isEmpty ? AppStrings.t(context, 'none') : (_profile!.travelStyles).join(', '),
                         Icons.style_outlined,
                         chips: (_profile?.travelStyles ?? []).map((s) => Chip(label: Text(s))).toList(),
                         onTap: (_profile?.travelStyles ?? []).isEmpty && _isOwnProfile
@@ -545,7 +545,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: subtitle == 'None' ? Theme.of(context).colorScheme.onSurfaceVariant : null,
+                    color: subtitle == AppStrings.t(context, 'none') ? Theme.of(context).colorScheme.onSurfaceVariant : null,
                   ),
             ),
         ],
@@ -578,7 +578,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
           ListTile(
             leading: const Icon(Icons.history_outlined),
             title: Text(AppStrings.t(context, 'lived_before')),
-            subtitle: Text(_pastCities.isEmpty ? 'None' : '${_pastCities.length} cities'),
+            subtitle: Text(_pastCities.isEmpty ? AppStrings.t(context, 'none') : '${_pastCities.length} ${AppStrings.t(context, 'cities')}'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               Navigator.pop(ctx);

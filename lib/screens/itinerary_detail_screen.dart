@@ -80,7 +80,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not load itinerary. Please try again.';
+        _error = 'could_not_load_itinerary';
         _isLoading = false;
       });
     }
@@ -223,7 +223,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       }).toList();
       final forked = await SupabaseService.createItinerary(
         authorId: userId,
-        title: '${it.title} (copy)',
+        title: '${it.title} (${AppStrings.t(context, 'copy')})',
         destination: it.destination,
         daysCount: it.daysCount,
         styleTags: it.styleTags,
@@ -275,7 +275,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
               children: [
                 Icon(Icons.map_outlined, size: 64, color: Theme.of(context).colorScheme.outline),
                 const SizedBox(height: AppTheme.spacingLg),
-                Text(_error ?? 'Not found', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+                Text(AppStrings.t(context, _error ?? 'not_found'), textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                 const SizedBox(height: AppTheme.spacingLg),
                 FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
               ],
@@ -487,7 +487,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                                       color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    child: Text(it.mode!.toUpperCase(), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
+                                    child: Text(AppStrings.t(context, it.mode!), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
                                   ),
                               ],
                             ),
@@ -505,7 +505,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                                         children: [
                                           Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.primary),
                                           const SizedBox(width: 6),
-                                          Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
+                                          Text('${AppStrings.t(context, 'by')} ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
                                         ],
                                       ),
                                     ),
@@ -519,7 +519,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                                         minimumSize: Size.zero,
                                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
-                                      child: Text(_isFollowing ? 'Following' : 'Follow'),
+                                      child: Text(_isFollowing ? AppStrings.t(context, 'following') : AppStrings.t(context, 'follow')),
                                     ),
                                   ],
                                 ],
