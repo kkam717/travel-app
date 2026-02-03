@@ -1,0 +1,17 @@
+---
+description: Always create a PR when pushing to develop
+alwaysApply: true
+---
+
+# Git: PR when pushing to develop
+
+When the user asks to push to develop (or to push and create a PR):
+
+1. **Use a feature branch** – Do not push directly to `develop`. Create a branch from the current state (e.g. `feature/<short-description>` or the current branch if it’s not `develop`).
+2. **Commit** – Stage and commit any uncommitted changes with a clear message.
+3. **Push** – Push the feature branch to origin: `git push -u origin <branch-name>`.
+4. **Create a PR** – Open a pull request **into `develop`**:
+   - If `gh` is available: run `gh pr create --base develop --title "<title>" --body "<body>"` (or let the user fill title/body).
+   - If `gh` is not available: give the user the GitHub “Create pull request” URL for the pushed branch and tell them to set the base branch to **develop**.
+
+Example PR base URL pattern: `https://github.com/<owner>/<repo>/compare/develop...<branch>?expand=1` or the “pull/new/<branch>” link shown in the push output.

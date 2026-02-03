@@ -499,91 +499,103 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   void _showFilters() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) {
         int? days = _filterDays;
         List<String> styles = List.from(_filterStyles);
         String? mode = _filterMode;
         return StatefulBuilder(
           builder: (_, setModal) {
-            return Padding(
-              padding: const EdgeInsets.all(AppTheme.spacingLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    children: [7, 10, 14, 21].map((d) {
-                      final selected = days == d;
-                      return FilterChip(
-                        label: Text('$d ${AppStrings.t(context, 'days')}'),
-                        selected: selected,
-                        onSelected: (_) => setModal(() => days = selected ? null : d),
-                      );
-                    }).toList(),
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingLg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          children: [7, 10, 14, 21].map((d) {
+                            final selected = days == d;
+                            return FilterChip(
+                              label: Text('$d ${AppStrings.t(context, 'days')}'),
+                              selected: selected,
+                              onSelected: (_) => setModal(() => days = selected ? null : d),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: travelStyles.map((s) {
+                            final selected = styles.contains(s);
+                            return FilterChip(
+                              label: Text(s),
+                              selected: selected,
+                              onSelected: (_) => setModal(() {
+                                if (selected) styles.remove(s);
+                                else styles.add(s);
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          children: travelModes.map((m) {
+                            final selected = mode == m;
+                            return ChoiceChip(
+                              label: Text(m),
+                              selected: selected,
+                              onSelected: (_) => setModal(() => mode = selected ? null : m),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => setModal(() {
+                                days = null;
+                                styles = [];
+                                mode = null;
+                              }),
+                              child: Text(AppStrings.t(context, 'clear')),
+                            ),
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: () {
+                                setState(() {
+                                  _filterDays = days;
+                                  _filterStyles = styles;
+                                  _filterMode = mode;
+                                });
+                                Navigator.pop(ctx);
+                                _search();
+                              },
+                              child: Text(AppStrings.t(context, 'apply')),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: travelStyles.map((s) {
-                      final selected = styles.contains(s);
-                      return FilterChip(
-                        label: Text(s),
-                        selected: selected,
-                        onSelected: (_) => setModal(() {
-                          if (selected) styles.remove(s);
-                          else styles.add(s);
-                        }),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    children: travelModes.map((m) {
-                      final selected = mode == m;
-                      return ChoiceChip(
-                        label: Text(m),
-                        selected: selected,
-                        onSelected: (_) => setModal(() => mode = selected ? null : m),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => setModal(() {
-                          days = null;
-                          styles = [];
-                          mode = null;
-                        }),
-                        child: Text(AppStrings.t(context, 'clear')),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: () {
-                          setState(() {
-                            _filterDays = days;
-                            _filterStyles = styles;
-                            _filterMode = mode;
-                          });
-                          Navigator.pop(ctx);
-                          _search();
-                        },
-                        child: Text(AppStrings.t(context, 'apply')),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
