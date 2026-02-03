@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../l10n/app_strings.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
 
@@ -65,31 +66,19 @@ class _FollowersScreenState extends State<FollowersScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Something went wrong. Pull down to retry.';
+        _error = 'could_not_refresh';
         _isLoading = false;
       });
     }
   }
 
-  String get _title => widget.showFollowing ? 'Following' : 'Followers';
-
-  String get _loadingText =>
-      widget.showFollowing ? 'Loading following…' : 'Loading followers…';
-
-  String get _emptyTitle =>
-      widget.showFollowing ? 'Not following anyone yet' : 'No followers yet';
-
-  String get _emptySubtitle =>
-      widget.showFollowing
-          ? 'Find people to follow from Search'
-          : 'Share your trips to get followers';
 
   @override
   Widget build(BuildContext context) {
     Analytics.logScreenView(widget.showFollowing ? 'following' : 'followers');
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title),
+        title: Text(widget.showFollowing ? AppStrings.t(context, 'following') : AppStrings.t(context, 'followers')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -110,7 +99,7 @@ class _FollowersScreenState extends State<FollowersScreen> {
                   ),
                   const SizedBox(height: AppTheme.spacingLg),
                   Text(
-                    _loadingText,
+                    widget.showFollowing ? AppStrings.t(context, 'loading_following') : AppStrings.t(context, 'loading_followers'),
                     style: Theme.of(context)
                         .textTheme
                         .bodyMedium
@@ -133,7 +122,7 @@ class _FollowersScreenState extends State<FollowersScreen> {
                         ),
                         const SizedBox(height: AppTheme.spacingLg),
                         Text(
-                          _error!,
+                          AppStrings.t(context, _error!),
                           textAlign: TextAlign.center,
                           style: Theme.of(context).textTheme.bodyLarge,
                         ),
@@ -141,7 +130,7 @@ class _FollowersScreenState extends State<FollowersScreen> {
                         FilledButton.icon(
                           onPressed: _load,
                           icon: const Icon(Icons.refresh, size: 20),
-                          label: const Text('Retry'),
+                          label: Text(AppStrings.t(context, 'retry')),
                         ),
                       ],
                     ),
@@ -161,12 +150,12 @@ class _FollowersScreenState extends State<FollowersScreen> {
                             ),
                             const SizedBox(height: AppTheme.spacingLg),
                             Text(
-                              _emptyTitle,
+                              widget.showFollowing ? AppStrings.t(context, 'not_following_anyone') : AppStrings.t(context, 'no_followers_yet'),
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: AppTheme.spacingSm),
                             Text(
-                              _emptySubtitle,
+                              widget.showFollowing ? AppStrings.t(context, 'find_people_follow') : AppStrings.t(context, 'share_trips_followers'),
                               textAlign: TextAlign.center,
                               style: Theme.of(context)
                                   .textTheme
@@ -204,7 +193,7 @@ class _FollowersScreenState extends State<FollowersScreen> {
                                     : null,
                               ),
                               title: Text(
-                                p.name ?? 'Unknown',
+                                p.name ?? AppStrings.t(context, 'unknown'),
                                 style: Theme.of(context).textTheme.titleSmall,
                               ),
                               trailing: Icon(

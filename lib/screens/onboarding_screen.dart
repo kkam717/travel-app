@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../data/countries.dart' show travelStyles, travelModes;
+import '../l10n/app_strings.dart';
 import '../services/supabase_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -36,7 +37,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save. Please try again.'), backgroundColor: Colors.red),
+          SnackBar(content: Text(AppStrings.t(context, 'could_not_save')), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -53,11 +54,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Travel preferences'),
+        title: Text(AppStrings.t(context, 'travel_preferences')),
         actions: [
           TextButton(
             onPressed: _signOut,
-            child: const Text('Sign out'),
+            child: Text(AppStrings.t(context, 'sign_out')),
           ),
         ],
       ),
@@ -74,12 +75,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Travel styles',
+            AppStrings.t(context, 'travel_styles'),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: AppTheme.spacingSm),
           Text(
-            'Select what describes your travel vibe (multi-select)',
+            AppStrings.t(context, 'select_travel_vibe'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -107,12 +108,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           const SizedBox(height: AppTheme.spacingXl),
           Text(
-            'Travel mode',
+            AppStrings.t(context, 'travel_mode'),
             style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: AppTheme.spacingSm),
           Text(
-            'Optional – budget, standard, or luxury',
+            AppStrings.t(context, 'optional_budget_luxury'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -142,7 +143,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       color: Theme.of(context).colorScheme.onPrimary,
                     ),
                   )
-                : const Text('Get started'),
+                : Text(AppStrings.t(context, 'get_started')),
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../core/theme.dart';
 import '../core/app_link.dart';
+import '../l10n/app_strings.dart';
 
 /// Revolut-style screen: "My code" (user's profile QR + share) and "Scan" (camera to scan another user's QR).
 class ProfileQRScreen extends StatefulWidget {
@@ -43,7 +44,7 @@ class _ProfileQRScreenState extends State<ProfileQRScreen> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
-        title: Text(widget.userName ?? 'My code'),
+        title: Text(widget.userName ?? AppStrings.t(context, 'my_code')),
         centerTitle: true,
       ),
       body: Column(
@@ -61,7 +62,7 @@ class _ProfileQRScreenState extends State<ProfileQRScreen> {
 
   Widget _buildMyCodeContent() {
     final link = profileShareLink(widget.userId);
-    final name = widget.userName ?? 'Profile';
+    final name = widget.userName ?? AppStrings.t(context, 'profile');
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppTheme.spacingLg),
       child: Column(
@@ -105,7 +106,7 @@ class _ProfileQRScreenState extends State<ProfileQRScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg),
             child: Text(
-              'Scan to view profile, even if they don\'t have the app',
+              AppStrings.t(context, 'scan_to_view_profile'),
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
@@ -116,7 +117,7 @@ class _ProfileQRScreenState extends State<ProfileQRScreen> {
           OutlinedButton.icon(
             onPressed: () => shareProfileLink(widget.userId, name: widget.userName),
             icon: const Icon(Icons.share_outlined, size: 20),
-            label: const Text('Share link'),
+            label: Text(AppStrings.t(context, 'share_link')),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
@@ -182,7 +183,7 @@ class _ProfileQRScreenState extends State<ProfileQRScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: _TabButton(
-                label: 'My code',
+                label: AppStrings.t(context, 'my_code'),
                 isSelected: _selectedTab == _tabMyCode,
                 onTap: () => setState(() => _selectedTab = _tabMyCode),
               ),

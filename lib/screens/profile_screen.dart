@@ -12,6 +12,9 @@ import '../models/user_city.dart';
 import '../data/countries.dart';
 import '../widgets/itinerary_feed_card.dart';
 import '../services/supabase_service.dart';
+import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
+import '../core/locale_notifier.dart';
+import '../l10n/app_strings.dart';
 
 /// Merges profile visited countries with countries from all user itineraries.
 List<String> _mergedVisitedCountries(Profile profile, List<Itinerary> itineraries) {
@@ -39,6 +42,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _followingCount = 0;
   bool _isLoading = true;
   String? _error;
+  final Map<String, String> _translatedContent = {};
+  final Map<String, bool> _showTranslate = {};
 
   @override
   void initState() {
@@ -72,6 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoading = false;
           _error = null;
         });
+        _checkShowTranslateForTrips(_myItineraries);
       }
       _load(silent: true);
     } else {
@@ -117,12 +123,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _error = null;
         _isLoading = false;
       });
+      _checkShowTranslateForTrips(myItineraries);
     } catch (e) {
       if (!mounted) return;
       if (silent) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not refresh. Pull down to retry.')),
+            SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))),
           );
         }
         return;
@@ -153,7 +160,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await SupabaseService.updateProfile(userId, {'photo_url': url});
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not upload photo. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_upload_photo'))));
     } finally {
       if (mounted) setState(() => _isUploadingPhoto = false);
     }
@@ -164,14 +171,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Analytics.logScreenView('profile');
     if (_isLoading && _profile == null) {
       return Scaffold(
-        appBar: AppBar(title: Text(_profile?.name ?? 'Profile')),
+        appBar: AppBar(title: Text(_profile?.name ?? AppStrings.t(context, 'profile'))),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
               const SizedBox(height: AppTheme.spacingLg),
-              Text('Loading profile…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text(AppStrings.t(context, 'loading_profile'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
           ),
         ),
@@ -179,7 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     if (_error != null) {
       return Scaffold(
-        appBar: AppBar(title: Text(_profile?.name ?? 'Profile')),
+        appBar: AppBar(title: Text(_profile?.name ?? AppStrings.t(context, 'profile'))),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(AppTheme.spacingLg),
@@ -190,7 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: AppTheme.spacingLg),
                 Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                 const SizedBox(height: AppTheme.spacingLg),
-                FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+                FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
               ],
             ),
           ),
@@ -205,7 +212,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: const Icon(Icons.qr_code_2_outlined),
           onPressed: () => context.push('/profile/qr', extra: {'userId': userId, 'userName': p.name}),
         ),
-        title: Text(p.name ?? 'Profile'),
+        title: Text(p.name ?? AppStrings.t(context, 'profile')),
         actions: [
           IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _showEditProfileSheet(p)),
           IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => context.push('/profile/settings')),
@@ -306,7 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Not set',
+                                  AppStrings.t(context, 'not_set'),
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                                 ),
                                 Icon(Icons.chevron_right, size: 24, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -325,7 +332,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: _StatCard(
                   icon: Icons.public_outlined,
                   value: '${visitedCountries.length}',
-                  label: 'Countries',
+                  label: AppStrings.t(context, 'countries'),
                   color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.primary,
                   showBadge: visitedCountries.isEmpty,
@@ -340,7 +347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: _StatCard(
                   icon: Icons.location_city_outlined,
                   value: '${(hasCity ? 1 : 0) + _pastCities.length}',
-                  label: 'Lived',
+                  label: AppStrings.t(context, 'lived'),
                   color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.secondary,
                   onTap: () async {
@@ -370,7 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (mounted) _load();
                     },
                     borderRadius: BorderRadius.circular(8),
-                    child: _ProfileStatChip(label: 'Followers', value: '$_followersCount'),
+                    child: _ProfileStatChip(label: AppStrings.t(context, 'followers'), value: '$_followersCount'),
                   ),
                 ),
                 Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3)),
@@ -381,7 +388,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (mounted) _load();
                     },
                     borderRadius: BorderRadius.circular(8),
-                    child: _ProfileStatChip(label: 'Following', value: '$_followingCount'),
+                    child: _ProfileStatChip(label: AppStrings.t(context, 'following'), value: '$_followingCount'),
                   ),
                 ),
               ],
@@ -390,7 +397,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: AppTheme.spacingLg),
           Row(
             children: [
-              Text('Trips', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(AppStrings.t(context, 'trips'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
               if (_myItineraries.isNotEmpty)
                 Text(' (${_myItineraries.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ],
@@ -407,7 +414,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Padding(
           padding: const EdgeInsets.only(top: 8, left: AppTheme.spacingLg, right: AppTheme.spacingLg),
           child: Text(
-            'No trips yet',
+            AppStrings.t(context, 'no_trips_yet'),
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
@@ -417,13 +424,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
       delegate: SliverChildBuilderDelegate(
         (_, i) {
           final it = _myItineraries[i];
+          final desc = _descriptionFor(it);
+          final text = desc.isNotEmpty ? '${it.title}\n\n$desc' : it.title;
           return RepaintBoundary(
             child: ItineraryFeedCard(
               itinerary: it,
-              description: _descriptionFor(it),
+              description: desc,
               locations: _locationsFor(it),
               onTap: () => context.push('/itinerary/${it.id}'),
               onEdit: () => context.push('/itinerary/${it.id}/edit'),
+              translatedContent: _translatedContent[it.id],
+              onTranslate: _showTranslate[it.id] == true
+                  ? () async {
+                      if (_translatedContent[it.id] != null) {
+                        setState(() => _translatedContent.remove(it.id));
+                      } else {
+                        final r = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                        if (mounted && r != null) setState(() => _translatedContent[it.id] = r);
+                      }
+                    }
+                  : null,
             ),
           );
         },
@@ -431,6 +451,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         addRepaintBoundaries: true,
       ),
     );
+  }
+
+  Future<void> _checkShowTranslateForTrips(List<Itinerary> itineraries) async {
+    final appLang = LocaleNotifier.instance.localeCode;
+    for (final it in itineraries) {
+      final desc = _descriptionFor(it);
+      final text = desc.isNotEmpty ? '${it.title}\n\n$desc' : it.title;
+      final different = await isContentInDifferentLanguage(text, appLang);
+      if (!mounted) return;
+      setState(() => _showTranslate[it.id] = different);
+    }
   }
 
   String _descriptionFor(Itinerary it) {
@@ -459,12 +490,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           controller: scrollController,
           padding: const EdgeInsets.all(AppTheme.spacingLg),
           children: [
-            Text('Edit Profile', style: Theme.of(context).textTheme.headlineSmall),
+            Text(AppStrings.t(context, 'edit_profile'), style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: AppTheme.spacingLg),
             ListTile(
               leading: const Icon(Icons.person_outline),
-              title: const Text('Name'),
-              subtitle: Text(p.name?.isNotEmpty == true ? p.name! : 'Not set'),
+              title: Text(AppStrings.t(context, 'name')),
+              subtitle: Text(p.name?.isNotEmpty == true ? p.name! : AppStrings.t(context, 'not_set')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -473,8 +504,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.location_city_outlined),
-              title: const Text('Lived'),
-              subtitle: const Text('Home town, lived before, travel styles'),
+              title: Text(AppStrings.t(context, 'lived')),
+              subtitle: Text(AppStrings.t(context, 'home_town_lived_before')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -508,35 +539,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Edit name', style: Theme.of(context).textTheme.headlineSmall),
+              Text(AppStrings.t(context, 'edit_name'), style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: AppTheme.spacingLg),
               TextField(
                 controller: controller,
                 autofocus: true,
                 textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  hintText: 'Enter your name',
+                decoration: InputDecoration(
+                  labelText: AppStrings.t(context, 'name'),
+                  hintText: AppStrings.t(context, 'enter_your_name'),
                   prefixIcon: Icon(Icons.person_outline),
                 ),
               ),
               const SizedBox(height: 24),
               Row(
                 children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
                   const Spacer(),
                   FilledButton(
                     onPressed: () {
                       final name = controller.text.trim();
                       if (name.isEmpty) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Please enter your name')));
+                        ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'please_enter_name'))));
                       } else {
                         onSave(name);
                         Navigator.pop(ctx);
                         _load();
                       }
                     },
-                    child: const Text('Save'),
+                    child: Text(AppStrings.t(context, 'save')),
                   ),
                 ],
               ),

@@ -9,6 +9,7 @@ import '../models/profile.dart';
 import '../models/user_city.dart';
 import '../services/places_service.dart';
 import '../services/supabase_service.dart';
+import '../l10n/app_strings.dart';
 import '../widgets/places_field.dart';
 
 /// Shows home town, lived before cities, and travel styles.
@@ -190,7 +191,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Home Town', style: Theme.of(context).textTheme.headlineSmall),
+                Text(AppStrings.t(context, 'home_town'), style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: AppTheme.spacingLg),
                 PlacesField(
                   hint: 'Search for your city…',
@@ -212,7 +213,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                     ),
                   ),
                 const SizedBox(height: 16),
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
               ],
             ),
           ),
@@ -236,7 +237,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Lived Before', style: Theme.of(context).textTheme.titleLarge),
+                  Text(AppStrings.t(context, 'lived_before'), style: Theme.of(context).textTheme.titleLarge),
                   const SizedBox(height: 8),
                   Text(
                     'Cities you previously lived in',
@@ -253,7 +254,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                         if (i == pastCities.length) {
                           return ListTile(
                             leading: Icon(Icons.add, color: Theme.of(context).colorScheme.primary),
-                            title: Text('Add city', style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+                            title: Text(AppStrings.t(context, 'add_city'), style: TextStyle(color: Theme.of(context).colorScheme.primary)),
                             onTap: () async {
                               final name = await showDialog<String>(
                                 context: context,
@@ -265,7 +266,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                         mainAxisSize: MainAxisSize.min,
                                         crossAxisAlignment: CrossAxisAlignment.stretch,
                                         children: [
-                                          Text('Add city', style: Theme.of(dctx).textTheme.titleLarge),
+                                          Text(AppStrings.t(context, 'add_city'), style: Theme.of(dctx).textTheme.titleLarge),
                                           const SizedBox(height: 16),
                                           PlacesField(
                                             hint: 'Search for a city…',
@@ -275,7 +276,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                             },
                                           ),
                                           const SizedBox(height: 16),
-                                          TextButton(onPressed: () => Navigator.pop(dctx), child: const Text('Cancel')),
+                                          TextButton(onPressed: () => Navigator.pop(dctx), child: Text(AppStrings.t(context, 'cancel'))),
                                         ],
                                       ),
                                     ),
@@ -307,7 +308,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                 await SupabaseService.removePastCity(pastCity.id);
                                 setModal(() => pastCities = pastCities.where((c) => c.id != pastCity.id).toList());
                               } catch (e) {
-                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not remove: $e')));
+                                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.t(context, 'could_not_remove')}: $e')));
                               }
                             },
                           ),
@@ -321,7 +322,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                       Navigator.pop(ctx);
                       onDone();
                     },
-                    child: const Text('Done'),
+                    child: Text(AppStrings.t(context, 'done')),
                   ),
                 ],
               ),
@@ -343,7 +344,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Travel styles', style: Theme.of(context).textTheme.titleMedium),
+              Text(AppStrings.t(context, 'travel_styles'), style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 8,
@@ -363,7 +364,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
               const SizedBox(height: 24),
               Row(
                 children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
                   const Spacer(),
                   FilledButton(
                     onPressed: () {
@@ -371,7 +372,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                       Navigator.pop(ctx);
                       _load();
                     },
-                    child: const Text('Save'),
+                    child: Text(AppStrings.t(context, 'save')),
                   ),
                 ],
               ),
@@ -387,7 +388,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
     Analytics.logScreenView('profile_stats');
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stats'),
+        title: Text(AppStrings.t(context, 'stats')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -431,7 +432,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                         const SizedBox(height: AppTheme.spacingLg),
                         Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: AppTheme.spacingLg),
-                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
                       ],
                     ),
                   ),
@@ -556,12 +557,12 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
         shrinkWrap: true,
         padding: const EdgeInsets.all(AppTheme.spacingLg),
         children: [
-          Text('Edit Stats', style: Theme.of(context).textTheme.headlineSmall),
+          Text(AppStrings.t(context, 'edit_stats'), style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: AppTheme.spacingLg),
           ListTile(
             leading: const Icon(Icons.location_city_outlined),
-            title: const Text('Home town'),
-            subtitle: Text(p.currentCity?.trim().isNotEmpty == true ? p.currentCity! : 'Not set'),
+            title: Text(AppStrings.t(context, 'home_town')),
+            subtitle: Text(p.currentCity?.trim().isNotEmpty == true ? p.currentCity! : AppStrings.t(context, 'not_set')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               Navigator.pop(ctx);
@@ -570,7 +571,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.history_outlined),
-            title: const Text('Lived before'),
+            title: Text(AppStrings.t(context, 'lived_before')),
             subtitle: Text(_pastCities.isEmpty ? 'None' : '${_pastCities.length} cities'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
@@ -580,8 +581,8 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.style_outlined),
-            title: const Text('Travel styles'),
-            subtitle: Text(p.travelStyles.isEmpty ? 'None' : p.travelStyles.join(', ')),
+            title: Text(AppStrings.t(context, 'travel_styles')),
+            subtitle: Text(p.travelStyles.isEmpty ? AppStrings.t(context, 'none') : p.travelStyles.join(', ')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () async {
               Navigator.pop(ctx);

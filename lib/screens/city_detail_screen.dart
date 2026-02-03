@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
+import '../l10n/app_strings.dart';
 import '../models/user_city.dart';
 import '../services/places_service.dart';
 import '../services/supabase_service.dart';
@@ -111,7 +112,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                 children: [
                   SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
                   const SizedBox(height: AppTheme.spacingLg),
-                  Text('Loading…', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Text(AppStrings.t(context, 'loading'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ],
               ),
             )
@@ -126,7 +127,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                         const SizedBox(height: AppTheme.spacingLg),
                         Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: AppTheme.spacingLg),
-                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: const Text('Retry')),
+                        FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
                       ],
                     ),
                   ),
@@ -137,7 +138,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                     padding: const EdgeInsets.all(AppTheme.spacingMd),
                     children: [
                       Text(
-                        'Top spots in ${widget.cityName}',
+                        '${AppStrings.t(context, 'top_spots_in')} ${widget.cityName}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: AppTheme.spacingLg),
@@ -186,13 +187,13 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
       );
       await SupabaseService.addTopSpot(spot);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Spot added')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'spot_added'))));
         _load();
       }
     } on StateError catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? 'Maximum 5 spots per category')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? AppStrings.t(context, 'max_5_spots_per_category'))));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not add spot. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_add_spot'))));
     }
   }
 
@@ -217,11 +218,11 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
         'location_url': result['location_url'],
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Spot updated')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'spot_updated'))));
         _load();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update spot. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_update_spot'))));
     }
   }
 
@@ -229,11 +230,11 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove spot?'),
-        content: Text('Remove "${spot.name}" from ${topSpotCategoryLabels[spot.category]}?'),
+        title: Text(AppStrings.t(context, 'remove_spot_confirm')),
+        content: Text('${AppStrings.t(context, 'remove')} "${spot.name}" ${topSpotCategoryLabels[spot.category]}?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.t(context, 'cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.t(context, 'remove'))),
         ],
       ),
     );
@@ -241,11 +242,11 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
     try {
       await SupabaseService.removeTopSpot(spot.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Spot removed')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'spot_removed'))));
         _load();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not remove spot. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_remove_spot'))));
     }
   }
 
@@ -256,11 +257,11 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
         } else if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Maps')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_open_maps'))));
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open Maps')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_open_maps'))));
         }
       }
     } else {
@@ -280,7 +281,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
               if (spot.locationUrl == null || spot.locationUrl!.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 16),
-                  child: Text('No location link', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  child: Text(AppStrings.t(context, 'no_location_link'), style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                 ),
             ],
           ),
@@ -331,7 +332,7 @@ class _CategorySection extends StatelessWidget {
                 TextButton.icon(
                   onPressed: onAdd,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add'),
+                  label: Text(AppStrings.t(context, 'add')),
                 ),
             ],
           ),
@@ -339,7 +340,7 @@ class _CategorySection extends StatelessWidget {
           if (spots.isEmpty && !isOwnProfile)
             Padding(
               padding: const EdgeInsets.only(left: 30),
-              child: Text('No spots', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              child: Text(AppStrings.t(context, 'no_spots'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             )
           else
             ...spots.map((s) => _SpotTile(
@@ -394,8 +395,8 @@ class _SpotTile extends StatelessWidget {
                       if (v == 'remove') onRemove?.call();
                     },
                     itemBuilder: (_) => [
-                      const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                      const PopupMenuItem(value: 'remove', child: Text('Remove')),
+                      PopupMenuItem(value: 'edit', child: Text(AppStrings.t(context, 'edit'))),
+                      PopupMenuItem(value: 'remove', child: Text(AppStrings.t(context, 'remove'))),
                     ],
                   ),
               ],
@@ -463,12 +464,12 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-            Text(widget.initialName != null ? 'Edit spot' : 'Add spot', style: Theme.of(context).textTheme.titleLarge),
+            Text(widget.initialName != null ? AppStrings.t(context, 'edit_spot') : AppStrings.t(context, 'add_spot'), style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppTheme.spacingLg),
             if (widget.category == null)
               DropdownButtonFormField<String>(
                 value: _category,
-                decoration: const InputDecoration(labelText: 'Category'),
+                decoration: InputDecoration(labelText: AppStrings.t(context, 'category')),
                 items: ['eat', 'drink', 'date', 'chill'].map((c) => DropdownMenuItem(value: c, child: Text(topSpotCategoryLabels[c] ?? c))).toList(),
                 onChanged: (v) => setState(() => _category = v ?? 'eat'),
               ),
@@ -499,7 +500,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                       _placeId = null;
                       _showSearch = false;
                     }),
-                    child: const Text('Keep current place'),
+                    child: Text(AppStrings.t(context, 'keep_current_place')),
                   ),
                 ),
             ] else
@@ -517,26 +518,26 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                       _placeName = null;
                       _placeId = null;
                     }),
-                    child: const Text('Change'),
+                    child: Text(AppStrings.t(context, 'change')),
                   ),
                 ],
               ),
             const SizedBox(height: AppTheme.spacingMd),
             TextField(
               controller: _descController,
-              decoration: const InputDecoration(labelText: 'Description (optional)', hintText: 'Short description'),
+              decoration: InputDecoration(labelText: AppStrings.t(context, 'description_optional'), hintText: AppStrings.t(context, 'description_optional_short')),
               maxLines: 2,
             ),
             const SizedBox(height: AppTheme.spacingLg),
             Row(
               children: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                TextButton(onPressed: () => Navigator.pop(context), child: Text(AppStrings.t(context, 'cancel'))),
                 const Spacer(),
                 FilledButton(
                   onPressed: () {
                     final name = _placeName?.trim();
                     if (name == null || name.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please search and select a place')));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'please_search_select_place'))));
                       return;
                     }
                     final locationUrl = _placeId != null && (_placeName ?? '').trim().isNotEmpty
@@ -549,7 +550,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                       'location_url': locationUrl,
                     });
                   },
-                  child: const Text('Save'),
+                  child: Text(AppStrings.t(context, 'save')),
                 ),
               ],
             ),

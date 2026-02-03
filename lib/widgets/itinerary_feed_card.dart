@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../core/app_link.dart';
+import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import 'static_map_image.dart';
 
-/// Feed-style itinerary card. Supports optional author row, bookmark, and edit button.
+/// Feed-style itinerary card. Supports optional author row, bookmark, edit, and in-place translate.
 class ItineraryFeedCard extends StatelessWidget {
   final Itinerary itinerary;
   final String description;
@@ -14,6 +15,8 @@ class ItineraryFeedCard extends StatelessWidget {
   final VoidCallback? onBookmark;
   final VoidCallback? onAuthorTap;
   final VoidCallback? onEdit;
+  final String? translatedContent;
+  final VoidCallback? onTranslate;
 
   const ItineraryFeedCard({
     super.key,
@@ -25,6 +28,8 @@ class ItineraryFeedCard extends StatelessWidget {
     this.onBookmark,
     this.onAuthorTap,
     this.onEdit,
+    this.translatedContent,
+    this.onTranslate,
   });
 
   @override
@@ -82,7 +87,7 @@ class ItineraryFeedCard extends StatelessWidget {
                   if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
                     const SizedBox(height: 2),
                     Text(
-                      '${it.bookmarkCount} saved',
+                      '${it.bookmarkCount} ${AppStrings.t(context, 'saved_count')}',
                       style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
                     ),
                   ],
@@ -95,6 +100,12 @@ class ItineraryFeedCard extends StatelessWidget {
                         )
                       else
                         const Spacer(),
+                      if (onTranslate != null)
+                        IconButton(
+                          icon: Icon(Icons.translate_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          onPressed: onTranslate,
+                          style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                        ),
                       IconButton(
                         icon: Icon(Icons.share_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                         onPressed: () => shareItineraryLink(it.id, title: it.title),
@@ -118,23 +129,32 @@ class ItineraryFeedCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppTheme.spacingSm),
-                  Text(
-                    it.title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                  if (translatedContent != null) ...[
                     Text(
-                      description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
+                      translatedContent!,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ] else ...[
+                    Text(
+                      it.title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              height: 1.4,
+                            ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
                   const SizedBox(height: AppTheme.spacingMd),
                   Wrap(
@@ -147,7 +167,7 @@ class ItineraryFeedCard extends StatelessWidget {
                         children: [
                           Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           const SizedBox(width: 4),
-                          Text('${it.daysCount} days', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                          Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                         ],
                       ),
                       if (it.mode != null)

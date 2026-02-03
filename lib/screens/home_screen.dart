@@ -9,6 +9,9 @@ import '../core/home_cache.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
+import '../core/locale_notifier.dart';
+import '../l10n/app_strings.dart';
+import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
 import '../widgets/static_map_image.dart';
 
 const int _pageSize = 20;
@@ -133,7 +136,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } catch (e) {
       if (!mounted) return;
       if (silent) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not refresh. Pull down to retry.')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
         return;
       }
       setState(() {
@@ -204,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
     } catch (e) {
       if (mounted) setState(() => _bookmarked[itineraryId] = wasBookmarked);
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not update bookmark. Please try again.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_update_bookmark'))));
     }
   }
 
@@ -237,9 +240,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       SliverToBoxAdapter(
                         child: TabBar(
                           controller: _tabController,
-                          tabs: const [
-                            Tab(text: 'For you'),
-                            Tab(text: 'Following'),
+                          tabs: [
+                            Tab(text: AppStrings.t(context, 'for_you')),
+                            Tab(text: AppStrings.t(context, 'following')),
                           ],
                         ),
                       ),
@@ -383,9 +386,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         SliverToBoxAdapter(
           child: TabBar(
             controller: _tabController,
-            tabs: const [
-              Tab(text: 'For you'),
-              Tab(text: 'Following'),
+            tabs: [
+              Tab(text: AppStrings.t(context, 'for_you')),
+              Tab(text: AppStrings.t(context, 'following')),
             ],
           ),
         ),
@@ -439,12 +442,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Welcome back',
+            AppStrings.t(context, 'welcome_back'),
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
-            'Discover your next adventure',
+            AppStrings.t(context, 'discover_adventure'),
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ],
@@ -483,7 +486,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             FilledButton.icon(
               onPressed: () => context.go('/search'),
               icon: const Icon(Icons.search_rounded, size: 20),
-              label: const Text('Discover trips'),
+              label: Text(AppStrings.t(context, 'discover_trips')),
             ),
           ],
         ),
@@ -502,7 +505,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             const SizedBox(height: AppTheme.spacingLg),
             Text(_error!, style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
             const SizedBox(height: AppTheme.spacingLg),
-            FilledButton(onPressed: () => _load(silent: false), child: const Text('Retry')),
+            FilledButton(onPressed: () => _load(silent: false), child: Text(AppStrings.t(context, 'retry'))),
           ],
         ),
       ),
@@ -627,7 +630,7 @@ class _EdgeZone extends StatelessWidget {
   }
 }
 
-class _FeedCard extends StatelessWidget {
+class _FeedCard extends StatefulWidget {
   final Itinerary itinerary;
   final String description;
   final String locations;
@@ -651,15 +654,38 @@ class _FeedCard extends StatelessWidget {
   });
 
   @override
+  State<_FeedCard> createState() => _FeedCardState();
+}
+
+class _FeedCardState extends State<_FeedCard> {
+  String? _translatedText;
+  bool _isTranslating = false;
+  bool? _showTranslate;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkShowTranslate();
+  }
+
+  Future<void> _checkShowTranslate() async {
+    final text = widget.description.isNotEmpty ? '${widget.itinerary.title}\n\n${widget.description}' : widget.itinerary.title;
+    final different = await isContentInDifferentLanguage(text, LocaleNotifier.instance.localeCode);
+    if (mounted) setState(() => _showTranslate = different);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final it = itinerary;
-    final isCompact = variant == _CardVariant.compact;
-    final mapHeight = variant == _CardVariant.tall ? 240.0 : (isCompact ? 88.0 : 200.0);
+    final it = widget.itinerary;
+    final description = widget.description;
+    final locations = widget.locations;
+    final isCompact = widget.variant == _CardVariant.compact;
+    final mapHeight = widget.variant == _CardVariant.tall ? 240.0 : (isCompact ? 88.0 : 200.0);
 
     return Card(
       margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
@@ -680,7 +706,7 @@ class _FeedCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: InkWell(
-                      onTap: onAuthorTap,
+                      onTap: widget.onAuthorTap,
                       borderRadius: BorderRadius.circular(8),
                       child: Row(
                         children: [
@@ -705,14 +731,36 @@ class _FeedCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (_showTranslate == true)
+                    IconButton(
+                      icon: _isTranslating
+                          ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onSurfaceVariant))
+                          : Icon(Icons.translate_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      onPressed: _isTranslating
+                          ? null
+                          : _translatedText != null
+                              ? () => setState(() => _translatedText = null)
+                              : () async {
+                                  final text = description.isNotEmpty ? '${it.title}\n\n$description' : it.title;
+                                  setState(() => _isTranslating = true);
+                                  final result = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                                  if (mounted) {
+                                    setState(() {
+                                      _translatedText = result;
+                                      _isTranslating = false;
+                                    });
+                                  }
+                                },
+                      style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                    ),
                   IconButton(
                     icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onPressed: () => shareItineraryLink(it.id, title: it.title),
                     style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                   ),
                   IconButton(
-                    icon: Icon(isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
-                    onPressed: onBookmark,
+                    icon: Icon(widget.isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: widget.isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                    onPressed: widget.onBookmark,
                     style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                   ),
                 ],
@@ -720,7 +768,7 @@ class _FeedCard extends StatelessWidget {
               if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
                 const SizedBox(height: 2),
                 Text(
-                  '${it.bookmarkCount} saved',
+                  '${it.bookmarkCount} ${AppStrings.t(context, 'saved_count')}',
                   style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
                 ),
               ],
@@ -729,20 +777,29 @@ class _FeedCard extends StatelessWidget {
                 Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               ],
               SizedBox(height: isCompact ? 4 : AppTheme.spacingSm),
-              Text(
-                it.title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
-                maxLines: isCompact ? 1 : 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (description.isNotEmpty) ...[
-                SizedBox(height: isCompact ? 2 : 4),
+              if (_translatedText != null) ...[
                 Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: isCompact ? 1.2 : 1.4, fontSize: isCompact ? 12 : null),
+                  _translatedText!,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
+                  maxLines: isCompact ? 1 : 4,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ] else ...[
+                Text(
+                  it.title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: isCompact ? 16 : null),
                   maxLines: isCompact ? 1 : 2,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (description.isNotEmpty) ...[
+                  SizedBox(height: isCompact ? 2 : 4),
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, height: isCompact ? 1.2 : 1.4, fontSize: isCompact ? 12 : null),
+                    maxLines: isCompact ? 1 : 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ],
               SizedBox(height: isCompact ? 6 : AppTheme.spacingMd),
               Wrap(
@@ -753,9 +810,9 @@ class _FeedCard extends StatelessWidget {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text('${it.daysCount} days', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                  Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
                     ],
                   ),
                   if (it.mode != null)
