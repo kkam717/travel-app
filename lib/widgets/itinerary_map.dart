@@ -47,6 +47,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   List<LatLng>? _displayPoints;
   Map<int, List<LatLng>>? _routedSegments; // Index -> route points for car/plane/train segments
   bool _loadingRoutes = false;
+  ItineraryStop? _selectedVenue;
 
   static String? get _geoapifyKey {
     const fromDefine = String.fromEnvironment('GEOAPIFY_API_KEY', defaultValue: '');
@@ -55,6 +56,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   }
 
   void _invalidateStopsCache() {
+    _selectedVenue = null;
     _venueStopsWithCoords = null;
     _locationStopsWithCoords = null;
     _locationStopsNoCoords = null;
@@ -64,11 +66,27 @@ class _ItineraryMapState extends State<ItineraryMap> {
     _routedSegments = null;
   }
 
+  /// Same criteria as original dots: any stop that is not a location (venue/other) with coords gets a marker.
   List<ItineraryStop> get _venueStopsWithCoordsList =>
       _venueStopsWithCoords ??= widget.stops.where((s) => s.isVenue && s.lat != null && s.lng != null).toList();
 
   List<ItineraryStop> get _locationStopsWithCoordsList =>
       _locationStopsWithCoords ??= widget.stops.where((s) => s.isLocation && s.lat != null && s.lng != null).toList();
+
+  /// Location stops to show as waypoint dots. In full-screen with route, show only the end of the route (one dot at the last stop).
+  List<ItineraryStop> get _orderedLocationStopsForMarkers {
+    final list = _locationStopsWithCoordsList;
+    if (list.isEmpty) return list;
+    final ordered = List<ItineraryStop>.from(list)
+      ..sort((a, b) {
+        final dayCmp = a.day.compareTo(b.day);
+        return dayCmp != 0 ? dayCmp : a.position.compareTo(b.position);
+      });
+    if (widget.fullScreen && ordered.length >= 2) {
+      return [ordered.last];
+    }
+    return ordered;
+  }
 
   List<ItineraryStop> get _locationStopsNoCoordsList =>
       _locationStopsNoCoords ??= widget.stops.where((s) => s.isLocation && (s.lat == null || s.lng == null)).toList();
@@ -200,65 +218,42 @@ class _ItineraryMapState extends State<ItineraryMap> {
       });
 
     final transitions = widget.transportTransitions ?? [];
-    final routes = <int, List<LatLng>>{};
     
     if (mounted) setState(() => _loadingRoutes = true);
 
     try {
-      for (var i = 0; i < ordered.length - 1; i++) {
+      // Build one future per segment and run them in parallel for faster loading
+      final segmentCount = ordered.length - 1;
+      final futures = <Future<({int i, List<LatLng>? route})>>[];
+      
+      for (var i = 0; i < segmentCount; i++) {
         final from = ordered[i];
         final to = ordered[i + 1];
-        
         if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) continue;
         
         final transition = i < transitions.length ? transitions[i] : null;
-        if (transition == null) continue;
+        final transportType = (transition?.type ?? 'car').toString().toLowerCase();
+        final description = transition?.description?.trim();
+        final fromPt = LatLng(from.lat!, from.lng!);
+        final toPt = LatLng(to.lat!, to.lng!);
         
-        final transportType = transition.type.toLowerCase();
-        final description = transition.description?.trim();
-        
-        List<LatLng>? route;
-        
+        Future<({int i, List<LatLng>? route})> future;
         if (transportType == 'car') {
-          // Fetch road route from Geoapify Routing API
-          debugPrint('ItineraryMap: Loading car route for segment $i (${from.name} -> ${to.name})');
-          route = await _fetchRoute(
-            LatLng(from.lat!, from.lng!),
-            LatLng(to.lat!, to.lng!),
-          );
+          future = _fetchRoute(fromPt, toPt).then((r) => (i: i, route: r));
         } else if (transportType == 'plane' && description != null && description.isNotEmpty) {
-          // Try to parse flight number and get flight route
-          debugPrint('ItineraryMap: Attempting to parse flight route for segment $i');
-          route = await _fetchFlightRoute(
-            LatLng(from.lat!, from.lng!),
-            LatLng(to.lat!, to.lng!),
-            description,
-            from.name,
-            to.name,
-          );
+          future = _fetchFlightRoute(fromPt, toPt, description, from.name, to.name).then((r) => (i: i, route: r));
         } else if (transportType == 'train') {
-          // Try to get train route - always attempt even without description
-          // Description helps identify specific routes but we'll try routing anyway
-          final desc = description ?? '';
-          debugPrint('ItineraryMap: Attempting to fetch train route for segment $i (description: $desc)');
-          route = await _fetchTrainRoute(
-            LatLng(from.lat!, from.lng!),
-            LatLng(to.lat!, to.lng!),
-            desc,
-            from.name,
-            to.name,
-          );
-        }
-        
-        if (route != null && route.isNotEmpty) {
-          debugPrint('ItineraryMap: Route loaded successfully for segment $i (${route.length} points)');
-          routes[i] = route;
+          future = _fetchTrainRoute(fromPt, toPt, description ?? '', from.name, to.name).then((r) => (i: i, route: r));
         } else {
-          debugPrint('ItineraryMap: No route available for segment $i (transport: $transportType)');
+          future = Future.value((i: i, route: null));
         }
-        
-        // Rate limiting: delay between requests
-        await Future.delayed(const Duration(milliseconds: 200));
+        futures.add(future);
+      }
+      
+      final results = await Future.wait(futures);
+      final routes = <int, List<LatLng>>{};
+      for (final r in results) {
+        if (r.route != null && r.route!.isNotEmpty) routes[r.i] = r.route!;
       }
 
       if (mounted) {
@@ -273,118 +268,119 @@ class _ItineraryMapState extends State<ItineraryMap> {
     }
   }
 
-  Future<List<LatLng>?> _fetchRoute(LatLng from, LatLng to) async {
-    try {
-      final key = _geoapifyKey;
-      if (key == null || key.trim().isEmpty) {
-        debugPrint('ItineraryMap: No Geoapify API key');
-        return null;
-      }
+  static const _routeTimeout = Duration(seconds: 15);
 
+  /// Parse GeoJSON feature geometry (LineString or MultiLineString) to list of LatLng.
+  /// Geoapify returns [lon, lat]. MultiLineString legs are merged in order.
+  List<LatLng>? _parseGeoJsonRouteGeometry(Map<String, dynamic>? geometry) {
+    if (geometry == null) return null;
+    final geometryType = geometry['type'] as String?;
+    final coordinates = geometry['coordinates'] as dynamic;
+    if (coordinates == null || coordinates is! List) return null;
+
+    final allPoints = <LatLng>[];
+    if (geometryType == 'LineString') {
+      for (final coord in coordinates) {
+        final p = _parseCoord(coord);
+        if (p != null) allPoints.add(p);
+      }
+    } else if (geometryType == 'MultiLineString') {
+      for (final line in coordinates) {
+        if (line is! List) continue;
+        for (final coord in line) {
+          final p = _parseCoord(coord);
+          if (p != null) allPoints.add(p);
+        }
+      }
+    } else {
+      return null;
+    }
+    return allPoints.isEmpty ? null : allPoints;
+  }
+
+  LatLng? _parseCoord(dynamic coord) {
+    if (coord is! List || coord.length < 2) return null;
+    final lon = coord[0];
+    final lat = coord[1];
+    final lonVal = lon is num ? lon.toDouble() : (lon is String ? double.tryParse(lon) : null);
+    final latVal = lat is num ? lat.toDouble() : (lat is String ? double.tryParse(lat) : null);
+    if (lonVal == null || latVal == null ||
+        lonVal < -180 || lonVal > 180 || latVal < -90 || latVal > 90) {
+      return null;
+    }
+    return LatLng(latVal, lonVal);
+  }
+
+  Future<List<LatLng>?> _fetchRoute(LatLng from, LatLng to) async {
+    final key = _geoapifyKey;
+    if (key != null && key.trim().isNotEmpty) {
+      final route = await _fetchGeoapifyRoute(from, to, 'drive', key);
+      if (route != null && route.isNotEmpty) return route;
+    }
+    // Fallback: OSRM public car routing (no API key, reliable for drive)
+    debugPrint('ItineraryMap: Falling back to OSRM for car route');
+    return _fetchOSRMDriveRoute(from, to);
+  }
+
+  Future<List<LatLng>?> _fetchGeoapifyRoute(LatLng from, LatLng to, String mode, String apiKey) async {
+    try {
       final url = Uri.parse(
         'https://api.geoapify.com/v1/routing'
         '?waypoints=${from.latitude},${from.longitude}|${to.latitude},${to.longitude}'
-        '&mode=drive'
-        '&apiKey=$key',
+        '&mode=$mode'
+        '&apiKey=$apiKey',
       );
+      debugPrint('ItineraryMap: Fetching Geoapify route ($mode) from ${from.latitude},${from.longitude} to ${to.latitude},${to.longitude}');
 
-      debugPrint('ItineraryMap: Fetching route from ${from.latitude},${from.longitude} to ${to.latitude},${to.longitude}');
-      
-      final res = await http.get(url);
+      final res = await http.get(url).timeout(_routeTimeout);
       if (res.statusCode != 200) {
         debugPrint('Geoapify routing error: ${res.statusCode} - ${res.body}');
         return null;
       }
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      debugPrint('ItineraryMap: Route response keys: ${data.keys.toList()}');
-      
       final features = data['features'] as List<dynamic>?;
       if (features == null || features.isEmpty) {
         debugPrint('ItineraryMap: No features in route response');
         return null;
       }
-      
-      debugPrint('ItineraryMap: Found ${features.length} features');
-      debugPrint('ItineraryMap: First feature keys: ${(features.first as Map<String, dynamic>).keys.toList()}');
 
-      // Extract coordinates from the route geometry
       final geometry = features.first['geometry'] as Map<String, dynamic>?;
-      if (geometry == null) {
-        debugPrint('ItineraryMap: No geometry in route feature');
-        return null;
+      final routePoints = _parseGeoJsonRouteGeometry(geometry);
+      if (routePoints != null) {
+        debugPrint('ItineraryMap: Geoapify route parsed: ${routePoints.length} points');
       }
-      
-      final geometryType = geometry['type'] as String?;
-      debugPrint('ItineraryMap: Geometry type: $geometryType');
-      
-      final coordinates = geometry['coordinates'] as dynamic;
-      if (coordinates == null) {
-        debugPrint('ItineraryMap: No coordinates in route geometry');
-        return null;
-      }
-      
-      // Handle different geometry types
-      List<dynamic> coordList;
-      if (geometryType == 'LineString' && coordinates is List) {
-        // LineString: coordinates is directly a list of [lon, lat] pairs
-        coordList = coordinates;
-        debugPrint('ItineraryMap: LineString with ${coordList.length} coordinate points');
-      } else if (geometryType == 'MultiLineString' && coordinates is List) {
-        // MultiLineString: coordinates is a list of LineString arrays
-        // Take the first LineString (usually the main route)
-        if (coordinates.isNotEmpty && coordinates[0] is List) {
-          coordList = coordinates[0] as List<dynamic>;
-          debugPrint('ItineraryMap: MultiLineString with ${coordList.length} coordinate points in first segment');
-        } else {
-          debugPrint('ItineraryMap: Invalid MultiLineString format');
-          return null;
-        }
-      } else {
-        debugPrint('ItineraryMap: Unexpected geometry type or format: $geometryType, coordinates type: ${coordinates.runtimeType}');
-        return null;
-      }
-
-      final routePoints = <LatLng>[];
-      for (var i = 0; i < coordList.length; i++) {
-        final coord = coordList[i];
-        try {
-          // Geoapify returns coordinates as [lon, lat] arrays
-          dynamic lon, lat;
-          if (coord is List && coord.length >= 2) {
-            lon = coord[0];
-            lat = coord[1];
-          } else {
-            debugPrint('ItineraryMap: Invalid coordinate format at index $i: $coord (type: ${coord.runtimeType})');
-            continue;
-          }
-          
-          // Convert to numbers safely
-          final lonVal = lon is num ? lon.toDouble() : (lon is String ? double.tryParse(lon) : null);
-          final latVal = lat is num ? lat.toDouble() : (lat is String ? double.tryParse(lat) : null);
-          
-          if (lonVal != null && latVal != null && 
-              lonVal >= -180 && lonVal <= 180 && 
-              latVal >= -90 && latVal <= 90) {
-            routePoints.add(LatLng(latVal, lonVal));
-          } else {
-            debugPrint('ItineraryMap: Invalid coordinate values at index $i: lon=$lon (${lon.runtimeType}) -> $lonVal, lat=$lat (${lat.runtimeType}) -> $latVal');
-          }
-        } catch (e) {
-          debugPrint('ItineraryMap route coordinate parse error at index $i: $e for coord: $coord (type: ${coord.runtimeType})');
-          continue;
-        }
-      }
-      
-      if (routePoints.isEmpty) {
-        debugPrint('ItineraryMap: No valid route points extracted');
-        return null;
-      }
-      
-      debugPrint('ItineraryMap: Successfully extracted ${routePoints.length} route points');
       return routePoints;
     } catch (e) {
-      debugPrint('ItineraryMap route fetch error: $e');
+      debugPrint('ItineraryMap Geoapify route fetch error: $e');
+      return null;
+    }
+  }
+
+  Future<List<LatLng>?> _fetchOSRMDriveRoute(LatLng from, LatLng to) async {
+    try {
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
+        '?overview=full&geometries=geojson',
+      );
+      final res = await http.get(url).timeout(_routeTimeout);
+      if (res.statusCode != 200) return null;
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (data['code'] != 'Ok') return null;
+      final routes = data['routes'] as List<dynamic>?;
+      if (routes == null || routes.isEmpty) return null;
+      final geometry = routes.first['geometry'] as Map<String, dynamic>?;
+      final coords = geometry?['coordinates'] as List<dynamic>?;
+      if (coords == null) return null;
+      final points = <LatLng>[];
+      for (final c in coords) {
+        final p = _parseCoord(c);
+        if (p != null) points.add(p);
+      }
+      return points.isEmpty ? null : points;
+    } catch (e) {
+      debugPrint('ItineraryMap OSRM route error: $e');
       return null;
     }
   }
@@ -485,6 +481,36 @@ class _ItineraryMapState extends State<ItineraryMap> {
     return info.isEmpty ? null : info;
   }
 
+  /// Parse origin and destination place names from train description for geocoding.
+  /// E.g. "AVE Barcelona Sants to Madrid Puerta de Atocha" → ("Barcelona Sants", "Madrid Puerta de Atocha")
+  ///      "Amtrak Northeast Regional NYC to Washington DC" → ("NYC", "Washington DC")
+  ///      "Amtrak Washington DC to Philadelphia 30th Street" → ("Washington DC", "Philadelphia 30th Street")
+  (String, String)? _parseTrainOriginDestination(String description) {
+    if (description.isEmpty) return null;
+    final toPatterns = [' to ', ' → ', ' - ', ' – '];
+    int? splitAt;
+    String? separator;
+    for (final sep in toPatterns) {
+      final idx = description.indexOf(sep);
+      if (idx != -1 && (splitAt == null || idx < splitAt)) {
+        splitAt = idx;
+        separator = sep;
+      }
+    }
+    if (splitAt == null || separator == null) return null;
+    var fromPart = description.substring(0, splitAt).trim();
+    final toPart = description.substring(splitAt + separator.length).trim();
+    if (fromPart.isEmpty || toPart.isEmpty) return null;
+    // Strip leading train name so we get the place (e.g. "Amtrak Northeast Regional NYC" → "NYC", "AVE Barcelona Sants" → "Barcelona Sants")
+    final trainPrefixes = RegExp(
+      r'^(?:Amtrak\s+(?:Northeast\s+Regional\s+|Acela\s+Express\s+)?|AVE\s+|TGV\s+\w+\s+|ICE\s+\d+\s+|Eurostar\s+|Thalys\s+)?',
+      caseSensitive: false,
+    );
+    fromPart = fromPart.replaceFirst(trainPrefixes, '').trim();
+    if (fromPart.isEmpty) fromPart = description.substring(0, splitAt).trim();
+    return (fromPart, toPart);
+  }
+
   /// Create a great circle route (flight path) between two points
   List<LatLng> _createGreatCircleRoute(LatLng from, LatLng to, {int segments = 50}) {
     final points = <LatLng>[];
@@ -562,7 +588,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
     }
   }
 
-  /// Fetch train route - searches for actual train route based on description
+  /// Fetch train route - uses description to get station/place names, geocodes them, then requests transit route
   Future<List<LatLng>?> _fetchTrainRoute(
     LatLng from,
     LatLng to,
@@ -573,35 +599,41 @@ class _ItineraryMapState extends State<ItineraryMap> {
     try {
       final trainInfo = _parseTrainInfo(description);
       debugPrint('ItineraryMap: Parsed train info: $trainInfo from description: $description');
-      debugPrint('ItineraryMap: Searching for train route from $fromCity to $toCity');
-      
-      // Try multiple approaches to get actual train route
-      
-      // Approach 1: Try Geoapify transit routing (best chance for actual transit routes)
-      final key = _geoapifyKey;
-      if (key != null && key.trim().isNotEmpty) {
-        debugPrint('ItineraryMap: Attempting to fetch train route from Geoapify transit API');
-        final route = await _fetchTransitRoute(from, to, key);
-        if (route != null && route.isNotEmpty) {
-          debugPrint('ItineraryMap: Successfully fetched train route from Geoapify with ${route.length} points');
-          return route;
+
+      LatLng fromWay = from;
+      LatLng toWay = to;
+      final originDest = _parseTrainOriginDestination(description);
+      if (originDest != null) {
+        final (fromPlace, toPlace) = originDest;
+        debugPrint('ItineraryMap: Geocoding train places: "$fromPlace" → "$toPlace"');
+        final fromCoords = await _geocodeNominatim(fromPlace);
+        await Future<void>.delayed(const Duration(milliseconds: 1100));
+        final toCoords = await _geocodeNominatim(toPlace);
+        if (fromCoords != null && toCoords != null) {
+          fromWay = LatLng(fromCoords.$1, fromCoords.$2);
+          toWay = LatLng(toCoords.$1, toCoords.$2);
+          debugPrint('ItineraryMap: Using geocoded station/place coords for transit request');
+        } else {
+          debugPrint('ItineraryMap: Geocode failed for "$fromPlace" or "$toPlace", using itinerary coords');
         }
       }
-      
-      // Approach 2: Try OSRM (Open Source Routing Machine) - note: public instance uses driving profile
-      // This won't give actual train tracks but might approximate the route
-      debugPrint('ItineraryMap: Attempting to fetch route from OSRM (may not be railway-specific)');
-      final osrmRoute = await _fetchRailwayRouteFromOSRM(from, to);
-      if (osrmRoute != null && osrmRoute.isNotEmpty) {
-        debugPrint('ItineraryMap: Got route from OSRM with ${osrmRoute.length} points (may be road-based, not train tracks)');
-        // Note: OSRM public instance doesn't have railway profile, so this is approximate
-        // Return null instead to show nothing rather than incorrect route
-        return null;
+
+      final key = _geoapifyKey;
+      if (key == null || key.trim().isEmpty) return null;
+
+      debugPrint('ItineraryMap: Fetching train route from Geoapify transit API');
+      var route = await _fetchTransitRoute(fromWay, toWay, key);
+      if (route != null && route.isNotEmpty) {
+        debugPrint('ItineraryMap: Fetched train route: ${route.length} points');
+        return route;
       }
-      
-      // If we can't get actual train route data, return null (show nothing)
-      debugPrint('ItineraryMap: Could not fetch actual train route - returning null (no line will be shown)');
-      debugPrint('ItineraryMap: Note: To show actual train routes, we need railway-specific routing data');
+      // If we used geocoded station coords and got nothing, try with original itinerary coords
+      if (fromWay != from || toWay != to) {
+        debugPrint('ItineraryMap: Retrying transit with itinerary coords');
+        route = await _fetchTransitRoute(from, to, key);
+        if (route != null && route.isNotEmpty) return route;
+      }
+      debugPrint('ItineraryMap: No transit route returned for train segment');
       return null;
     } catch (e) {
       debugPrint('ItineraryMap train route error: $e');
@@ -609,170 +641,41 @@ class _ItineraryMapState extends State<ItineraryMap> {
     }
   }
 
-  /// Fetch railway route from OSRM (Open Source Routing Machine) with railway profile
-  Future<List<LatLng>?> _fetchRailwayRouteFromOSRM(LatLng from, LatLng to) async {
-    try {
-      // OSRM public instance with railway profile
-      // Note: Public OSRM instances may not have railway profiles, so this might fail
-      // But we try it as an alternative
-      final url = Uri.parse(
-        'https://router.project-osrm.org/route/v1/driving/'
-        '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
-        '?overview=full&geometries=geojson',
-      );
-
-      debugPrint('ItineraryMap: Querying OSRM for route');
-      
-      final res = await http.get(url);
-      if (res.statusCode != 200) {
-        debugPrint('OSRM API error: ${res.statusCode}');
-        return null;
-      }
-
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
-      final code = data['code'] as String?;
-      
-      if (code != 'Ok') {
-        debugPrint('OSRM route error: $code');
-        return null;
-      }
-
-      final routes = data['routes'] as List<dynamic>?;
-      if (routes == null || routes.isEmpty) {
-        debugPrint('ItineraryMap: No routes in OSRM response');
-        return null;
-      }
-
-      final route = routes.first as Map<String, dynamic>;
-      final geometry = route['geometry'] as Map<String, dynamic>?;
-      final coordinates = geometry?['coordinates'] as List<dynamic>?;
-      
-      if (coordinates == null) {
-        debugPrint('ItineraryMap: No coordinates in OSRM route');
-        return null;
-      }
-
-      final routePoints = <LatLng>[];
-      for (final coord in coordinates) {
-        if (coord is List && coord.length >= 2) {
-          final lon = coord[0] as num;
-          final lat = coord[1] as num;
-          routePoints.add(LatLng(lat.toDouble(), lon.toDouble()));
-        }
-      }
-      
-      if (routePoints.isEmpty) {
-        debugPrint('ItineraryMap: No valid route points from OSRM');
-        return null;
-      }
-      
-      debugPrint('ItineraryMap: Successfully extracted ${routePoints.length} route points from OSRM');
-      return routePoints;
-    } catch (e) {
-      debugPrint('ItineraryMap OSRM railway route error: $e');
-      return null;
+  /// Fetch transit route (train/public transport) using Geoapify Routing API.
+  /// Tries [mode] first, then if [tryApproximated] true, tries approximated_transit.
+  Future<List<LatLng>?> _fetchTransitRoute(LatLng from, LatLng to, String apiKey, {bool tryApproximated = true}) async {
+    final route = await _fetchTransitRouteWithMode(from, to, apiKey, 'transit');
+    if (route != null && route.isNotEmpty) return route;
+    if (tryApproximated) {
+      debugPrint('ItineraryMap: Trying approximated_transit after transit returned no route');
+      return _fetchTransitRouteWithMode(from, to, apiKey, 'approximated_transit');
     }
+    return null;
   }
 
-  /// Fetch transit route (train/public transport) using Geoapify Routing API
-  Future<List<LatLng>?> _fetchTransitRoute(LatLng from, LatLng to, String apiKey) async {
+  Future<List<LatLng>?> _fetchTransitRouteWithMode(LatLng from, LatLng to, String apiKey, String mode) async {
     try {
       final url = Uri.parse(
         'https://api.geoapify.com/v1/routing'
         '?waypoints=${from.latitude},${from.longitude}|${to.latitude},${to.longitude}'
-        '&mode=transit'
+        '&mode=$mode'
         '&apiKey=$apiKey',
       );
-
-      debugPrint('ItineraryMap: Fetching transit route from ${from.latitude},${from.longitude} to ${to.latitude},${to.longitude}');
-      
-      final res = await http.get(url);
+      debugPrint('ItineraryMap: Fetching $mode route');
+      final res = await http.get(url).timeout(_routeTimeout);
       if (res.statusCode != 200) {
-        debugPrint('Geoapify transit routing error: ${res.statusCode} - ${res.body}');
+        debugPrint('Geoapify $mode error: ${res.statusCode}');
         return null;
       }
-
       final data = jsonDecode(res.body) as Map<String, dynamic>;
-      debugPrint('ItineraryMap: Transit route response keys: ${data.keys.toList()}');
-      
       final features = data['features'] as List<dynamic>?;
-      if (features == null || features.isEmpty) {
-        debugPrint('ItineraryMap: No features in transit route response');
-        return null;
-      }
-
-      // Extract coordinates from the route geometry
+      if (features == null || features.isEmpty) return null;
       final geometry = features.first['geometry'] as Map<String, dynamic>?;
-      if (geometry == null) {
-        debugPrint('ItineraryMap: No geometry in transit route feature');
-        return null;
-      }
-      
-      final geometryType = geometry['type'] as String?;
-      debugPrint('ItineraryMap: Transit geometry type: $geometryType');
-      
-      final coordinates = geometry['coordinates'] as dynamic;
-      if (coordinates == null) {
-        debugPrint('ItineraryMap: No coordinates in transit route geometry');
-        return null;
-      }
-
-      // Handle different geometry types
-      List<dynamic> coordList;
-      if (geometryType == 'LineString' && coordinates is List) {
-        coordList = coordinates;
-        debugPrint('ItineraryMap: LineString with ${coordList.length} coordinate points');
-      } else if (geometryType == 'MultiLineString' && coordinates is List) {
-        if (coordinates.isNotEmpty && coordinates[0] is List) {
-          coordList = coordinates[0] as List<dynamic>;
-          debugPrint('ItineraryMap: MultiLineString with ${coordList.length} coordinate points in first segment');
-        } else {
-          debugPrint('ItineraryMap: Invalid MultiLineString format');
-          return null;
-        }
-      } else {
-        debugPrint('ItineraryMap: Unexpected transit geometry type or format: $geometryType, coordinates type: ${coordinates.runtimeType}');
-        return null;
-      }
-
-      final routePoints = <LatLng>[];
-      for (var i = 0; i < coordList.length; i++) {
-        final coord = coordList[i];
-        try {
-          dynamic lon, lat;
-          if (coord is List && coord.length >= 2) {
-            lon = coord[0];
-            lat = coord[1];
-          } else {
-            debugPrint('ItineraryMap: Invalid coordinate format at index $i: $coord');
-            continue;
-          }
-          
-          final lonVal = lon is num ? lon.toDouble() : (lon is String ? double.tryParse(lon) : null);
-          final latVal = lat is num ? lat.toDouble() : (lat is String ? double.tryParse(lat) : null);
-          
-          if (lonVal != null && latVal != null && 
-              lonVal >= -180 && lonVal <= 180 && 
-              latVal >= -90 && latVal <= 90) {
-            routePoints.add(LatLng(latVal, lonVal));
-          } else {
-            debugPrint('ItineraryMap: Invalid coordinate values at index $i: lon=$lonVal, lat=$latVal');
-          }
-        } catch (e) {
-          debugPrint('ItineraryMap transit route coordinate parse error at index $i: $e');
-          continue;
-        }
-      }
-      
-      if (routePoints.isEmpty) {
-        debugPrint('ItineraryMap: No valid transit route points extracted');
-        return null;
-      }
-      
-      debugPrint('ItineraryMap: Successfully extracted ${routePoints.length} transit route points');
+      final routePoints = _parseGeoJsonRouteGeometry(geometry);
+      if (routePoints != null) debugPrint('ItineraryMap: $mode route: ${routePoints.length} points');
       return routePoints;
     } catch (e) {
-      debugPrint('ItineraryMap transit route fetch error: $e');
+      debugPrint('ItineraryMap $mode fetch error: $e');
       return null;
     }
   }
@@ -990,6 +893,9 @@ class _ItineraryMapState extends State<ItineraryMap> {
     final CameraFit? initialFit = bounds != null && !_isZeroAreaBounds(bounds)
         ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50))
         : null;
+    final routeData = widget.fullScreen && _locationStopsWithCoordsList.length >= 2
+        ? _buildRouteData(primaryColor)
+        : (polylines: <Polyline>[], transportMarkers: <Marker>[]);
     return SizedBox(
       height: widget.height,
       child: FlutterMap(
@@ -998,6 +904,13 @@ class _ItineraryMapState extends State<ItineraryMap> {
           initialCenter: initialPos,
           initialZoom: 12,
           initialCameraFit: initialFit,
+          onTap: (_, point) {
+            final nearVenue = _venueStopsWithCoordsList.any((s) =>
+                s.lat != null && s.lng != null && _haversineKm(point, LatLng(s.lat!, s.lng!)) < 0.05);
+            if (!nearVenue && _selectedVenue != null && mounted) {
+              setState(() => _selectedVenue = null);
+            }
+          },
           onMapReady: () {
             if (bounds == null) _fitBounds();
             // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
@@ -1018,8 +931,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
         ),
         children: [
           _buildTileLayer(brightness),
-          if (widget.fullScreen && _locationStopsWithCoordsList.length >= 2)
-            _buildRouteLayers(primaryColor)
+          if (widget.fullScreen && _locationStopsWithCoordsList.length >= 2 && routeData.polylines.isNotEmpty)
+            PolylineLayer(polylines: routeData.polylines)
           else if (_polylinePointsList.length >= 2)
             PolylineLayer(
               polylines: [
@@ -1032,8 +945,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
             ),
           MarkerLayer(
             markers: [
-              // City markers (locations) - larger circles
-              ..._locationStopsWithCoordsList.map((stop) => Marker(
+              // City markers (locations) - larger circles. In full-screen route view, skip origin (first stop) and show dots from second stop through end of route.
+              ..._orderedLocationStopsForMarkers.map((stop) => Marker(
                 point: LatLng(stop.lat!, stop.lng!),
                 width: 16,
                 height: 16,
@@ -1045,21 +958,14 @@ class _ItineraryMapState extends State<ItineraryMap> {
                   ),
                 ),
               )),
-              // Venue markers (spots) - small dots
-              ..._venueStopsWithCoordsList.map((stop) => Marker(
-                point: LatLng(stop.lat!, stop.lng!),
-                width: 8,
-                height: 8,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: primaryColor.withValues(alpha: 0.7),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1),
-                  ),
-                ),
-              )),
+              // Venue markers (spots) - orange flags, tap shows name above (flag stays fixed)
+              ..._venueStopsWithCoordsList.map((stop) => _buildVenueFlagMarker(stop)),
             ],
           ),
+          if (_selectedVenue != null)
+            MarkerLayer(markers: _buildSelectedVenueLabelMarker()),
+          if (widget.fullScreen && _locationStopsWithCoordsList.length >= 2 && routeData.transportMarkers.isNotEmpty)
+            MarkerLayer(markers: routeData.transportMarkers),
           Align(
             alignment: Alignment.bottomRight,
             child: Padding(
@@ -1080,6 +986,66 @@ class _ItineraryMapState extends State<ItineraryMap> {
         ],
       ),
     );
+  }
+
+  /// Venue marker: small square (24x24) so zoom doesn't drift. Tap shows name in a separate label marker above.
+  Marker _buildVenueFlagMarker(ItineraryStop stop) {
+    return Marker(
+      point: LatLng(stop.lat!, stop.lng!),
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedVenue = _selectedVenue?.id == stop.id ? null : stop;
+          });
+        },
+        child: Icon(Icons.flag_rounded, size: 22, color: Colors.orange),
+      ),
+    );
+  }
+
+  /// Label marker shown above the selected venue flag (separate from flag so flag size stays square and zoom is correct).
+  static const _labelOffsetLat = 0.00025;
+
+  List<Marker> _buildSelectedVenueLabelMarker() {
+    final stop = _selectedVenue;
+    if (stop == null || stop.lat == null || stop.lng == null) return [];
+    final pointAbove = LatLng(stop.lat! + _labelOffsetLat, stop.lng!);
+    return [
+      Marker(
+        point: pointAbove,
+        width: 130,
+        height: 44,
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Text(
+            stop.name,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    ];
   }
 
   List<LatLng> _createCurvedLine(LatLng from, LatLng to) {
@@ -1141,9 +1107,59 @@ class _ItineraryMapState extends State<ItineraryMap> {
     return points;
   }
 
-  Widget _buildRouteLayers(Color primaryColor) {
+  /// Point at half the path length along the polyline (true center for placing transport icon).
+  LatLng _midpointOf(List<LatLng> points) {
+    if (points.isEmpty) return const LatLng(0, 0);
+    if (points.length == 1) return points.first;
+    if (points.length == 2) {
+      final a = points[0];
+      final b = points[1];
+      return LatLng(
+        (a.latitude + b.latitude) / 2,
+        (a.longitude + b.longitude) / 2,
+      );
+    }
+    // Sum segment lengths and find point at half total distance
+    double total = 0;
+    final segLengths = <double>[];
+    for (var i = 0; i < points.length - 1; i++) {
+      final d = _haversineKm(points[i], points[i + 1]);
+      segLengths.add(d);
+      total += d;
+    }
+    if (total <= 0) return points[points.length ~/ 2];
+    final half = total / 2;
+    double acc = 0;
+    for (var i = 0; i < segLengths.length; i++) {
+      if (acc + segLengths[i] >= half) {
+        final t = (half - acc) / segLengths[i];
+        final a = points[i];
+        final b = points[i + 1];
+        return LatLng(
+          a.latitude + t * (b.latitude - a.latitude),
+          a.longitude + t * (b.longitude - a.longitude),
+        );
+      }
+      acc += segLengths[i];
+    }
+    return points[points.length ~/ 2];
+  }
+
+  double _haversineKm(LatLng a, LatLng b) {
+    const R = 6371.0;
+    final dLat = (b.latitude - a.latitude) * math.pi / 180;
+    final dLon = (b.longitude - a.longitude) * math.pi / 180;
+    final x = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(a.latitude * math.pi / 180) *
+            math.cos(b.latitude * math.pi / 180) *
+            math.sin(dLon / 2) *
+            math.sin(dLon / 2);
+    return R * 2 * math.atan2(math.sqrt(x), math.sqrt(1 - x));
+  }
+
+  ({List<Polyline> polylines, List<Marker> transportMarkers}) _buildRouteData(Color primaryColor) {
     final locationStops = _locationStopsWithCoordsList;
-    if (locationStops.length < 2) return const SizedBox.shrink();
+    if (locationStops.length < 2) return (polylines: [], transportMarkers: []);
     
     final ordered = List<ItineraryStop>.from(locationStops)
       ..sort((a, b) {
@@ -1153,6 +1169,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
     final transitions = widget.transportTransitions ?? [];
     final polylines = <Polyline>[];
+    final transportMarkers = <Marker>[];
     
     for (var i = 0; i < ordered.length - 1; i++) {
       final from = ordered[i];
@@ -1166,62 +1183,104 @@ class _ItineraryMapState extends State<ItineraryMap> {
       final transition = i < transitions.length ? transitions[i] : null;
       final transportType = transition?.type.toLowerCase() ?? 'unknown';
       final isPlane = transportType == 'plane';
+      final isBoat = transportType == 'boat';
       
-      // Check if we have a fetched route for this segment
-      if (_routedSegments != null && _routedSegments!.containsKey(i)) {
-        // Use actual route (car, plane with flight number, or train with train number)
+      List<LatLng> segmentPoints;
+      bool solidLine;
+
+      if (isPlane) {
+        // Flights: always solid curved (great circle) line
+        segmentPoints = _createGreatCircleRoute(fromPoint, toPoint);
+        solidLine = true;
+      } else if (isBoat) {
+        // Boats: dotted curved line
+        segmentPoints = _createCurvedLine(fromPoint, toPoint);
+        solidLine = false;
+      } else if (_routedSegments != null && _routedSegments!.containsKey(i)) {
+        // Train or car with fetched route: solid line
         final route = _routedSegments![i]!;
-        debugPrint('ItineraryMap: Using fetched route for segment $i (transport: $transportType, ${route.length} points)');
-        if (route.isNotEmpty && route.length >= 2) {
-          // Validate route points
-          final validRoute = route.where((p) => 
-            p.latitude >= -90 && p.latitude <= 90 && 
-            p.longitude >= -180 && p.longitude <= 180
-          ).toList();
-          
-          if (validRoute.length >= 2) {
-            // Use solid line for actual routes (car, plane, train)
-            // Thinner line for flights to show great circle path more subtly
-            polylines.add(Polyline(
-              points: validRoute,
-              color: primaryColor,
-              strokeWidth: isPlane ? 3 : 5,
-            ));
-          } else {
-            debugPrint('ItineraryMap: Route for segment $i has invalid points, falling back to curved line');
-            // Fall back to curved line if route is invalid
-            final curvedPoints = _createCurvedLine(fromPoint, toPoint);
-            if (curvedPoints.length >= 2) {
-              polylines.add(Polyline(
-                points: curvedPoints,
-                color: primaryColor,
-                strokeWidth: 4,
-                pattern: StrokePattern.dashed(
-                  segments: [10, 8],
-                ),
-              ));
-            }
-          }
+        final validRoute = route.where((p) => 
+          p.latitude >= -90 && p.latitude <= 90 && 
+          p.longitude >= -180 && p.longitude <= 180
+        ).toList();
+        if (validRoute.length >= 2) {
+          segmentPoints = validRoute;
+          solidLine = true;
+        } else {
+          segmentPoints = _createCurvedLine(fromPoint, toPoint);
+          solidLine = false;
         }
       } else {
-        // No route available - use curved dotted line
-        debugPrint('ItineraryMap: Using curved line for segment $i (transport: $transportType, hasRoutes: ${_routedSegments != null}, segmentInRoutes: ${_routedSegments?.containsKey(i)})');
-        final curvedPoints = _createCurvedLine(fromPoint, toPoint);
-        if (curvedPoints.length >= 2) {
-          polylines.add(Polyline(
-            points: curvedPoints,
-            color: primaryColor,
-            strokeWidth: 4,
-            pattern: StrokePattern.dashed(
-              segments: [10, 8],
+        // No route (train/car/other): dotted curved
+        segmentPoints = _createCurvedLine(fromPoint, toPoint);
+        solidLine = false;
+      }
+
+      if (segmentPoints.length < 2) continue;
+
+      if (solidLine) {
+        polylines.add(Polyline(
+          points: segmentPoints,
+          color: primaryColor,
+          strokeWidth: isPlane ? 3 : 5,
+        ));
+      } else {
+        polylines.add(Polyline(
+          points: segmentPoints,
+          color: primaryColor,
+          strokeWidth: 4,
+          pattern: StrokePattern.dashed(segments: [10, 8]),
+        ));
+      }
+
+      final mid = _midpointOf(segmentPoints);
+      // Only show transport icon if midpoint is clearly on the line, not at a station
+      final distFromStart = _haversineKm(fromPoint, mid);
+      final distFromEnd = _haversineKm(mid, toPoint);
+      final minDistKm = 0.5;
+      if (distFromStart >= minDistKm && distFromEnd >= minDistKm) {
+        final iconData = _transportIconFor(transportType);
+        transportMarkers.add(Marker(
+          point: mid,
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          child: Center(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                shape: BoxShape.circle,
+                border: Border.all(color: primaryColor, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: Icon(iconData, size: 16, color: primaryColor),
             ),
-          ));
-        }
+          ),
+        ));
       }
     }
     
-    if (polylines.isEmpty) return const SizedBox.shrink();
-    
-    return PolylineLayer(polylines: polylines);
+    return (polylines: polylines, transportMarkers: transportMarkers);
+  }
+
+  IconData _transportIconFor(String transportType) {
+    switch (transportType) {
+      case 'train':
+        return Icons.train;
+      case 'car':
+        return Icons.directions_car;
+      case 'plane':
+        return Icons.flight;
+      case 'boat':
+        return Icons.directions_boat;
+      default:
+        return Icons.directions_transit;
+    }
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -115,6 +116,42 @@ class _StaticMapImageState extends State<StaticMapImage> {
     return null;
   }
 
+  /// Builds a list of points forming a curved path through [cityPoints] using quadratic Bezier segments.
+  List<(double, double)> _createCurvedPolylinePoints(List<(double, double)> cityPoints) {
+    if (cityPoints.length < 2) return cityPoints;
+    final result = <(double, double)>[];
+    for (var i = 0; i < cityPoints.length - 1; i++) {
+      final from = cityPoints[i];
+      final to = cityPoints[i + 1];
+      final midLat = (from.$1 + to.$1) / 2;
+      final midLng = (from.$2 + to.$2) / 2;
+      final dx = to.$2 - from.$2;
+      final dy = to.$1 - from.$1;
+      final dist = math.sqrt(dx * dx + dy * dy);
+      if (dist < 1e-7) {
+        if (i == 0) result.add(from);
+        result.add(to);
+        continue;
+      }
+      final offset = dist * 0.3;
+      final perpX = -dy / dist * offset;
+      final perpY = dx / dist * offset;
+      final ctrlLat = midLat + perpY;
+      final ctrlLng = midLng + perpX;
+      const segments = 20;
+      final start = i == 0 ? 0 : 1;
+      for (var j = start; j <= segments; j++) {
+        final t = j / segments;
+        final lat = (1 - t) * (1 - t) * from.$1 + 2 * (1 - t) * t * ctrlLat + t * t * to.$1;
+        final lng = (1 - t) * (1 - t) * from.$2 + 2 * (1 - t) * t * ctrlLng + t * t * to.$2;
+        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+          result.add((lat, lng));
+        }
+      }
+    }
+    return result.isEmpty ? cityPoints : result;
+  }
+
   String _buildGeoapifyUrl(List<(double, double)> cityPoints, {List<(double, double)>? venuePoints, bool path = true}) {
     final w = (widget.width * 2).toInt().clamp(100, 640);
     final h = (widget.height * 2).toInt().clamp(100, 640);
@@ -138,17 +175,18 @@ class _StaticMapImageState extends State<StaticMapImage> {
     final padLng = lngSpan * 0.25; // 25% padding left/right
     final rect = 'rect:${(minLng - padLng).clamp(-180.0, 180.0)},${(maxLat + padLat).clamp(-90.0, 90.0)},${(maxLng + padLng).clamp(-180.0, 180.0)},${(minLat - padLat).clamp(-90.0, 90.0)}';
 
-    // positron (light) / dark-matter (night) to match app theme
-    final style = (_lastBrightness ?? Brightness.light) == Brightness.dark ? 'dark-matter' : 'positron';
+    // Same theme as interactive map (klokantech-basic)
+    const style = 'klokantech-basic';
     final hex = (widget.pathColor.value & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toLowerCase();
     
     // Build geometry list - Geoapify requires multiple geometries in ONE parameter separated by |
     final geometries = <String>[];
     
-    // Add polyline connecting cities only
+    // Add curved dotted polyline connecting cities only
     if (path && cityPoints.length >= 2) {
-      final polyline = cityPoints.map((p) => '${p.$2},${p.$1}').join(',');
-      geometries.add('polyline:$polyline;linewidth:6;linecolor:#$hex');
+      final curvedPoints = _createCurvedPolylinePoints(cityPoints);
+      final polyline = curvedPoints.map((p) => '${p.$2},${p.$1}').join(',');
+      geometries.add('polyline:$polyline;linewidth:6;linecolor:#$hex;linestyle:dotted');
     }
     
     // Add markers for cities (larger circles)
