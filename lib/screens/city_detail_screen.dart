@@ -433,6 +433,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
   late String _category;
   late TextEditingController _descController;
   late Future<(double, double)?> _cityCoordsFuture;
+  late Future<String?> _countryCodeFuture;
   String? _placeName;
   String? _placeId;
   bool _showSearch = false;
@@ -445,6 +446,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
     _placeName = widget.initialName;
     _showSearch = widget.initialName == null || widget.initialName!.isEmpty;
     _cityCoordsFuture = PlacesService.geocodeAddress(widget.cityName);
+    _countryCodeFuture = PlacesService.geocodeToCountryCode(widget.cityName);
   }
 
   @override
@@ -475,12 +477,15 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
               ),
             const SizedBox(height: AppTheme.spacingMd),
             if (_showSearch) ...[
-              FutureBuilder<(double, double)?>(
-                future: _cityCoordsFuture,
+              FutureBuilder<List<dynamic>>(
+                future: Future.wait([_cityCoordsFuture, _countryCodeFuture]),
                 builder: (context, snapshot) {
+                  final coords = snapshot.hasData ? snapshot.data![0] as (double, double)? : null;
+                  final countryCode = snapshot.hasData ? snapshot.data![1] as String? : null;
                   return PlacesField(
                     hint: 'Search for a place in ${widget.cityName}…',
-                    locationLatLng: snapshot.data,
+                    locationLatLng: coords,
+                    countryCodes: countryCode != null && countryCode.isNotEmpty ? [countryCode] : null,
                     onSelected: (name, _, __, locationUrl) {
                       setState(() {
                         _placeName = name;

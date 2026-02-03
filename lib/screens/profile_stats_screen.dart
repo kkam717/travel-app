@@ -196,6 +196,9 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                 PlacesField(
                   hint: 'Search for your city…',
                   placeType: 'city',
+                  countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
+                      ? _profile!.visitedCountries
+                      : null,
                   onSelected: (name, _, __, ___) {
                     onSave(name);
                     Navigator.pop(ctx);
@@ -271,6 +274,9 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                           PlacesField(
                                             hint: 'Search for a city…',
                                             placeType: 'city',
+                                            countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
+                                                ? _profile!.visitedCountries
+                                                : null,
                                             onSelected: (placeName, _, __, ___) {
                                               Navigator.pop(dctx, placeName);
                                             },

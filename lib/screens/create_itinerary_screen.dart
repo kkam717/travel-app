@@ -752,8 +752,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                         child: d.name.isEmpty
                             ? PlacesField(
                                 hint: AppStrings.t(context, 'search_city_or_location'),
-                                countryCodes: _selectedCountries,
-                                placeType: 'city',
+                                countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                                 onSelected: (name, lat, lng, locationUrl) {
                                   d.name = name;
                                   d.lat = lat;
