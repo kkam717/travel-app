@@ -65,9 +65,9 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
   List<LatLng> get _polylinePointsList {
     if (_polylinePoints != null) return _polylinePoints!;
-    // Use all stops with coords (location + venue) in day/position order for full route
-    final allWithCoords = _allStopsWithCoordsList;
-    final ordered = List<ItineraryStop>.from(allWithCoords)
+    // Only use location stops (cities) for connecting lines, not venues
+    final locationStops = _locationStopsWithCoordsList;
+    final ordered = List<ItineraryStop>.from(locationStops)
       ..sort((a, b) {
         final dayCmp = a.day.compareTo(b.day);
         return dayCmp != 0 ? dayCmp : a.position.compareTo(b.position);
@@ -388,6 +388,36 @@ class _ItineraryMapState extends State<ItineraryMap> {
                 ),
               ],
             ),
+          MarkerLayer(
+            markers: [
+              // City markers (locations) - larger circles
+              ..._locationStopsWithCoordsList.map((stop) => Marker(
+                point: LatLng(stop.lat!, stop.lng!),
+                width: 16,
+                height: 16,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: primaryColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              )),
+              // Venue markers (spots) - small dots
+              ..._venueStopsWithCoordsList.map((stop) => Marker(
+                point: LatLng(stop.lat!, stop.lng!),
+                width: 8,
+                height: 8,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: primaryColor.withValues(alpha: 0.7),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                ),
+              )),
+            ],
+          ),
           Align(
             alignment: Alignment.bottomRight,
             child: Padding(

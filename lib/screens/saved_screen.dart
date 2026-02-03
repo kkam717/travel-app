@@ -21,12 +21,19 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
   List<Itinerary> _planning = [];
   bool _isLoading = false;
   String? _error;
+  ScaffoldMessengerState? _scaffoldMessenger;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _initOrLoad();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
   }
 
   @override
@@ -83,17 +90,19 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
     } catch (e) {
       if (!mounted) return;
       if (silent) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted && _scaffoldMessenger != null) {
+          _scaffoldMessenger!.showSnackBar(
             SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))),
           );
         }
         return;
       }
-      setState(() {
-        _error = AppStrings.t(context, 'something_went_wrong');
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = AppStrings.t(context, 'something_went_wrong');
+          _isLoading = false;
+        });
+      }
     }
   }
 

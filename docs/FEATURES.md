@@ -4,7 +4,7 @@
 
 - **Email sign-up** — Create account with email and password
 - **Email sign-in** — Sign in with existing credentials
-- **Sign out** — Log out from any screen (Welcome, Onboarding)
+- **Sign out** — Log out from any screen (Welcome, Onboarding, Settings)
 - **Session persistence** — Supabase handles session; users stay logged in
 - **Auth redirect** — Deep links for email verification (when enabled in Supabase)
 
@@ -30,17 +30,32 @@
 
 ---
 
+## Internationalization (i18n)
+
+- **5 supported languages** — English (en), Spanish (es), French (fr), German (de), Italian (it)
+- **Localized UI** — All user-facing text translated
+- **Language selection** — Settings screen with language picker
+- **System language detection** — Auto-selects system language if supported
+- **Persistent language preference** — Saved in SharedPreferences
+- **Translation service** — Auto-translate content in different languages (see Translation section)
+
+---
+
 ## Home Feed
 
+- **Two tabs** — "For You" (merged feed + discover) and "Following" (followed users only)
 - **Personalized feed** — Itineraries from followed users + own itineraries
-- **Discover section** — Public itineraries for users with few/no follows
+- **Discover section** — Public itineraries for users with few/no follows (shown in "For You" tab)
 - **Infinite scroll** — Paginated feed (20 per page)
 - **Feed cards** — Title, destination, days, styles, mode, author, static map preview
+- **Like toggle** — Like/unlike other people's posts (thumbs up icon, like count)
 - **Bookmark toggle** — Bookmark/unbookmark from feed
 - **Tap to view** — Open itinerary detail
 - **Tap author** — Open author profile
+- **Translate button** — Appears when content is in different language than app language
 - **Home cache** — Cached feed for faster initial load
 - **Pull to refresh** — Reload feed
+- **State sync** — Like/bookmark state syncs when returning from itinerary detail
 
 ---
 
@@ -48,17 +63,20 @@
 
 - **7-step create flow** — Guided workflow for new itineraries
 - **Edit mode** — Same flow for editing existing itineraries (`/itinerary/:id/edit`)
+- **Transport transitions** — Optional transport type and description between destinations
 
 ### Step 1: Start New Trip
 
 - **Title** — Free-text trip title
 - **Destination** — Google Places autocomplete (locality)
-- **Mode** — Solo, couple, friends, family
+- **Mode** — Budget, standard, luxury
 - **Visibility** — Public or private
 
 ### Step 2: Add Destinations
 
-- **Google Places autocomplete** — Add cities/towns (location stops)
+- **Google Places autocomplete** — Add cities/towns, volcanoes, deserts, mountains (location stops)
+- **Place types** — Supports cities, volcanoes, deserts, mountains via OSM tags
+- **Country filtering** — Strict filtering by selected countries (combined bbox + post-filter)
 - **Reorder** — Drag to reorder destinations
 - **Remove** — Delete destinations
 
@@ -79,6 +97,7 @@
 - **Assign to destination** — Each venue linked to a location stop
 - **Reorder venues** — Within each destination
 - **Remove venues** — Delete individual venues
+- **Transport transitions** — Add transport type (walk, drive, fly, etc.) and description between destinations
 
 ### Step 6: Review Trip
 
@@ -96,12 +115,16 @@
 
 - **Full view** — Title, author, destination, days, styles, mode
 - **Map** — Interactive map with route and pins (primary theme color)
-- **Stops by day** — Grouped list of locations and venues
+- **Stops by day** — Grouped list of locations and venues with transport transitions
 - **Open in Maps** — Tap spot to open in Google Maps or Apple Maps (prefers Place ID when available)
+- **Like** — Like/unlike other people's posts (thumbs up icon, like count) — only shown for others' posts
 - **Bookmark** — Bookmark/unbookmark
 - **Edit** — Edit own itineraries
 - **View author** — Tap author to open profile
 - **Planning** — "Use this trip" forks itinerary into Planning
+- **Share link** — Share itinerary via deep link
+- **Translate** — Translate title/destination if content is in different language
+- **State sync** — Like/bookmark state passed back to home feed when navigating back
 
 ---
 
@@ -118,19 +141,23 @@
 ## Search
 
 - **Two tabs** — Profiles, Itineraries
-- **Profiles tab** — Search by name
-- **Profile results** — Name, follower count, follow/unfollow
-- **Itineraries tab** — Search by keyword
+- **Profiles tab** — Search by name (debounced, 400ms)
+- **Profile results** — Name, follower count, follow/unfollow button
+- **Itineraries tab** — Search by keyword (debounced, 400ms)
 - **Itinerary filters** — Days, styles, mode
-- **Debounced search** — 400ms debounce for itinerary search
-- **Empty query** — Shows empty results
+- **Place types** — Search includes cities, volcanoes, deserts, mountains
+- **Country filtering** — Strict filtering by selected countries
+- **Recent searches** — Stores up to 12 recent search queries (Persistent)
+- **Clear recent searches** — Option to clear all recent searches
+- **Empty query** — Shows empty results or recent searches
 - **Tap result** — Open profile or itinerary detail
+- **Like/bookmark** — Like and bookmark actions available on itinerary results
 
 ---
 
 ## Profile (Own)
 
-- **Layout** — Matches author profile: card with avatar + current city, Countries/Trips stats, Followers/Following bar, Past cities, Travel styles
+- **Layout** — Card with avatar + current city, Countries/Trips stats, Followers/Following bar, Past cities, Travel styles
 - **Profile card** — Avatar (tap to upload photo) + current city (tap to open city page)
 - **Countries card** — Opens visited countries map with edit enabled (`/map/countries?codes=...&editable=1`)
 - **Trips card** — Opens My Trips page (`/profile/trips`); itineraries are shown only on Trips page, not on profile
@@ -138,7 +165,9 @@
 - **Past cities** — Add/remove via edit sheet; tap city to open city detail
 - **Travel styles** — Edit via edit sheet
 - **Edit button** — App bar; opens edit sheet for name, current city, past cities, travel styles
-- **Sign out** — App bar action
+- **QR code button** — App bar; opens QR code screen (`/profile/qr`)
+- **Settings button** — App bar; opens Settings screen (`/profile/settings`)
+- **Sign out** — Settings screen action
 
 ---
 
@@ -152,6 +181,8 @@
 - **Past cities** — Tappable chips; open city detail
 - **Travel styles** — Display only
 - **Follow / Unfollow** — App bar button
+- **QR code button** — App bar; opens QR code view screen (`/author/:id/qr`)
+- **Like/bookmark** — Like and bookmark actions available on itinerary cards (only for others' posts)
 
 ---
 
@@ -181,6 +212,7 @@
 - **Author itineraries** — `/trips/:userId` — List of another user's itineraries (opened from author profile)
 - **Card actions** — View, edit (own trips only)
 - **Empty state** — Message when no trips; "Create Trip" button for own trips
+- **Like counts** — Shows like counts on all trips
 
 ---
 
@@ -192,26 +224,96 @@
 
 ---
 
+## Likes
+
+- **Like other people's posts** — Thumbs up icon to like/unlike itineraries (only shown for others' posts, not own)
+- **Like count** — Displays number of likes per itinerary
+- **Like button** — Thumbs up icon (filled when liked, outline when not)
+- **Database constraint** — Cannot like your own itinerary (enforced at DB level via trigger)
+- **State sync** — Like state syncs when returning from itinerary detail to home feed
+- **Batch fetching** — Efficient batch fetching of like counts and liked state
+- **Home cache** — Like state cached in home cache for faster load
+
+---
+
+## Translation
+
+- **Auto-detect language** — Detects content language via LibreTranslate API
+- **Translate button** — Appears when content is in different language than app language
+- **Toggle translation** — Tap to translate, tap again to show original
+- **Translation services** — LibreTranslate (with API key) or MyMemory (fallback)
+- **Supported content** — Itinerary titles, descriptions, destinations
+- **Where shown** — Home feed cards, itinerary detail, profile screens, author profile screens
+- **Conditional display** — Only shows translate button when content is confidently detected as different language
+
+---
+
+## QR Codes
+
+- **Profile QR code** — Generate QR code for own profile (`/profile/qr`)
+- **Scan QR code** — Scan other users' profile QR codes to view their profile
+- **Two tabs** — "My code" (own QR + share link) and "Scan" (camera scanner)
+- **Share link** — Copy/share profile link that works even without app
+- **QR view screen** — View-only screen for other users' QR codes (`/author/:id/qr`)
+- **Deep link support** — QR codes contain `/author/:id` links
+
+---
+
+## Settings
+
+- **Appearance** — Theme mode selection (Light, Dark, System)
+- **Language** — Language selection (English, Spanish, French, German, Italian)
+- **Account** — Sign out option
+- **Persistent preferences** — Theme and language saved in SharedPreferences
+- **Route** — `/profile/settings`
+
+---
+
+## Share & Deep Links
+
+- **Itinerary share links** — Share itinerary via deep link (`/itinerary/:id`)
+- **Profile share links** — Share profile via deep link (`/author/:id`)
+- **Universal links** — Links work on web and in-app
+- **Share functionality** — Native share sheet integration
+
+---
+
+## Feed Visibility & Mutual Friends
+
+- **Public itineraries** — Visible to all authenticated users
+- **Private itineraries** — Visible only to author
+- **Friends visibility** — Private itineraries visible to mutual friends (users who follow each other)
+- **Feed logic** — Feed includes: own itineraries, followed users' public/private (if mutual friend), discover section for users with few follows
+
+---
+
 ## Technical Features
 
 - **Supabase** — Auth, database, storage, RLS
 - **Google Places API** — Autocomplete, place details, geocoding
 - **Flutter** — Cross-platform (iOS, Android, Web)
 - **Analytics** — Screen views and events
-- **Theme** — App-wide theme (colors, spacing)
-- **Map styling** — Custom map styles for itinerary maps
+- **Theme** — App-wide theme (colors, spacing, light/dark mode)
+- **Map styling** — Custom map styles for itinerary maps (Geoapify, OSM)
 - **Feed visibility** — Mutual-follow logic for feed content
 - **Search** — Profile and itinerary search with filters
 - **Bookmark counts** — Denormalized bookmark counts on itineraries
+- **Like counts** — Denormalized like counts on itineraries (via RPC)
+- **Caching** — Home cache, profile cache, saved cache for performance
+- **State management** — LocaleNotifier, ThemeModeNotifier for app-wide state
+- **Error handling** — Graceful error handling with retry options
+- **Pull to refresh** — Available on feed screens
 
 ---
 
 ## Data Models
 
 - **Profile** — name, photo, visited_countries, travel_styles, travel_mode, current_city, past_cities, top_spots, onboarding_complete
-- **Itinerary** — title, destination, days_count, style_tags, mode, visibility, author_id, forked_from_itinerary_id
+- **Itinerary** — title, destination, days_count, style_tags, mode, visibility, author_id, forked_from_itinerary_id, like_count, bookmark_count
 - **ItineraryStop** — position, day, name, category, stop_type (location/venue), lat, lng, google_place_id
+- **TransportTransition** — type, description (between destinations)
 - **UserCity** — current_city, past_cities with top spots (eat, drink, date, chill)
 - **Follows** — follower_id, followed_id
 - **Bookmarks** — user_id, itinerary_id
+- **ItineraryLikes** — user_id, itinerary_id (with no self-like constraint)
 - **Planning** — Forked itineraries (forked_from_itinerary_id set)

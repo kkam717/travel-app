@@ -32,6 +32,7 @@ class _AddTripButtonState extends State<_AddTripButton> {
   @override
   Widget build(BuildContext context) {
     return FloatingActionButton(
+      heroTag: null, // avoid duplicate-hero when shell is in multiple route subtrees
       onPressed: _handleTap,
       backgroundColor: Theme.of(context).colorScheme.primary,
       foregroundColor: Theme.of(context).colorScheme.onPrimary,

@@ -43,6 +43,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   bool _isMutualFriend = false;
   final Map<String, String> _translatedContent = {};
   final Map<String, bool> _showTranslate = {};
+  final Map<String, bool> _liked = {};
 
   bool get _isOwnProfile => Supabase.instance.client.auth.currentUser?.id == widget.authorId;
 
@@ -72,7 +73,17 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
       final followingCount = results[3] as int;
       final isFollowing = results[4] as bool;
       final mutualFriend = results[5] as bool;
-      final itineraries = await SupabaseService.getUserItineraries(widget.authorId, publicOnly: !_isOwnProfile && !mutualFriend);
+      var itineraries = await SupabaseService.getUserItineraries(widget.authorId, publicOnly: !_isOwnProfile && !mutualFriend);
+      Map<String, bool> likedMap = {};
+      if (itineraries.isNotEmpty && userId != null) {
+        final ids = itineraries.map((i) => i.id).toList();
+        final likeCounts = await SupabaseService.getLikeCounts(ids);
+        itineraries = itineraries.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+        if (!_isOwnProfile) {
+          final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+          likedMap = {for (final id in ids) id: likedIds.contains(id)};
+        }
+      }
       if (!mounted) return;
       setState(() {
         _profile = profile;
@@ -82,6 +93,8 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         _followingCount = followingCount;
         _isFollowing = isFollowing;
         _isMutualFriend = mutualFriend;
+        _liked.clear();
+        _liked.addAll(likedMap);
         _isLoading = false;
       });
       _checkShowTranslateForTrips(itineraries);
@@ -109,6 +122,37 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
       if (mounted) {
         setState(() => _isFollowing = !_isFollowing);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_update_follow_status'))));
+      }
+    }
+  }
+
+  Future<void> _toggleLike(String itineraryId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null || _isOwnProfile) return;
+    final wasLiked = _liked[itineraryId] ?? false;
+    if (!mounted) return;
+    setState(() => _liked[itineraryId] = !wasLiked);
+    final idx = _itineraries.indexWhere((i) => i.id == itineraryId);
+    if (idx >= 0) {
+      final it = _itineraries[idx];
+      _itineraries[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? -1 : 1));
+    }
+    try {
+      if (wasLiked) {
+        await SupabaseService.removeLike(userId, itineraryId);
+      } else {
+        await SupabaseService.addLike(userId, itineraryId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _liked[itineraryId] = wasLiked;
+          if (idx >= 0) {
+            final it = _itineraries[idx];
+            _itineraries[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? 1 : -1));
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
       }
     }
   }
@@ -217,7 +261,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                 Expanded(
                   child: hasCity
                       ? InkWell(
-                          onTap: () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=${widget.authorId}'),
+                          onTap: () => context.push('/city/${Uri.encodeComponent(currentCity)}?userId=${widget.authorId}'),
                           borderRadius: BorderRadius.circular(12),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -227,7 +271,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    currentCity!,
+                                    currentCity,
                                     style: Theme.of(context).textTheme.titleMedium,
                                   ),
                                 ),
@@ -387,6 +431,9 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
               locations: _locationsFor(it),
               onTap: () => context.push('/itinerary/${it.id}'),
               onAuthorTap: null,
+              isLiked: _liked[it.id] ?? false,
+              likeCount: it.likeCount ?? 0,
+              onLike: _isOwnProfile ? null : () => _toggleLike(it.id),
               translatedContent: _translatedContent[it.id],
               onTranslate: _showTranslate[it.id] == true
                   ? () async {

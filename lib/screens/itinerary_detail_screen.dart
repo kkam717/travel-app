@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,6 +28,8 @@ class ItineraryDetailScreen extends StatefulWidget {
 class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   Itinerary? _itinerary;
   bool _isBookmarked = false;
+  bool _isLiked = false;
+  int _likeCount = 0;
   bool _isFollowing = false;
   bool _isLoading = true;
   String? _error;
@@ -50,17 +52,27 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       if (!mounted) return;
       final userId = Supabase.instance.client.auth.currentUser?.id;
       bool bookmarked = false;
+      bool liked = false;
+      int likeCount = 0;
       bool following = false;
       if (userId != null && it != null) {
         bookmarked = await SupabaseService.isBookmarked(userId, widget.itineraryId);
         if (it.authorId != userId) {
           following = await SupabaseService.isFollowing(userId, it.authorId);
+          final counts = await SupabaseService.getLikeCounts([widget.itineraryId]);
+          liked = (await SupabaseService.getLikedItineraryIds(userId, [widget.itineraryId])).contains(widget.itineraryId);
+          likeCount = counts[widget.itineraryId] ?? it.likeCount ?? 0;
+        } else {
+          final counts = await SupabaseService.getLikeCounts([widget.itineraryId]);
+          likeCount = counts[widget.itineraryId] ?? it.likeCount ?? 0;
         }
       }
       if (!mounted) return;
       setState(() {
         _itinerary = it;
         _isBookmarked = bookmarked;
+        _isLiked = liked;
+        _likeCount = likeCount;
         _isFollowing = following;
         _isLoading = false;
       });
@@ -110,6 +122,33 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       if (mounted) {
         setState(() => _isBookmarked = !_isBookmarked);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_update_bookmark'))));
+      }
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final it = _itinerary;
+    if (userId == null || it == null || it.authorId == userId) return;
+    if (!mounted) return;
+    final wasLiked = _isLiked;
+    setState(() {
+      _isLiked = !_isLiked;
+      _likeCount = (_likeCount + (wasLiked ? -1 : 1)).clamp(0, 0x7fffffff);
+    });
+    try {
+      if (_isLiked) {
+        await SupabaseService.addLike(userId, widget.itineraryId);
+      } else {
+        await SupabaseService.removeLike(userId, widget.itineraryId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLiked = wasLiked;
+          _likeCount = (_likeCount + (wasLiked ? 1 : -1)).clamp(0, 0x7fffffff);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
       }
     }
   }
@@ -247,13 +286,23 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
     }
     final it = _itinerary!;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (context.canPop()) {
+          context.pop(<String, dynamic>{'liked': _isLiked, 'likeCount': _likeCount, 'bookmarked': _isBookmarked});
+        } else {
+          context.go('/home');
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
             if (context.canPop()) {
-              context.pop();
+              context.pop(<String, dynamic>{'liked': _isLiked, 'likeCount': _likeCount, 'bookmarked': _isBookmarked});
             } else {
               context.go('/home');
             }
@@ -322,6 +371,27 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           ),
           const SizedBox(height: AppTheme.spacingLg),
           Text(_translatedDestination ?? it.destination, style: Theme.of(context).textTheme.titleLarge),
+          if (Supabase.instance.client.auth.currentUser?.id != it.authorId) ...[
+            const SizedBox(height: AppTheme.spacingSm),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: _toggleLike,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 8, right: 8, bottom: 8),
+                    child: Icon(_isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined, size: 22, color: _isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ),
+                if (_likeCount > 0) ...[
+                  const SizedBox(width: 4),
+                  Text('$_likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+              ],
+            ),
+          ],
           const SizedBox(height: AppTheme.spacingSm),
           Wrap(
             spacing: AppTheme.spacingMd,
@@ -392,6 +462,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 }

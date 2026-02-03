@@ -29,6 +29,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   final _searchFocusNode = FocusNode();
   List<ProfileSearchResult> _profileResults = [];
   List<Itinerary> _placeResults = [];
+  final Map<String, bool> _placeLiked = {};
   Set<String> _followedProfileIds = {};
   bool _isLoading = false;
   String? _error;
@@ -168,17 +169,33 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         });
         Analytics.logEvent('profile_search_performed', {'result_count': profiles.length});
       } else {
-        final places = await SupabaseService.searchItineraries(
+        var places = await SupabaseService.searchItineraries(
           query: query,
           daysCount: _filterDays,
           styles: _filterStyles.isEmpty ? null : _filterStyles,
           mode: _filterMode,
         );
-        if (!mounted) return;
-        setState(() {
-          _placeResults = places;
-          _isLoading = false;
-        });
+        final userId = Supabase.instance.client.auth.currentUser?.id;
+        if (places.isNotEmpty && userId != null) {
+          final ids = places.map((i) => i.id).toList();
+          final likeCounts = await SupabaseService.getLikeCounts(ids);
+          final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+          places = places.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+          if (!mounted) return;
+          setState(() {
+            _placeResults = places;
+            _placeLiked.clear();
+            _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
+            _isLoading = false;
+          });
+        } else {
+          if (!mounted) return;
+          setState(() {
+            _placeResults = places;
+            _placeLiked.clear();
+            _isLoading = false;
+          });
+        }
         Analytics.logEvent('place_search_performed', {'result_count': places.length});
       }
     } catch (e) {
@@ -187,6 +204,37 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         _error = 'Something went wrong. Please try again.';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _togglePlaceLike(String itineraryId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    final wasLiked = _placeLiked[itineraryId] ?? false;
+    if (!mounted) return;
+    setState(() => _placeLiked[itineraryId] = !wasLiked);
+    final idx = _placeResults.indexWhere((i) => i.id == itineraryId);
+    if (idx >= 0) {
+      final it = _placeResults[idx];
+      _placeResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? -1 : 1));
+    }
+    try {
+      if (wasLiked) {
+        await SupabaseService.removeLike(userId, itineraryId);
+      } else {
+        await SupabaseService.addLike(userId, itineraryId);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _placeLiked[itineraryId] = wasLiked;
+          if (idx >= 0) {
+            final it = _placeResults[idx];
+            _placeResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? 1 : -1));
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
+      }
     }
   }
 
@@ -366,18 +414,25 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         ),
       );
     }
+    final userId = Supabase.instance.client.auth.currentUser?.id;
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
       itemCount: _placeResults.length,
-      itemBuilder: (_, i) => _ItineraryCard(
-        itinerary: _placeResults[i],
-        onTap: () {
-          final it = _placeResults[i];
-          _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
-          context.push('/itinerary/${it.id}');
-        },
-        onAuthorTap: () => context.push('/author/${_placeResults[i].authorId}'),
-      ),
+      itemBuilder: (_, i) {
+        final it = _placeResults[i];
+        final isOthersPost = userId != null && it.authorId != userId;
+        return _ItineraryCard(
+          itinerary: it,
+          isLiked: _placeLiked[it.id] ?? false,
+          likeCount: it.likeCount ?? 0,
+          onLike: isOthersPost ? () => _togglePlaceLike(it.id) : null,
+          onTap: () {
+            _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
+            context.push('/itinerary/${it.id}');
+          },
+          onAuthorTap: () => context.push('/author/${it.authorId}'),
+        );
+      },
     );
   }
 
@@ -444,91 +499,103 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   void _showFilters() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) {
         int? days = _filterDays;
         List<String> styles = List.from(_filterStyles);
         String? mode = _filterMode;
         return StatefulBuilder(
           builder: (_, setModal) {
-            return Padding(
-              padding: const EdgeInsets.all(AppTheme.spacingLg),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    children: [7, 10, 14, 21].map((d) {
-                      final selected = days == d;
-                      return FilterChip(
-                        label: Text('$d ${AppStrings.t(context, 'days')}'),
-                        selected: selected,
-                        onSelected: (_) => setModal(() => days = selected ? null : d),
-                      );
-                    }).toList(),
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, scrollController) {
+                return SingleChildScrollView(
+                  controller: scrollController,
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingLg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          children: [7, 10, 14, 21].map((d) {
+                            final selected = days == d;
+                            return FilterChip(
+                              label: Text('$d ${AppStrings.t(context, 'days')}'),
+                              selected: selected,
+                              onSelected: (_) => setModal(() => days = selected ? null : d),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: travelStyles.map((s) {
+                            final selected = styles.contains(s);
+                            return FilterChip(
+                              label: Text(s),
+                              selected: selected,
+                              onSelected: (_) => setModal(() {
+                                if (selected) styles.remove(s);
+                                else styles.add(s);
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: AppTheme.spacingSm),
+                        Wrap(
+                          spacing: 8,
+                          children: travelModes.map((m) {
+                            final selected = mode == m;
+                            return ChoiceChip(
+                              label: Text(m),
+                              selected: selected,
+                              onSelected: (_) => setModal(() => mode = selected ? null : m),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: AppTheme.spacingLg),
+                        Row(
+                          children: [
+                            TextButton(
+                              onPressed: () => setModal(() {
+                                days = null;
+                                styles = [];
+                                mode = null;
+                              }),
+                              child: Text(AppStrings.t(context, 'clear')),
+                            ),
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: () {
+                                setState(() {
+                                  _filterDays = days;
+                                  _filterStyles = styles;
+                                  _filterMode = mode;
+                                });
+                                Navigator.pop(ctx);
+                                _search();
+                              },
+                              child: Text(AppStrings.t(context, 'apply')),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: travelStyles.map((s) {
-                      final selected = styles.contains(s);
-                      return FilterChip(
-                        label: Text(s),
-                        selected: selected,
-                        onSelected: (_) => setModal(() {
-                          if (selected) styles.remove(s);
-                          else styles.add(s);
-                        }),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: AppTheme.spacingSm),
-                  Wrap(
-                    spacing: 8,
-                    children: travelModes.map((m) {
-                      final selected = mode == m;
-                      return ChoiceChip(
-                        label: Text(m),
-                        selected: selected,
-                        onSelected: (_) => setModal(() => mode = selected ? null : m),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: AppTheme.spacingLg),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => setModal(() {
-                          days = null;
-                          styles = [];
-                          mode = null;
-                        }),
-                        child: Text(AppStrings.t(context, 'clear')),
-                      ),
-                      const Spacer(),
-                      FilledButton(
-                        onPressed: () {
-                          setState(() {
-                            _filterDays = days;
-                            _filterStyles = styles;
-                            _filterMode = mode;
-                          });
-                          Navigator.pop(ctx);
-                          _search();
-                        },
-                        child: Text(AppStrings.t(context, 'apply')),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -626,10 +693,20 @@ class _ProfileCard extends StatelessWidget {
 
 class _ItineraryCard extends StatelessWidget {
   final Itinerary itinerary;
+  final bool isLiked;
+  final int likeCount;
+  final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback? onAuthorTap;
 
-  const _ItineraryCard({required this.itinerary, required this.onTap, this.onAuthorTap});
+  const _ItineraryCard({
+    required this.itinerary,
+    this.isLiked = false,
+    this.likeCount = 0,
+    this.onLike,
+    required this.onTap,
+    this.onAuthorTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -654,6 +731,10 @@ class _ItineraryCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: AppTheme.spacingSm),
+              if (likeCount > 0) ...[
+                const SizedBox(height: 4),
+                Text('$likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              ],
               Row(
                 children: [
                   Icon(Icons.calendar_today_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -670,6 +751,16 @@ class _ItineraryCard extends StatelessWidget {
                       child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
                     ),
                   const Spacer(),
+                  if (onLike != null)
+                    IconButton(
+                      icon: Icon(
+                        isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                        size: 20,
+                        color: isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      onPressed: onLike,
+                      style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(36, 36)),
+                    ),
                   IconButton(
                     icon: Icon(Icons.share_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     onPressed: () => shareItineraryLink(it.id, title: it.title),

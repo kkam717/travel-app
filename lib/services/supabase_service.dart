@@ -390,6 +390,65 @@ class SupabaseService {
     }
   }
 
+  // --- Likes (other people's posts only) ---
+  static Future<void> addLike(String userId, String itineraryId) async {
+    try {
+      await _client.from('itinerary_likes').insert({'user_id': userId, 'itinerary_id': itineraryId});
+    } catch (e) {
+      Analytics.logEvent('like_add_error', {'error': e.toString()});
+      rethrow;
+    }
+  }
+
+  static Future<void> removeLike(String userId, String itineraryId) async {
+    try {
+      await _client.from('itinerary_likes').delete().eq('user_id', userId).eq('itinerary_id', itineraryId);
+    } catch (e) {
+      Analytics.logEvent('like_remove_error', {'error': e.toString()});
+      rethrow;
+    }
+  }
+
+  static Future<bool> isLiked(String userId, String itineraryId) async {
+    try {
+      final res = await _client.from('itinerary_likes').select().eq('user_id', userId).eq('itinerary_id', itineraryId).maybeSingle();
+      return res != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, int>> getLikeCounts(List<String> itineraryIds) async {
+    if (itineraryIds.isEmpty) return {};
+    try {
+      final res = await _client.rpc('get_like_counts', params: {'p_itinerary_ids': itineraryIds});
+      final map = <String, int>{};
+      for (final row in res as List) {
+        final m = row as Map<String, dynamic>;
+        final id = m['itinerary_id'] as String?;
+        final count = (m['like_count'] as num?)?.toInt() ?? 0;
+        if (id != null) map[id] = count;
+      }
+      return map;
+    } catch (e) {
+      return {};
+    }
+  }
+
+  static Future<Set<String>> getLikedItineraryIds(String userId, List<String> itineraryIds) async {
+    if (itineraryIds.isEmpty) return {};
+    try {
+      final res = await _client
+          .from('itinerary_likes')
+          .select('itinerary_id')
+          .eq('user_id', userId)
+          .inFilter('itinerary_id', itineraryIds);
+      return (res as List).map((e) => (e as Map)['itinerary_id'] as String).toSet();
+    } catch (e) {
+      return {};
+    }
+  }
+
   static Future<List<Itinerary>> getBookmarkedItineraries(String userId) async {
     try {
       final res = await _client
@@ -619,16 +678,17 @@ class SupabaseService {
       final itineraries = limited.map((e) => Itinerary.fromJson(e)).toList();
       if (itineraries.isEmpty) return itineraries;
 
-      // Batch load stops and bookmark counts
+      // Batch load stops, bookmark counts, like counts
       final ids = itineraries.map((i) => i.id).toList();
       final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
-      final counts = await getBookmarkCounts(ids);
+      final bookmarkCounts = await getBookmarkCounts(ids);
+      final likeCounts = await getLikeCounts(ids);
       final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
       final stopsByItinerary = <String, List<ItineraryStop>>{};
       for (final s in stopsList) {
         stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
       }
-      return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], bookmarkCount: counts[i.id])).toList();
+      return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], bookmarkCount: bookmarkCounts[i.id], likeCount: likeCounts[i.id])).toList();
     } catch (e) {
       Analytics.logEvent('feed_fetch_error', {'error': e.toString()});
       rethrow;
@@ -666,13 +726,14 @@ class SupabaseService {
 
       final ids = itineraries.map((i) => i.id).toList();
       final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
-      final counts = await getBookmarkCounts(ids);
+      final bookmarkCounts = await getBookmarkCounts(ids);
+      final likeCounts = await getLikeCounts(ids);
       final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
       final stopsByItinerary = <String, List<ItineraryStop>>{};
       for (final s in stopsList) {
         stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
       }
-      return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], bookmarkCount: counts[i.id])).toList();
+      return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], bookmarkCount: bookmarkCounts[i.id], likeCount: likeCounts[i.id])).toList();
     } catch (e) {
       return [];
     }
