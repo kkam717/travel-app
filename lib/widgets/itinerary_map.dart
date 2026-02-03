@@ -45,7 +45,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   List<ItineraryStop>? _allStopsWithCoords;
   List<LatLng>? _polylinePoints;
   List<LatLng>? _displayPoints;
-  Map<int, List<LatLng>>? _routedSegments; // Index -> route points for car segments
+  Map<int, List<LatLng>>? _routedSegments; // Index -> route points for car/plane/train segments
   bool _loadingRoutes = false;
 
   static String? get _geoapifyKey {
@@ -211,22 +211,50 @@ class _ItineraryMapState extends State<ItineraryMap> {
         
         if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) continue;
         
-        // Check if transport mode is car
-        final transportType = i < transitions.length ? transitions[i].type : 'unknown';
-        if (transportType.toLowerCase() != 'car') continue;
-
-        // Fetch route from Geoapify Routing API
-        debugPrint('ItineraryMap: Loading route for segment $i (${from.name} -> ${to.name})');
-        final route = await _fetchRoute(
-          LatLng(from.lat!, from.lng!),
-          LatLng(to.lat!, to.lng!),
-        );
+        final transition = i < transitions.length ? transitions[i] : null;
+        if (transition == null) continue;
+        
+        final transportType = transition.type.toLowerCase();
+        final description = transition.description?.trim();
+        
+        List<LatLng>? route;
+        
+        if (transportType == 'car') {
+          // Fetch road route from Geoapify Routing API
+          debugPrint('ItineraryMap: Loading car route for segment $i (${from.name} -> ${to.name})');
+          route = await _fetchRoute(
+            LatLng(from.lat!, from.lng!),
+            LatLng(to.lat!, to.lng!),
+          );
+        } else if (transportType == 'plane' && description != null && description.isNotEmpty) {
+          // Try to parse flight number and get flight route
+          debugPrint('ItineraryMap: Attempting to parse flight route for segment $i');
+          route = await _fetchFlightRoute(
+            LatLng(from.lat!, from.lng!),
+            LatLng(to.lat!, to.lng!),
+            description,
+            from.name,
+            to.name,
+          );
+        } else if (transportType == 'train') {
+          // Try to get train route - always attempt even without description
+          // Description helps identify specific routes but we'll try routing anyway
+          final desc = description ?? '';
+          debugPrint('ItineraryMap: Attempting to fetch train route for segment $i (description: $desc)');
+          route = await _fetchTrainRoute(
+            LatLng(from.lat!, from.lng!),
+            LatLng(to.lat!, to.lng!),
+            desc,
+            from.name,
+            to.name,
+          );
+        }
         
         if (route != null && route.isNotEmpty) {
           debugPrint('ItineraryMap: Route loaded successfully for segment $i (${route.length} points)');
           routes[i] = route;
         } else {
-          debugPrint('ItineraryMap: Failed to load route for segment $i');
+          debugPrint('ItineraryMap: No route available for segment $i (transport: $transportType)');
         }
         
         // Rate limiting: delay between requests
@@ -357,6 +385,394 @@ class _ItineraryMapState extends State<ItineraryMap> {
       return routePoints;
     } catch (e) {
       debugPrint('ItineraryMap route fetch error: $e');
+      return null;
+    }
+  }
+
+  /// Parse flight number from description (e.g., "AA123", "BA456", "DL789")
+  String? _parseFlightNumber(String description) {
+    // Match common flight number patterns: 2-3 letter airline code + 1-4 digits
+    final regex = RegExp(r'\b([A-Z]{2,3})\s*(\d{1,4})\b', caseSensitive: false);
+    final match = regex.firstMatch(description);
+    if (match != null) {
+      return '${match.group(1)!.toUpperCase()}${match.group(2)}';
+    }
+    return null;
+  }
+
+  /// Parse train number from description (e.g., "TGV 1234", "ICE 567", "Amtrak Northeast Regional")
+  String? _parseTrainNumber(String description) {
+    // First check if description contains any train type keywords
+    final trainTypes = ['TGV', 'ICE', 'Shinkansen', 'Eurostar', 'Thalys', 'AVE', 'Frecciarossa', 'Trenitalia', 'Amtrak', 'Acela', 'Regional', 'Express'];
+    final hasTrainType = trainTypes.any((type) => description.toLowerCase().contains(type.toLowerCase()));
+    
+    if (!hasTrainType) {
+      // Try simpler pattern: just numbers that might be train numbers
+      final simpleRegex = RegExp(r'\b(\d{3,5})\b');
+      final simpleMatch = simpleRegex.firstMatch(description);
+      if (simpleMatch != null) {
+        return simpleMatch.group(1);
+      }
+      return null;
+    }
+    
+    // Match train number patterns: train type + number
+    final regex = RegExp(r'\b(TGV|ICE|Shinkansen|Eurostar|Thalys|AVE|Frecciarossa|Trenitalia|Amtrak|Acela|Regional|Express)\s*([A-Z]?\d+)?', caseSensitive: false);
+    final match = regex.firstMatch(description);
+    if (match != null) {
+      final trainType = match.group(1)!;
+      final number = match.group(2);
+      return number != null ? '$trainType $number' : trainType;
+    }
+    
+    // If we found a train type but no number, return the train type itself
+    for (final type in trainTypes) {
+      if (description.toLowerCase().contains(type.toLowerCase())) {
+        return type;
+      }
+    }
+    
+    return null;
+  }
+
+  /// Parse train information from description
+  /// Returns a map with train type, route name, and cities
+  Map<String, String>? _parseTrainInfo(String description) {
+    if (description.isEmpty) return null;
+    
+    final info = <String, String>{};
+    
+    // Train type keywords
+    final trainTypes = ['TGV', 'ICE', 'Shinkansen', 'Eurostar', 'Thalys', 'AVE', 'Frecciarossa', 'Trenitalia', 'Amtrak', 'Acela', 'Regional', 'Express', 'Northeast Regional'];
+    
+    // Find train type/route name
+    for (final type in trainTypes) {
+      if (description.toLowerCase().contains(type.toLowerCase())) {
+        info['type'] = type;
+        
+        // Try to extract full route name (e.g., "Amtrak Northeast Regional")
+        final routeRegex = RegExp(r'\b(Amtrak\s+(?:Northeast\s+)?Regional|Acela\s+Express|TGV\s+\w+|ICE\s+\d+)', caseSensitive: false);
+        final routeMatch = routeRegex.firstMatch(description);
+        if (routeMatch != null) {
+          info['route'] = routeMatch.group(1)!;
+        }
+        break;
+      }
+    }
+    
+    // Extract city names (common patterns: "X to Y", "X-Y", "X → Y")
+    final cityPatterns = [
+      RegExp(r'(\w+(?:\s+\w+)*)\s+(?:to|→|-|–)\s+(\w+(?:\s+\w+)*)', caseSensitive: false),
+      RegExp(r'(\w+(?:\s+\w+)*)\s+and\s+(\w+(?:\s+\w+)*)', caseSensitive: false),
+    ];
+    
+    for (final pattern in cityPatterns) {
+      final match = pattern.firstMatch(description);
+      if (match != null) {
+        info['fromCity'] = match.group(1)!.trim();
+        info['toCity'] = match.group(2)!.trim();
+        break;
+      }
+    }
+    
+    // Extract train number if present
+    final numberRegex = RegExp(r'\b([A-Z]{2,4})\s*(\d{1,4})\b', caseSensitive: false);
+    final numberMatch = numberRegex.firstMatch(description);
+    if (numberMatch != null) {
+      info['number'] = '${numberMatch.group(1)}${numberMatch.group(2)}';
+    }
+    
+    return info.isEmpty ? null : info;
+  }
+
+  /// Create a great circle route (flight path) between two points
+  List<LatLng> _createGreatCircleRoute(LatLng from, LatLng to, {int segments = 50}) {
+    final points = <LatLng>[];
+    
+    // Convert to radians
+    final lat1 = from.latitude * math.pi / 180;
+    final lon1 = from.longitude * math.pi / 180;
+    final lat2 = to.latitude * math.pi / 180;
+    final lon2 = to.longitude * math.pi / 180;
+    
+    // Calculate great circle distance
+    final d = 2 * math.asin(math.sqrt(
+      math.pow(math.sin((lat2 - lat1) / 2), 2) +
+      math.cos(lat1) * math.cos(lat2) * math.pow(math.sin((lon2 - lon1) / 2), 2)
+    ));
+    
+    // Handle case where points are the same or very close
+    if (d < 0.0001) {
+      return [from, to];
+    }
+    
+    // Generate points along the great circle
+    for (var i = 0; i <= segments; i++) {
+      final f = i / segments;
+      
+      // Spherical interpolation
+      final a = math.sin((1 - f) * d) / math.sin(d);
+      final b = math.sin(f * d) / math.sin(d);
+      
+      final x = a * math.cos(lat1) * math.cos(lon1) + b * math.cos(lat2) * math.cos(lon2);
+      final y = a * math.cos(lat1) * math.sin(lon1) + b * math.cos(lat2) * math.sin(lon2);
+      final z = a * math.sin(lat1) + b * math.sin(lat2);
+      
+      final lat = math.atan2(z, math.sqrt(x * x + y * y)) * 180 / math.pi;
+      final lon = math.atan2(y, x) * 180 / math.pi;
+      
+      // Validate coordinates
+      if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        points.add(LatLng(lat, lon));
+      }
+    }
+    
+    // Ensure start and end points
+    if (points.isEmpty || points.first != from) points.insert(0, from);
+    if (points.isEmpty || points.last != to) points.add(to);
+    
+    return points;
+  }
+
+  /// Fetch flight route - creates great circle path between airports
+  Future<List<LatLng>?> _fetchFlightRoute(
+    LatLng from,
+    LatLng to,
+    String description,
+    String fromCity,
+    String toCity,
+  ) async {
+    try {
+      final flightNumber = _parseFlightNumber(description);
+      if (flightNumber != null) {
+        debugPrint('ItineraryMap: Parsed flight number: $flightNumber from description: $description');
+        // Create great circle route (actual flight path)
+        final route = _createGreatCircleRoute(from, to);
+        debugPrint('ItineraryMap: Created great circle route with ${route.length} points');
+        return route;
+      } else {
+        debugPrint('ItineraryMap: Could not parse flight number from: $description');
+        // Fallback: create great circle route anyway (planes follow great circle paths)
+        return _createGreatCircleRoute(from, to);
+      }
+    } catch (e) {
+      debugPrint('ItineraryMap flight route error: $e');
+      // Fallback: create great circle route
+      return _createGreatCircleRoute(from, to);
+    }
+  }
+
+  /// Fetch train route - searches for actual train route based on description
+  Future<List<LatLng>?> _fetchTrainRoute(
+    LatLng from,
+    LatLng to,
+    String description,
+    String fromCity,
+    String toCity,
+  ) async {
+    try {
+      final trainInfo = _parseTrainInfo(description);
+      debugPrint('ItineraryMap: Parsed train info: $trainInfo from description: $description');
+      debugPrint('ItineraryMap: Searching for train route from $fromCity to $toCity');
+      
+      // Try multiple approaches to get actual train route
+      
+      // Approach 1: Try Geoapify transit routing (best chance for actual transit routes)
+      final key = _geoapifyKey;
+      if (key != null && key.trim().isNotEmpty) {
+        debugPrint('ItineraryMap: Attempting to fetch train route from Geoapify transit API');
+        final route = await _fetchTransitRoute(from, to, key);
+        if (route != null && route.isNotEmpty) {
+          debugPrint('ItineraryMap: Successfully fetched train route from Geoapify with ${route.length} points');
+          return route;
+        }
+      }
+      
+      // Approach 2: Try OSRM (Open Source Routing Machine) - note: public instance uses driving profile
+      // This won't give actual train tracks but might approximate the route
+      debugPrint('ItineraryMap: Attempting to fetch route from OSRM (may not be railway-specific)');
+      final osrmRoute = await _fetchRailwayRouteFromOSRM(from, to);
+      if (osrmRoute != null && osrmRoute.isNotEmpty) {
+        debugPrint('ItineraryMap: Got route from OSRM with ${osrmRoute.length} points (may be road-based, not train tracks)');
+        // Note: OSRM public instance doesn't have railway profile, so this is approximate
+        // Return null instead to show nothing rather than incorrect route
+        return null;
+      }
+      
+      // If we can't get actual train route data, return null (show nothing)
+      debugPrint('ItineraryMap: Could not fetch actual train route - returning null (no line will be shown)');
+      debugPrint('ItineraryMap: Note: To show actual train routes, we need railway-specific routing data');
+      return null;
+    } catch (e) {
+      debugPrint('ItineraryMap train route error: $e');
+      return null;
+    }
+  }
+
+  /// Fetch railway route from OSRM (Open Source Routing Machine) with railway profile
+  Future<List<LatLng>?> _fetchRailwayRouteFromOSRM(LatLng from, LatLng to) async {
+    try {
+      // OSRM public instance with railway profile
+      // Note: Public OSRM instances may not have railway profiles, so this might fail
+      // But we try it as an alternative
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${from.longitude},${from.latitude};${to.longitude},${to.latitude}'
+        '?overview=full&geometries=geojson',
+      );
+
+      debugPrint('ItineraryMap: Querying OSRM for route');
+      
+      final res = await http.get(url);
+      if (res.statusCode != 200) {
+        debugPrint('OSRM API error: ${res.statusCode}');
+        return null;
+      }
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final code = data['code'] as String?;
+      
+      if (code != 'Ok') {
+        debugPrint('OSRM route error: $code');
+        return null;
+      }
+
+      final routes = data['routes'] as List<dynamic>?;
+      if (routes == null || routes.isEmpty) {
+        debugPrint('ItineraryMap: No routes in OSRM response');
+        return null;
+      }
+
+      final route = routes.first as Map<String, dynamic>;
+      final geometry = route['geometry'] as Map<String, dynamic>?;
+      final coordinates = geometry?['coordinates'] as List<dynamic>?;
+      
+      if (coordinates == null) {
+        debugPrint('ItineraryMap: No coordinates in OSRM route');
+        return null;
+      }
+
+      final routePoints = <LatLng>[];
+      for (final coord in coordinates) {
+        if (coord is List && coord.length >= 2) {
+          final lon = coord[0] as num;
+          final lat = coord[1] as num;
+          routePoints.add(LatLng(lat.toDouble(), lon.toDouble()));
+        }
+      }
+      
+      if (routePoints.isEmpty) {
+        debugPrint('ItineraryMap: No valid route points from OSRM');
+        return null;
+      }
+      
+      debugPrint('ItineraryMap: Successfully extracted ${routePoints.length} route points from OSRM');
+      return routePoints;
+    } catch (e) {
+      debugPrint('ItineraryMap OSRM railway route error: $e');
+      return null;
+    }
+  }
+
+  /// Fetch transit route (train/public transport) using Geoapify Routing API
+  Future<List<LatLng>?> _fetchTransitRoute(LatLng from, LatLng to, String apiKey) async {
+    try {
+      final url = Uri.parse(
+        'https://api.geoapify.com/v1/routing'
+        '?waypoints=${from.latitude},${from.longitude}|${to.latitude},${to.longitude}'
+        '&mode=transit'
+        '&apiKey=$apiKey',
+      );
+
+      debugPrint('ItineraryMap: Fetching transit route from ${from.latitude},${from.longitude} to ${to.latitude},${to.longitude}');
+      
+      final res = await http.get(url);
+      if (res.statusCode != 200) {
+        debugPrint('Geoapify transit routing error: ${res.statusCode} - ${res.body}');
+        return null;
+      }
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      debugPrint('ItineraryMap: Transit route response keys: ${data.keys.toList()}');
+      
+      final features = data['features'] as List<dynamic>?;
+      if (features == null || features.isEmpty) {
+        debugPrint('ItineraryMap: No features in transit route response');
+        return null;
+      }
+
+      // Extract coordinates from the route geometry
+      final geometry = features.first['geometry'] as Map<String, dynamic>?;
+      if (geometry == null) {
+        debugPrint('ItineraryMap: No geometry in transit route feature');
+        return null;
+      }
+      
+      final geometryType = geometry['type'] as String?;
+      debugPrint('ItineraryMap: Transit geometry type: $geometryType');
+      
+      final coordinates = geometry['coordinates'] as dynamic;
+      if (coordinates == null) {
+        debugPrint('ItineraryMap: No coordinates in transit route geometry');
+        return null;
+      }
+
+      // Handle different geometry types
+      List<dynamic> coordList;
+      if (geometryType == 'LineString' && coordinates is List) {
+        coordList = coordinates;
+        debugPrint('ItineraryMap: LineString with ${coordList.length} coordinate points');
+      } else if (geometryType == 'MultiLineString' && coordinates is List) {
+        if (coordinates.isNotEmpty && coordinates[0] is List) {
+          coordList = coordinates[0] as List<dynamic>;
+          debugPrint('ItineraryMap: MultiLineString with ${coordList.length} coordinate points in first segment');
+        } else {
+          debugPrint('ItineraryMap: Invalid MultiLineString format');
+          return null;
+        }
+      } else {
+        debugPrint('ItineraryMap: Unexpected transit geometry type or format: $geometryType, coordinates type: ${coordinates.runtimeType}');
+        return null;
+      }
+
+      final routePoints = <LatLng>[];
+      for (var i = 0; i < coordList.length; i++) {
+        final coord = coordList[i];
+        try {
+          dynamic lon, lat;
+          if (coord is List && coord.length >= 2) {
+            lon = coord[0];
+            lat = coord[1];
+          } else {
+            debugPrint('ItineraryMap: Invalid coordinate format at index $i: $coord');
+            continue;
+          }
+          
+          final lonVal = lon is num ? lon.toDouble() : (lon is String ? double.tryParse(lon) : null);
+          final latVal = lat is num ? lat.toDouble() : (lat is String ? double.tryParse(lat) : null);
+          
+          if (lonVal != null && latVal != null && 
+              lonVal >= -180 && lonVal <= 180 && 
+              latVal >= -90 && latVal <= 90) {
+            routePoints.add(LatLng(latVal, lonVal));
+          } else {
+            debugPrint('ItineraryMap: Invalid coordinate values at index $i: lon=$lonVal, lat=$latVal');
+          }
+        } catch (e) {
+          debugPrint('ItineraryMap transit route coordinate parse error at index $i: $e');
+          continue;
+        }
+      }
+      
+      if (routePoints.isEmpty) {
+        debugPrint('ItineraryMap: No valid transit route points extracted');
+        return null;
+      }
+      
+      debugPrint('ItineraryMap: Successfully extracted ${routePoints.length} transit route points');
+      return routePoints;
+    } catch (e) {
+      debugPrint('ItineraryMap transit route fetch error: $e');
       return null;
     }
   }
@@ -747,13 +1163,15 @@ class _ItineraryMapState extends State<ItineraryMap> {
       final fromPoint = LatLng(from.lat!, from.lng!);
       final toPoint = LatLng(to.lat!, to.lng!);
       
-      final transportType = i < transitions.length ? transitions[i].type.toLowerCase() : 'unknown';
-      final isCar = transportType == 'car';
+      final transition = i < transitions.length ? transitions[i] : null;
+      final transportType = transition?.type.toLowerCase() ?? 'unknown';
+      final isPlane = transportType == 'plane';
       
-      if (isCar && _routedSegments != null && _routedSegments!.containsKey(i)) {
-        // Use actual route for car segments
+      // Check if we have a fetched route for this segment
+      if (_routedSegments != null && _routedSegments!.containsKey(i)) {
+        // Use actual route (car, plane with flight number, or train with train number)
         final route = _routedSegments![i]!;
-        debugPrint('ItineraryMap: Using fetched route for car segment $i (${route.length} points)');
+        debugPrint('ItineraryMap: Using fetched route for segment $i (transport: $transportType, ${route.length} points)');
         if (route.isNotEmpty && route.length >= 2) {
           // Validate route points
           final validRoute = route.where((p) => 
@@ -762,10 +1180,12 @@ class _ItineraryMapState extends State<ItineraryMap> {
           ).toList();
           
           if (validRoute.length >= 2) {
+            // Use solid line for actual routes (car, plane, train)
+            // Thinner line for flights to show great circle path more subtly
             polylines.add(Polyline(
               points: validRoute,
               color: primaryColor,
-              strokeWidth: 5,
+              strokeWidth: isPlane ? 3 : 5,
             ));
           } else {
             debugPrint('ItineraryMap: Route for segment $i has invalid points, falling back to curved line');
@@ -784,8 +1204,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
           }
         }
       } else {
-        debugPrint('ItineraryMap: Using curved line for segment $i (transport: $transportType, isCar: $isCar, hasRoutes: ${_routedSegments != null}, segmentInRoutes: ${_routedSegments?.containsKey(i)})');
-        // Use curved dotted line for non-car segments
+        // No route available - use curved dotted line
+        debugPrint('ItineraryMap: Using curved line for segment $i (transport: $transportType, hasRoutes: ${_routedSegments != null}, segmentInRoutes: ${_routedSegments?.containsKey(i)})');
         final curvedPoints = _createCurvedLine(fromPoint, toPoint);
         if (curvedPoints.length >= 2) {
           polylines.add(Polyline(
