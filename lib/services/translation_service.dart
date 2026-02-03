@@ -51,13 +51,12 @@ Future<String?> detectLanguage(String text) async {
 
 /// Returns true if [text] is detected to be in a different language than [appLanguageCode].
 /// Uses primary codes for comparison (e.g. en-US and en-GB both count as 'en').
-/// When detection fails (e.g. no API key or network), returns true so the translate
-/// button is still shown and the user can try translating.
+/// When detection fails, returns false so we don't show translate on same-language content (e.g. English on English UI).
 Future<bool> isContentInDifferentLanguage(String text, String appLanguageCode) async {
   final trimmed = text.trim();
   if (trimmed.length < 3) return false;
   final detected = await detectLanguage(trimmed);
-  if (detected == null) return true; // show button when detection fails
+  if (detected == null) return false; // only show button when we know content is different
   return _primaryLangCode(detected) != _primaryLangCode(appLanguageCode);
 }
 
