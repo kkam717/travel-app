@@ -310,6 +310,22 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       if (searchEmpty && _recentSearches.isNotEmpty) {
         return _buildRecentSearches();
       }
+      if (searchEmpty) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+              const SizedBox(height: AppTheme.spacingLg),
+              Text(
+                AppStrings.t(context, 'type_to_search_trips'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        );
+      }
       final hasFilters = _filterDays != null || _filterStyles.isNotEmpty || _filterMode != null;
       return Center(
         child: Padding(
@@ -320,32 +336,30 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
               const SizedBox(height: AppTheme.spacingLg),
               Text(
-                searchEmpty ? AppStrings.t(context, 'type_to_search_trips') : AppStrings.t(context, 'no_trips_found'),
+                AppStrings.t(context, 'no_trips_found'),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
-              if (!searchEmpty) ...[
-                const SizedBox(height: AppTheme.spacingSm),
-                Text(
-                  hasFilters ? 'Try clearing filters or a different search.' : 'Only public itineraries appear.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  textAlign: TextAlign.center,
+              const SizedBox(height: AppTheme.spacingSm),
+              Text(
+                hasFilters ? 'Try clearing filters or a different search.' : 'Only public itineraries appear.',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+              if (hasFilters) ...[
+                const SizedBox(height: AppTheme.spacingMd),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _filterDays = null;
+                      _filterStyles = [];
+                      _filterMode = null;
+                    });
+                    _search();
+                  },
+                  icon: const Icon(Icons.clear_all_rounded, size: 18),
+                  label: Text(AppStrings.t(context, 'clear_filters')),
                 ),
-                if (hasFilters) ...[
-                  const SizedBox(height: AppTheme.spacingMd),
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _filterDays = null;
-                        _filterStyles = [];
-                        _filterMode = null;
-                      });
-                      _search();
-                    },
-                    icon: const Icon(Icons.clear_all_rounded, size: 18),
-                    label: Text(AppStrings.t(context, 'clear_filters')),
-                  ),
-                ],
               ],
             ],
           ),
