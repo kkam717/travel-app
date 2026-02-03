@@ -297,172 +297,255 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         }
       },
       child: Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop(<String, dynamic>{'liked': _isLiked, 'likeCount': _likeCount, 'bookmarked': _isBookmarked});
-            } else {
-              context.go('/home');
-            }
-          },
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: Container(
+            margin: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () {
+                if (context.canPop()) {
+                  context.pop(<String, dynamic>{'liked': _isLiked, 'likeCount': _likeCount, 'bookmarked': _isBookmarked});
+                } else {
+                  context.go('/home');
+                }
+              },
+            ),
+          ),
+          actions: [
+            Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.share_outlined),
+                onPressed: () => shareItineraryLink(widget.itineraryId, title: it.title),
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
+                onPressed: _toggleBookmark,
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                shape: BoxShape.circle,
+              ),
+              child: PopupMenuButton(
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'fork', child: Text(AppStrings.t(context, 'add_to_planning'))),
+                  PopupMenuItem(value: 'author', child: Text(AppStrings.t(context, 'view_author_profile'))),
+                ],
+                onSelected: (v) {
+                  if (v == 'fork') _forkItinerary();
+                  else if (v == 'author') context.push('/author/${it.authorId}');
+                },
+              ),
+            ),
+          ],
         ),
-        title: Text(AppStrings.t(context, 'trip_details_title')),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share_outlined),
-            onPressed: () => shareItineraryLink(widget.itineraryId, title: it.title),
-          ),
-          IconButton(
-            icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
-            onPressed: _toggleBookmark,
-          ),
-          PopupMenuButton(
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'fork', child: Text(AppStrings.t(context, 'add_to_planning'))),
-              PopupMenuItem(value: 'author', child: Text(AppStrings.t(context, 'view_author_profile'))),
-            ],
-            onSelected: (v) {
-              if (v == 'fork') _forkItinerary();
-              else if (v == 'author') context.push('/author/${it.authorId}');
-            },
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(AppTheme.spacingMd),
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(_translatedTitle ?? it.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-              ),
-              if (_showTranslateButton == true)
-                IconButton(
-                  icon: _isTranslating
-                      ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary))
-                      : const Icon(Icons.translate_outlined),
-                  onPressed: _isTranslating
-                      ? null
-                      : (_translatedTitle != null || _translatedDestination != null)
-                          ? () => setState(() {
-                                _translatedTitle = null;
-                                _translatedDestination = null;
-                              })
-                          : () async {
-                              setState(() => _isTranslating = true);
-                              final titleResult = await translate(text: it.title, targetLanguageCode: LocaleNotifier.instance.localeCode);
-                              final destResult = await translate(text: it.destination, targetLanguageCode: LocaleNotifier.instance.localeCode);
-                              if (mounted) setState(() {
-                                _translatedTitle = titleResult;
-                                _translatedDestination = destResult;
-                                _isTranslating = false;
-                              });
-                            },
-                ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.spacingLg),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: ItineraryMap(stops: it.stops, destination: it.destination, height: 260),
-          ),
-          const SizedBox(height: AppTheme.spacingLg),
-          Text(_translatedDestination ?? it.destination, style: Theme.of(context).textTheme.titleLarge),
-          if (Supabase.instance.client.auth.currentUser?.id != it.authorId) ...[
-            const SizedBox(height: AppTheme.spacingSm),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                InkWell(
-                  onTap: _toggleLike,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8, right: 8, bottom: 8),
-                    child: Icon(_isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined, size: 22, color: _isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
-                  ),
-                ),
-                if (_likeCount > 0) ...[
-                  const SizedBox(width: 4),
-                  Text('$_likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                ],
-              ],
+        body: Stack(
+          children: [
+            // Full-screen map
+            ItineraryMap(
+              stops: it.stops,
+              destination: it.destination,
+              height: MediaQuery.of(context).size.height,
+              fullScreen: true,
+              transportTransitions: it.transportTransitions,
             ),
-          ],
-          const SizedBox(height: AppTheme.spacingSm),
-          Wrap(
-            spacing: AppTheme.spacingMd,
-            runSpacing: AppTheme.spacingSm,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.calendar_today_outlined, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  const SizedBox(width: 6),
-                  Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-                ],
-              ),
-              if (it.mode != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            // Draggable bottom sheet with details
+            DraggableScrollableSheet(
+              initialChildSize: 0.4,
+              minChildSize: 0.3,
+              maxChildSize: 0.95,
+              builder: (context, scrollController) {
+                return Container(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(10),
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
                   ),
-                  child: Text(it.mode!.toUpperCase(), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
-                ),
-            ],
-          ),
-          if (it.authorName != null) ...[
-            const SizedBox(height: AppTheme.spacingSm),
-            Row(
-              children: [
-                InkWell(
-                  onTap: () => context.push('/author/${it.authorId}'),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.primary),
-                        const SizedBox(width: 6),
-                        Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
-                      ],
-                    ),
+                  child: Column(
+                    children: [
+                      // Drag handle
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Scrollable content
+                      Expanded(
+                        child: ListView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _translatedTitle ?? it.title,
+                                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                if (_showTranslateButton == true)
+                                  IconButton(
+                                    icon: _isTranslating
+                                        ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary))
+                                        : const Icon(Icons.translate_outlined),
+                                    onPressed: _isTranslating
+                                        ? null
+                                        : (_translatedTitle != null || _translatedDestination != null)
+                                            ? () => setState(() {
+                                                  _translatedTitle = null;
+                                                  _translatedDestination = null;
+                                                })
+                                            : () async {
+                                                setState(() => _isTranslating = true);
+                                                final titleResult = await translate(text: it.title, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                                                final destResult = await translate(text: it.destination, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                                                if (mounted) setState(() {
+                                                  _translatedTitle = titleResult;
+                                                  _translatedDestination = destResult;
+                                                  _isTranslating = false;
+                                                });
+                                              },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: AppTheme.spacingMd),
+                            Text(
+                              _translatedDestination ?? it.destination,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            if (Supabase.instance.client.auth.currentUser?.id != it.authorId) ...[
+                              const SizedBox(height: AppTheme.spacingSm),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  InkWell(
+                                    onTap: _toggleLike,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(top: 8, right: 8, bottom: 8),
+                                      child: Icon(_isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined, size: 22, color: _isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                                    ),
+                                  ),
+                                  if (_likeCount > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Text('$_likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                  ],
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: AppTheme.spacingSm),
+                            Wrap(
+                              spacing: AppTheme.spacingMd,
+                              runSpacing: AppTheme.spacingSm,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.calendar_today_outlined, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                    const SizedBox(width: 6),
+                                    Text('${it.daysCount} ${AppStrings.t(context, 'days')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                  ],
+                                ),
+                                if (it.mode != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.6),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(it.mode!.toUpperCase(), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
+                                  ),
+                              ],
+                            ),
+                            if (it.authorName != null) ...[
+                              const SizedBox(height: AppTheme.spacingSm),
+                              Row(
+                                children: [
+                                  InkWell(
+                                    onTap: () => context.push('/author/${it.authorId}'),
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 4),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.person_outline, size: 18, color: Theme.of(context).colorScheme.primary),
+                                          const SizedBox(width: 6),
+                                          Text('by ${it.authorName}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  if (Supabase.instance.client.auth.currentUser?.id != it.authorId) ...[
+                                    const SizedBox(width: AppTheme.spacingMd),
+                                    FilledButton.tonal(
+                                      onPressed: _toggleFollow,
+                                      style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: Text(_isFollowing ? 'Following' : 'Follow'),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: AppTheme.spacingLg),
+                            Text(AppStrings.t(context, 'places'), style: Theme.of(context).textTheme.headlineSmall),
+                            const SizedBox(height: AppTheme.spacingMd),
+                            ItineraryTimeline(
+                              itinerary: it,
+                              transportOverrides: _transportOverridesFor(it),
+                              transportDescriptions: _transportDescriptionsFor(it),
+                              onOpenInMaps: _openInMaps,
+                            ),
+                            SizedBox(height: MediaQuery.of(context).padding.bottom + AppTheme.spacingMd),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                if (Supabase.instance.client.auth.currentUser?.id != it.authorId) ...[
-                  const SizedBox(width: AppTheme.spacingMd),
-                  FilledButton.tonal(
-                    onPressed: _toggleFollow,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(_isFollowing ? 'Following' : 'Follow'),
-                  ),
-                ],
-              ],
+                );
+              },
             ),
           ],
-          const SizedBox(height: AppTheme.spacingLg),
-          Text(AppStrings.t(context, 'places'), style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: AppTheme.spacingMd),
-          ItineraryTimeline(
-            itinerary: it,
-            transportOverrides: _transportOverridesFor(it),
-            transportDescriptions: _transportDescriptionsFor(it),
-            onOpenInMaps: _openInMaps,
-          ),
-        ],
+        ),
       ),
-    ),
     );
   }
 }

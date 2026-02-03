@@ -800,98 +800,98 @@ class _FeedCardState extends State<_FeedCard> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: widget.onAuthorTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Row(
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
-                                ? NetworkImage(it.authorPhotoUrl!)
-                                : null,
-                            child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
-                                ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              it.authorName ?? 'Unknown',
-                              style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                              overflow: TextOverflow.ellipsis,
+                            child: InkWell(
+                              onTap: widget.onAuthorTap,
+                              borderRadius: BorderRadius.circular(8),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundImage: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
+                                        ? NetworkImage(it.authorPhotoUrl!)
+                                        : null,
+                                    child: it.authorPhotoUrl == null || it.authorPhotoUrl!.isEmpty
+                                        ? Icon(Icons.person_outline_rounded, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant)
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      it.authorName ?? 'Unknown',
+                                      style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                          ),
+                          if (_showTranslate == true)
+                            IconButton(
+                              icon: _isTranslating
+                                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onSurfaceVariant))
+                                  : Icon(Icons.translate_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              onPressed: _isTranslating
+                                  ? null
+                                  : _translatedText != null
+                                      ? () => setState(() => _translatedText = null)
+                                      : () async {
+                                          final text = description.isNotEmpty ? '${it.title}\n\n$description' : it.title;
+                                          setState(() => _isTranslating = true);
+                                          final result = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
+                                          if (mounted) {
+                                            setState(() {
+                                              _translatedText = result;
+                                              _isTranslating = false;
+                                            });
+                                          }
+                                        },
+                              style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                            ),
+                          if (widget.onLike != null)
+                            IconButton(
+                              icon: Icon(
+                                widget.isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
+                                color: widget.isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              onPressed: widget.onLike,
+                              style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                            ),
+                          IconButton(
+                            icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            onPressed: () => shareItineraryLink(it.id, title: it.title),
+                            style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
+                          ),
+                          IconButton(
+                            icon: Icon(widget.isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: widget.isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                            onPressed: widget.onBookmark,
+                            style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  if (_showTranslate == true)
-                    IconButton(
-                      icon: _isTranslating
-                          ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onSurfaceVariant))
-                          : Icon(Icons.translate_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      onPressed: _isTranslating
-                          ? null
-                          : _translatedText != null
-                              ? () => setState(() => _translatedText = null)
-                              : () async {
-                                  final text = description.isNotEmpty ? '${it.title}\n\n$description' : it.title;
-                                  setState(() => _isTranslating = true);
-                                  final result = await translate(text: text, targetLanguageCode: LocaleNotifier.instance.localeCode);
-                                  if (mounted) {
-                                    setState(() {
-                                      _translatedText = result;
-                                      _isTranslating = false;
-                                    });
-                                  }
-                                },
-                      style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                    ),
-                  if (widget.onLike != null)
-                    IconButton(
-                      icon: Icon(
-                        widget.isLiked ? Icons.thumb_up_rounded : Icons.thumb_up_outlined,
-                        color: widget.isLiked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      onPressed: widget.onLike,
-                      style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                    ),
-                  IconButton(
-                    icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    onPressed: () => shareItineraryLink(it.id, title: it.title),
-                    style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                  ),
-                  IconButton(
-                    icon: Icon(widget.isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: widget.isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
-                    onPressed: widget.onBookmark,
-                    style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                  ),
-                ],
-              ),
-              if (widget.onLike != null && widget.likeCount > 0) ...[
-                const SizedBox(height: 2),
-                Text(
-                  '${widget.likeCount} ${AppStrings.t(context, 'likes')}',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                ),
-              ],
-              if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
-                const SizedBox(height: 2),
-                Text(
-                  '${it.bookmarkCount} ${AppStrings.t(context, 'saved_count')}',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
-                ),
-              ],
-              if (it.updatedAt != null) ...[
-                const SizedBox(height: 2),
-                Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              ],
-              SizedBox(height: isCompact ? 4 : AppTheme.spacingSm),
+                      if (widget.onLike != null && widget.likeCount > 0) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${widget.likeCount} ${AppStrings.t(context, 'likes')}',
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                      if (it.bookmarkCount != null && it.bookmarkCount! > 0) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          '${it.bookmarkCount} ${AppStrings.t(context, 'saved_count')}',
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                      if (it.updatedAt != null) ...[
+                        const SizedBox(height: 2),
+                        Text(_formatDate(it.updatedAt!), style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                      ],
+                      SizedBox(height: isCompact ? 4 : AppTheme.spacingSm),
               if (_translatedText != null) ...[
                 Text(
                   _translatedText!,
