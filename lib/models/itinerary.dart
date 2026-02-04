@@ -201,6 +201,8 @@ class ItineraryStop {
   final double? lng;
   final String? placeId;
   final String? googlePlaceId;
+  /// Optional 1–5 star rating for venue stops.
+  final int? rating;
 
   const ItineraryStop({
     required this.id,
@@ -215,12 +217,14 @@ class ItineraryStop {
     this.lng,
     this.placeId,
     this.googlePlaceId,
+    this.rating,
   });
 
   bool get isLocation => stopType == 'location';
   bool get isVenue => stopType != 'location';
 
   factory ItineraryStop.fromJson(Map<String, dynamic> json) {
+    final rating = json['rating'];
     return ItineraryStop(
       id: json['id'] as String,
       itineraryId: json['itinerary_id'] as String,
@@ -234,6 +238,7 @@ class ItineraryStop {
       lng: (json['lng'] as num?)?.toDouble(),
       placeId: json['place_id'] as String?,
       googlePlaceId: json['google_place_id'] as String?,
+      rating: rating != null ? (rating is int ? rating : (rating as num).toInt()) : null,
     );
   }
 
@@ -250,6 +255,7 @@ class ItineraryStop {
       'lng': lng,
       'place_id': placeId,
       'google_place_id': googlePlaceId,
+      if (rating != null) 'rating': rating,
     };
   }
 }

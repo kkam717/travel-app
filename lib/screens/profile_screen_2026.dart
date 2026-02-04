@@ -11,7 +11,7 @@ import '../models/itinerary.dart';
 import '../models/user_city.dart';
 import '../data/countries.dart';
 import '../widgets/profile_hero_banner.dart';
-import '../widgets/profile_stat_tiles_row.dart';
+import '../widgets/profile_insight_card.dart';
 import '../widgets/country_filter_chips.dart';
 import '../widgets/trip_photo_card.dart';
 import '../services/supabase_service.dart';
@@ -281,26 +281,26 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
                 onCityTap: hasCity ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=$userId') : null,
                 isUploadingPhoto: _isUploadingPhoto,
                 editProfileLabel: AppStrings.t(context, 'edit_profile'),
-                statTilesRow: ProfileStatTilesRow(
+                statTilesRow: ProfileInsightCardsRow(
                   countriesCount: visitedCountries.length,
-                  livedCount: livedCount,
+                  placesCount: livedCount,
                   currentCity: hasCity ? currentCity : null,
                   onCountriesTap: () async {
                     await context.push('/map/countries?codes=${visitedCountries.join(',')}&editable=1');
                     if (mounted) _load();
                   },
-                  onLivedTap: () async {
+                  onPlacesTap: () async {
                     await context.push('/profile/stats');
                     if (mounted) _load();
                   },
-                  onHomeTap: hasCity ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=$userId') : () => context.push('/profile/stats'),
+                  onBaseTap: hasCity ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=$userId') : () => context.push('/profile/stats'),
                 ),
               ),
             ),
             // B) Main section: followers/following links, then Trips header + country filter chips
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingSm),
+                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingSm),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -310,7 +310,7 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
                       onFollowersTap: () => context.push('/profile/followers'),
                       onFollowingTap: () => context.push('/profile/following'),
                     ),
-                    const SizedBox(height: AppTheme.spacingLg),
+                    const SizedBox(height: AppTheme.spacingMd),
                     Text(
                       AppStrings.t(context, 'trips'),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -507,9 +507,9 @@ class _FollowersFollowingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = theme.textTheme.bodyMedium?.copyWith(
-      color: theme.colorScheme.primary,
-      fontWeight: FontWeight.w500,
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+      fontWeight: FontWeight.w400,
     );
     return Row(
       children: [
