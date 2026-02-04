@@ -27,6 +27,8 @@ class ItineraryMap extends StatefulWidget {
   final MapController? mapController;
   /// When set, tapping a city (location) marker calls this with the stop's day and place name (so the UI can show all days for that place).
   final void Function(int day, String placeName)? onCityTap;
+  /// When set, tapping the venue expansion card (label above a selected venue flag) calls this to open the venue in maps.
+  final void Function(ItineraryStop stop)? onVenueOpenInMaps;
 
   const ItineraryMap({
     super.key,
@@ -39,6 +41,7 @@ class ItineraryMap extends StatefulWidget {
     this.countryCodes,
     this.mapController,
     this.onCityTap,
+    this.onVenueOpenInMaps,
   });
 
   @override
@@ -582,6 +585,62 @@ class _ItineraryMapState extends State<ItineraryMap> {
     return (fromPart, toPart);
   }
 
+  /// Ocean waypoints (in open water) for boat routing, ordered Atlantic → Med → Red Sea → Indian Ocean and beyond.
+  /// Used so boat segments follow water instead of crossing land.
+  static const List<LatLng> _oceanWaypoints = [
+    LatLng(52, -8),   // Atlantic west of Ireland
+    LatLng(48, -10),  // North Atlantic
+    LatLng(42, -5),   // Bay of Biscay
+    LatLng(38, 0),    // Western Mediterranean
+    LatLng(35, 12),   // Central Mediterranean
+    LatLng(32, 22),   // Eastern Mediterranean
+    LatLng(28, 34),   // Suez / Red Sea north
+    LatLng(20, 38),   // Red Sea
+    LatLng(12, 44),   // Gulf of Aden
+    LatLng(2, 50),    // Indian Ocean (East Africa)
+    LatLng(-5, 45),   // Indian Ocean
+    LatLng(0, 55),    // Indian Ocean
+    LatLng(-15, -25), // South Atlantic
+    LatLng(-5, -35),  // South Atlantic
+    LatLng(0, -50),   // South Atlantic
+    LatLng(25, -80),  // Caribbean / Gulf of Mexico
+    LatLng(0, 120),   // Pacific
+    LatLng(-20, 120), // Indian Ocean south
+  ];
+
+  /// Boat route that stays over water by routing through ocean waypoints, then great-circle segments between them.
+  List<LatLng> _createBoatWaterRoute(LatLng from, LatLng to) {
+    if (_oceanWaypoints.isEmpty) return _createGreatCircleRoute(from, to);
+    final fromKm = _oceanWaypoints.map((w) => _haversineKm(from, w)).toList();
+    final toKm = _oceanWaypoints.map((w) => _haversineKm(to, w)).toList();
+    int i = 0;
+    for (var k = 1; k < _oceanWaypoints.length; k++) {
+      if (fromKm[k] < fromKm[i]) i = k;
+    }
+    int j = 0;
+    for (var k = 1; k < _oceanWaypoints.length; k++) {
+      if (toKm[k] < toKm[j]) j = k;
+    }
+    final points = <LatLng>[from];
+    if (i <= j) {
+      for (var k = i; k <= j; k++) points.add(_oceanWaypoints[k]);
+    } else {
+      for (var k = i; k >= j; k--) points.add(_oceanWaypoints[k]);
+    }
+    points.add(to);
+    // Flatten: great-circle segments between consecutive points
+    final path = <LatLng>[];
+    for (var p = 0; p < points.length - 1; p++) {
+      final seg = _createGreatCircleRoute(points[p], points[p + 1], segments: 25);
+      if (path.isEmpty) {
+        path.addAll(seg);
+      } else {
+        path.addAll(seg.skip(1));
+      }
+    }
+    return path;
+  }
+
   /// Create a great circle route (flight path) between two points
   List<LatLng> _createGreatCircleRoute(LatLng from, LatLng to, {int segments = 50}) {
     final points = <LatLng>[];
@@ -1003,7 +1062,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
         : null;
     final initialZoom =
         useWorldView ? _worldZoom : (initialFit != null ? null : 12.0);
-    final routeData = widget.fullScreen && _locationStopsWithCoordsList.length >= 2
+    final hasTransportData = widget.transportTransitions != null && widget.transportTransitions!.isNotEmpty;
+    final routeData = _locationStopsWithCoordsList.length >= 2 && (widget.fullScreen || hasTransportData)
         ? _buildRouteData(primaryColor)
         : (polylines: <Polyline>[], transportMarkers: <Marker>[]);
     return SizedBox(
@@ -1057,7 +1117,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
             ),
             children: [
               _buildTileLayer(brightness),
-          if (widget.fullScreen && _locationStopsWithCoordsList.length >= 2 && routeData.polylines.isNotEmpty)
+          if (routeData.polylines.isNotEmpty)
             PolylineLayer(polylines: routeData.polylines)
           else if (_polylinePointsList.length >= 2)
             PolylineLayer(
@@ -1100,7 +1160,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
           ),
           if (_selectedVenue != null)
             MarkerLayer(markers: _buildSelectedVenueLabelMarker()),
-          if (widget.fullScreen && _locationStopsWithCoordsList.length >= 2 && routeData.transportMarkers.isNotEmpty)
+          if (routeData.transportMarkers.isNotEmpty)
             MarkerLayer(markers: routeData.transportMarkers),
           Align(
             alignment: Alignment.bottomRight,
@@ -1150,8 +1210,33 @@ class _ItineraryMapState extends State<ItineraryMap> {
     );
   }
 
-  /// Venue marker: small square (24x24) so zoom doesn't drift. Tap shows name in a separate label marker above.
+  /// Flag color by experience/venue category.
+  static Color _colorForVenueCategory(String? category) {
+    if (category == null || category.isEmpty) return Colors.orange;
+    switch (category.toLowerCase()) {
+      case 'restaurant':
+        return Colors.amber.shade700;
+      case 'hotel':
+        return Colors.blue.shade700;
+      case 'bar':
+      case 'drinks':
+        return Colors.deepPurple.shade700;
+      case 'guide':
+      case 'experience':
+        return Colors.teal.shade700;
+      case 'coffee':
+      case 'cafe':
+        return Colors.brown.shade700;
+      case 'museum':
+        return Colors.indigo.shade700;
+      default:
+        return Colors.orange;
+    }
+  }
+
+  /// Venue marker: small square (24x24), color by category. Tap shows name in a separate label marker above.
   Marker _buildVenueFlagMarker(ItineraryStop stop) {
+    final color = _colorForVenueCategory(stop.category);
     return Marker(
       point: LatLng(stop.lat!, stop.lng!),
       width: 24,
@@ -1163,7 +1248,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
             _selectedVenue = _selectedVenue?.id == stop.id ? null : stop;
           });
         },
-        child: Icon(Icons.flag_rounded, size: 22, color: Colors.orange),
+        child: Icon(Icons.flag_rounded, size: 22, color: color),
       ),
     );
   }
@@ -1175,35 +1260,54 @@ class _ItineraryMapState extends State<ItineraryMap> {
     final stop = _selectedVenue;
     if (stop == null || stop.lat == null || stop.lng == null) return [];
     final pointAbove = LatLng(stop.lat! + _labelOffsetLat, stop.lng!);
+    final color = _colorForVenueCategory(stop.category);
+    final onOpenInMaps = widget.onVenueOpenInMaps;
     return [
       Marker(
         point: pointAbove,
         width: 130,
         height: 44,
         alignment: Alignment.bottomCenter,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.orange.withValues(alpha: 0.5), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.12),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Text(
-            stop.name,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: Theme.of(context).colorScheme.onSurface,
+        child: GestureDetector(
+          onTap: () {
+            if (onOpenInMaps != null) onOpenInMaps(stop);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withValues(alpha: 0.6), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
             ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    stop.name,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                if (onOpenInMaps != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.open_in_new, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1355,9 +1459,9 @@ class _ItineraryMapState extends State<ItineraryMap> {
         segmentPoints = _createGreatCircleRoute(fromPoint, toPoint);
         solidLine = true;
       } else if (isBoat) {
-        // Boats: dotted curved line
-        segmentPoints = _createCurvedLine(fromPoint, toPoint);
-        solidLine = false;
+        // Boats: water-only route via ocean waypoints so route stays over water (no land crossing)
+        segmentPoints = _createBoatWaterRoute(fromPoint, toPoint);
+        solidLine = true;
       } else if (_routedSegments != null && _routedSegments!.containsKey(i)) {
         // Train or car with fetched route: solid line
         final route = _routedSegments![i]!;
@@ -1384,7 +1488,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
         polylines.add(Polyline(
           points: segmentPoints,
           color: primaryColor,
-          strokeWidth: isPlane ? 3 : 5,
+          strokeWidth: (isPlane || isBoat) ? 3 : 5,
         ));
       } else {
         polylines.add(Polyline(

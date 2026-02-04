@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -10,6 +11,7 @@ import '../core/web_tile_provider.dart';
 import '../data/countries.dart';
 import '../l10n/app_strings.dart';
 import '../services/countries_geojson_service.dart';
+import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 
 /// CRS that disables world wrap (no horizontal looping).
@@ -79,92 +81,27 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
     final profile = await SupabaseService.getProfile(userId);
-    Set<String> selected = (profile?.visitedCountries ?? _selectedCodes).toSet();
-    String searchQuery = '';
+    final initialSelected = (profile?.visitedCountries ?? _selectedCodes).toSet().toList();
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (_, setModal) {
-          final q = searchQuery.trim().toLowerCase();
-          final filteredEntries = q.isEmpty
-              ? countries.entries.toList()
-              : countries.entries.where((e) => e.key.toLowerCase().contains(q) || e.value.toLowerCase().contains(q)).toList();
-          return DraggableScrollableSheet(
-            initialChildSize: 0.7,
-            expand: false,
-            builder: (_, scrollController) => Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(AppTheme.spacingMd),
-                  child: Row(
-                    children: [
-                      Text(AppStrings.t(context, 'edit_visited_countries'), style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                      const Spacer(),
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () async {
-                          final list = selected.toList()..sort();
-                          await SupabaseService.updateProfile(userId, {'visited_countries': list});
-                          if (!ctx.mounted) return;
-                          Navigator.pop(ctx);
-                          if (!mounted) return;
-                          ProfileCache.updateVisitedCountries(userId, list);
-                          setState(() {
-                            _selectedCodes = list;
-                            _loadPolygons();
-                          });
-                          final messenger = ScaffoldMessenger.maybeOf(context);
-                          messenger?.showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'countries_updated'))));
-                        },
-                        child: Text(AppStrings.t(context, 'save')),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: AppStrings.t(context, 'search_and_add_countries'),
-                      prefixIcon: const Icon(Icons.search_outlined, size: 20),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      isDense: true,
-                    ),
-                    onChanged: (v) => setModal(() => searchQuery = v),
-                  ),
-                ),
-                const SizedBox(height: AppTheme.spacingSm),
-                Expanded(
-                  child: ListView.builder(
-                    controller: scrollController,
-                    itemCount: filteredEntries.length,
-                    itemBuilder: (_, i) {
-                      final e = filteredEntries[i];
-                      final sel = selected.contains(e.key);
-                      return CheckboxListTile(
-                        value: sel,
-                        onChanged: (v) {
-                          setModal(() {
-                            if (v == true) {
-                              selected.add(e.key);
-                            } else {
-                              selected.remove(e.key);
-                            }
-                          });
-                        },
-                        title: Text(e.value),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
+      builder: (ctx) => _EditCountriesSheetContent(
+        initialSelected: initialSelected,
+        onSave: (list) async {
+          await SupabaseService.updateProfile(userId, {'visited_countries': list});
+          if (!ctx.mounted) return;
+          Navigator.pop(ctx);
+          if (!mounted) return;
+          ProfileCache.updateVisitedCountries(userId, list);
+          setState(() {
+            _selectedCodes = list;
+            _loadPolygons();
+          });
+          final messenger = ScaffoldMessenger.maybeOf(context);
+          messenger?.showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'countries_updated'))));
         },
+        onCancel: () => Navigator.pop(ctx),
       ),
     );
   }
@@ -379,6 +316,167 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Sheet content for editing visited countries using API search (countries only).
+class _EditCountriesSheetContent extends StatefulWidget {
+  final List<String> initialSelected;
+  final void Function(List<String>) onSave;
+  final VoidCallback onCancel;
+
+  const _EditCountriesSheetContent({
+    required this.initialSelected,
+    required this.onSave,
+    required this.onCancel,
+  });
+
+  @override
+  State<_EditCountriesSheetContent> createState() => _EditCountriesSheetContentState();
+}
+
+class _EditCountriesSheetContentState extends State<_EditCountriesSheetContent> {
+  late Set<String> _selected;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+  List<PlacePrediction> _searchResults = [];
+  bool _loading = false;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.initialSelected.toSet();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String v) {
+    setState(() => _searchQuery = v);
+    _debounce?.cancel();
+    if (v.trim().length < 2) {
+      setState(() {
+        _searchResults = [];
+        _loading = false;
+      });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 400), () async {
+      if (!mounted) return;
+      setState(() => _loading = true);
+      try {
+        final lang = Localizations.localeOf(context).languageCode;
+        final results = await PlacesService.search(
+          v.trim(),
+          placeType: 'country',
+          lang: lang,
+        );
+        if (!mounted) return;
+        final seen = <String>{};
+        final filtered = results
+            .where((p) => p.countryCode != null && p.countryCode!.isNotEmpty && seen.add(p.countryCode!.toUpperCase()))
+            .toList();
+        setState(() {
+          _searchResults = filtered;
+          _loading = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() {
+          _searchResults = [];
+          _loading = false;
+        });
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      expand: false,
+      builder: (_, scrollController) => Padding(
+        padding: EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingMd, AppTheme.spacingMd, MediaQuery.viewPaddingOf(context).bottom + AppTheme.spacingMd),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text(AppStrings.t(context, 'edit_visited_countries'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                TextButton(onPressed: widget.onCancel, child: Text(AppStrings.t(context, 'cancel'))),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () {
+                    final list = _selected.toList()..sort();
+                    widget.onSave(list);
+                  },
+                  child: Text(AppStrings.t(context, 'save')),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: AppStrings.t(context, 'search_and_add_countries'),
+                prefixIcon: const Icon(Icons.search_outlined, size: 20),
+                suffixIcon: _loading
+                    ? Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
+                      )
+                    : null,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                isDense: true,
+              ),
+              onChanged: _onSearchChanged,
+            ),
+            if (_selected.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _selected.map((code) => Chip(
+                  label: Text(countries[code] ?? code),
+                  deleteIcon: Icon(Icons.close, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  onDeleted: () => setState(() => _selected.remove(code)),
+                )).toList(),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: _searchQuery.trim().length < 2
+                  ? Center(
+                      child: Text(
+                        AppStrings.t(context, 'search_and_add_countries'),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: _searchResults.length,
+                      itemBuilder: (_, i) {
+                        final p = _searchResults[i];
+                        final code = p.countryCode!;
+                        final added = _selected.contains(code);
+                        return ListTile(
+                          leading: Icon(added ? Icons.check_circle : Icons.add_circle_outline, size: 22, color: added ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                          title: Text(p.mainText, style: Theme.of(context).textTheme.bodyMedium),
+                          onTap: added ? null : () => setState(() => _selected.add(code)),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

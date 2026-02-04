@@ -446,6 +446,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
               transportTransitions: it.transportTransitions,
               mapController: _detailMapController,
               onCityTap: (day, placeName) => _showPlaceItinerary(context, placeName, it),
+              onVenueOpenInMaps: _openInMaps,
             ),
             // Draggable bottom sheet with details
             DraggableScrollableSheet(

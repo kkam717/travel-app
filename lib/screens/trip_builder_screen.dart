@@ -5,6 +5,7 @@
 // - stopsData: chronological (location stop per day per city, then venue stops) day, position, stop_type, category, lat, lng
 // - transport_transitions: length == chronologicalPairs.length - 1, type + optional description
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
@@ -12,10 +13,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/analytics.dart';
-import '../core/trip_builder_helpers.dart';
+import '../core/trip_builder_helpers.dart' show allocateDaysAcrossCities, autoBalanceDays, buildChronologicalPairsFromAllocations, CityDayPair, inferTransportTransitions;
 import '../data/countries.dart' show countries, destinationToCountryCodes, travelStyles;
 import '../l10n/app_strings.dart';
-import '../models/itinerary.dart';
+import '../models/itinerary.dart' show ItineraryStop, TransportTransition;
 import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 import '../widgets/places_field.dart';
@@ -51,6 +52,7 @@ class _VenueEntry {
   double? lng;
   String? externalUrl;
   String category = 'restaurant';
+  int? rating; // 1–5 stars, optional
 }
 
 class TripBuilderScreen extends StatefulWidget {
@@ -66,6 +68,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   final _titleController = TextEditingController();
   final _countryQueryController = TextEditingController();
   final _countryFieldKey = GlobalKey();
+  final _countryFieldFocusNode = FocusNode();
   OverlayEntry? _countryOverlayEntry;
   int _daysCount = _kDefaultDays;
   String _mode = modeStandard;
@@ -73,6 +76,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   List<String> _selectedCountries = [];
   String _countryQuery = '';
   bool _showCountrySuggestions = false;
+  List<PlacePrediction> _countrySearchResults = [];
+  bool _countrySearchLoading = false;
+  Timer? _countrySearchDebounce;
   bool _useDates = false;
   DateTime? _startDate;
   DateTime? _endDate;
@@ -127,13 +133,37 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   /// When publishing: use selected visibility (public or friends). Draft saves use private without showing it.
   String get _effectivePublishVisibility => _visibility;
 
-  List<MapEntry<String, String>> get _filteredCountries {
-    if (_countryQuery.isEmpty) return countries.entries.take(20).toList();
-    final q = _countryQuery.toLowerCase();
-    return countries.entries
-        .where((e) => e.value.toLowerCase().contains(q) || e.key.toLowerCase().contains(q))
-        .take(20)
+  /// Country results from API (only entries with a country code; deduped by code).
+  List<PlacePrediction> get _countryResultsForOverlay {
+    final seen = <String>{};
+    return _countrySearchResults
+        .where((p) => p.countryCode != null && p.countryCode!.isNotEmpty && seen.add(p.countryCode!.toUpperCase()))
         .toList();
+  }
+
+  Future<void> _searchCountries(String query) async {
+    if (query.trim().length < 2) {
+      if (mounted) setState(() { _countrySearchResults = []; _countrySearchLoading = false; });
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _countrySearchLoading = true);
+    try {
+      final lang = Localizations.localeOf(context).languageCode;
+      final results = await PlacesService.search(
+        query.trim(),
+        placeType: 'country',
+        lang: lang,
+      );
+      if (!mounted) return;
+      setState(() {
+        _countrySearchResults = results;
+        _countrySearchLoading = false;
+      });
+      _showCountryOverlay();
+    } catch (_) {
+      if (mounted) setState(() { _countrySearchResults = []; _countrySearchLoading = false; });
+    }
   }
 
   void _addCountry(String code) {
@@ -157,7 +187,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   void _showCountryOverlay() {
     _removeCountryOverlay();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_showCountrySuggestions || _filteredCountries.isEmpty) return;
+      final list = _countryResultsForOverlay;
+      if (!mounted || !_showCountrySuggestions || list.isEmpty) return;
       final box = _countryFieldKey.currentContext?.findRenderObject() as RenderBox?;
       if (box == null) return;
       final overlay = Overlay.of(context);
@@ -177,15 +208,16 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
               child: ListView.builder(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
-                itemCount: _filteredCountries.length,
+                itemCount: list.length,
                 itemBuilder: (_, i) {
-                  final e = _filteredCountries[i];
-                  final added = _selectedCountries.contains(e.key);
+                  final p = list[i];
+                  final code = p.countryCode!;
+                  final added = _selectedCountries.contains(code);
                   return ListTile(
                     dense: true,
                     leading: Icon(added ? Icons.check_circle : Icons.add_circle_outline, size: 20, color: added ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant),
-                    title: Text(e.value, style: theme.textTheme.bodyMedium),
-                    onTap: added ? null : () => _addCountry(e.key),
+                    title: Text(p.mainText, style: theme.textTheme.bodyMedium),
+                    onTap: added ? null : () => _addCountry(code),
                   );
                 },
               ),
@@ -207,7 +239,15 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   @override
   void initState() {
     super.initState();
+    _countryFieldFocusNode.addListener(_onCountryFieldFocusChange);
     if (_isEditMode) _loadForEdit();
+  }
+
+  void _onCountryFieldFocusChange() {
+    if (!_countryFieldFocusNode.hasFocus && mounted) {
+      _removeCountryOverlay();
+      setState(() => _showCountrySuggestions = false);
+    }
   }
 
   Future<void> _loadForEdit() async {
@@ -262,7 +302,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
             ..lat = s.lat
             ..lng = s.lng
             ..externalUrl = s.externalUrl
-            ..category = s.category == 'experience' ? 'guide' : (s.category ?? 'restaurant'));
+            ..category = s.category == 'experience' ? 'guide' : (s.category ?? 'restaurant')
+            ..rating = s.rating);
         }
       }
       final days = locationStopsByDay.keys.toList()..sort();
@@ -309,6 +350,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
 
   @override
   void dispose() {
+    _countrySearchDebounce?.cancel();
+    _countryFieldFocusNode.removeListener(_onCountryFieldFocusChange);
+    _countryFieldFocusNode.dispose();
     _removeCountryOverlay();
     _titleController.dispose();
     _countryQueryController.dispose();
@@ -451,7 +495,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     });
   }
 
-  void _addVenue(int cityIndex, int day, String category, String name, double? lat, double? lng, String? url) {
+  void _addVenue(int cityIndex, int day, String category, String name, double? lat, double? lng, String? url, [int? rating]) {
     setState(() {
       final key = '${cityIndex}_$day';
       _venuesByCityDay[key] ??= [];
@@ -460,7 +504,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         ..lat = lat
         ..lng = lng
         ..externalUrl = url
-        ..category = category);
+        ..category = category
+        ..rating = rating);
     });
   }
 
@@ -564,6 +609,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           'external_url': v.externalUrl,
           'day': day,
           'position': position++,
+          if (v.rating != null && v.rating! >= 1 && v.rating! <= 5) 'rating': v.rating,
         });
       }
     }
@@ -673,6 +719,17 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
+  List<TransportTransition> get _transportTransitionsForMap {
+    final pairs = _chronologicalPairs;
+    if (pairs.length < 2) return [];
+    return inferTransportTransitions(
+      pairs,
+      (i) => _cities[i].lat,
+      (i) => _cities[i].lng,
+      userOverrides: _transportOverrides.map((k, v) => MapEntry(k, (type: v.type, description: v.description))),
+    );
+  }
+
   List<ItineraryStop> get _stopsForMap {
     final stops = <ItineraryStop>[];
     for (final pair in _chronologicalPairs) {
@@ -773,7 +830,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     ),
                   ),
                 ),
-                title: Text(AppStrings.t(context, 'new_trip')),
+                title: Text(AppStrings.t(context, 'add_trip')),
                 backgroundColor: Colors.transparent,
                 foregroundColor: theme.colorScheme.onSurface,
                 elevation: 0,
@@ -987,7 +1044,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                       }
                     }
                   }),
-                  Expanded(child: Text(AppStrings.t(context, 'new_trip'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
+                  Expanded(child: Text(AppStrings.t(context, 'add_trip'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700))),
                 ],
               ),
               TextField(
@@ -1084,6 +1141,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       showWorldWhenEmpty: true,
       countryCodes: _selectedCountries.isEmpty ? null : _selectedCountries,
       mapController: _tripBuilderMapController,
+      transportTransitions: _transportTransitionsForMap.isNotEmpty ? _transportTransitionsForMap : null,
     );
   }
 
@@ -1288,10 +1346,17 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         KeyedSubtree(
           key: _countryFieldKey,
           child: TextField(
+            focusNode: _countryFieldFocusNode,
             controller: _countryQueryController,
             decoration: InputDecoration(
               hintText: AppStrings.t(context, 'search_and_add_countries'),
               prefixIcon: const Icon(Icons.search_outlined, size: 20),
+              suffixIcon: _countrySearchLoading
+                  ? Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
+                    )
+                  : null,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               isDense: true,
@@ -1301,13 +1366,23 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 _countryQuery = v;
                 _showCountrySuggestions = v.isNotEmpty;
               });
-              if (v.isNotEmpty) _showCountryOverlay();
-              else _removeCountryOverlay();
+              if (v.isNotEmpty) {
+                _countrySearchDebounce?.cancel();
+                _countrySearchDebounce = Timer(const Duration(milliseconds: 400), () => _searchCountries(v));
+              } else {
+                _removeCountryOverlay();
+                setState(() {
+                  _countrySearchResults = [];
+                  _countrySearchLoading = false;
+                });
+              }
             },
             onTap: () {
               setState(() => _showCountrySuggestions = _countryQueryController.text.isNotEmpty);
-              if (_countryQueryController.text.isNotEmpty) _showCountryOverlay();
-              else _removeCountryOverlay();
+              if (_countryQueryController.text.isNotEmpty) {
+                if (_countryResultsForOverlay.isNotEmpty) _showCountryOverlay();
+                else _searchCountries(_countryQueryController.text);
+              } else _removeCountryOverlay();
             },
           ),
         ),
@@ -1328,6 +1403,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     stops: _stopsForMap,
                     destination: _selectedCountries.isNotEmpty ? _selectedCountries.map((c) => countries[c]).join(', ') : _cities.map((c) => c.name).join(', '),
                     height: 220,
+                    transportTransitions: _transportTransitionsForMap.isNotEmpty ? _transportTransitionsForMap : null,
                   )
                 : Container(
                     color: theme.colorScheme.surfaceContainerHighest,
@@ -1988,6 +2064,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     double? lng;
     String? url;
     Set<int> chosenDays = {firstDay};
+    int? rating;
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
@@ -2056,12 +2133,29 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     }),
                   ),
                 ),
+                const SizedBox(height: 12),
+                Text(AppStrings.t(context, 'rating_optional'), style: Theme.of(ctx).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(5, (i) {
+                    final star = i + 1;
+                    final r = rating;
+                    final selected = r != null && r >= star;
+                    return IconButton(
+                      icon: Icon(selected ? Icons.star_rounded : Icons.star_border_rounded, color: selected ? Colors.amber : Theme.of(ctx).colorScheme.onSurfaceVariant),
+                      onPressed: () => setModalState(() => rating = rating == star ? null : star),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    );
+                  }),
+                ),
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
                     if (name.isNotEmpty) {
                       for (final day in chosenDays) {
-                        _addVenue(cityIndex, day, category, name, lat, lng, url);
+                        _addVenue(cityIndex, day, category, name, lat, lng, url, rating);
                       }
                     }
                     Navigator.pop(ctx);

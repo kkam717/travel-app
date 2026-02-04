@@ -336,19 +336,42 @@ class LocationCard extends StatelessWidget {
                       ],
                       if (venues.isNotEmpty) ...[
                         const SizedBox(height: AppTheme.spacingMd),
-                        ...venues.map((s) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            backgroundColor: theme.colorScheme.primaryContainer,
-                            child: Icon(_iconForVenueCategory(s.category), size: 22, color: theme.colorScheme.onPrimaryContainer),
-                          ),
-                          title: Text(s.name, style: theme.textTheme.titleSmall),
-                          subtitle: s.category != null && s.category != 'location'
-                              ? Text(_categoryLabel(context, s.category!), style: theme.textTheme.bodySmall)
-                              : null,
-                          trailing: Icon(Icons.open_in_new, size: 18, color: theme.colorScheme.onSurfaceVariant),
-                          onTap: () => onOpenInMaps(s),
-                        )),
+                        ...venues.map((s) {
+                          final hasCategory = s.category != null && s.category != 'location';
+                          final rating = s.rating;
+                          final hasRating = rating != null && rating >= 1 && rating <= 5;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(
+                              backgroundColor: theme.colorScheme.primaryContainer,
+                              child: Icon(_iconForVenueCategory(s.category), size: 22, color: theme.colorScheme.onPrimaryContainer),
+                            ),
+                            title: Text(s.name, style: theme.textTheme.titleSmall),
+                            subtitle: (hasCategory || hasRating)
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (hasCategory)
+                                        Text(_categoryLabel(context, s.category!), style: theme.textTheme.bodySmall),
+                                      if (hasRating) ...[
+                                        if (hasCategory) const SizedBox(height: 2),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: List.generate(5, (i) => Icon(
+                                            i < rating! ? Icons.star_rounded : Icons.star_border_rounded,
+                                            size: 14,
+                                            color: Colors.amber,
+                                          )),
+                                        ),
+                                      ],
+                                    ],
+                                  )
+                                : null,
+                            trailing: Icon(Icons.open_in_new, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                            onTap: () => onOpenInMaps(s),
+                          );
+                        }),
                       ],
                       if (locations.isNotEmpty && venues.isEmpty)
                         Padding(
@@ -401,7 +424,10 @@ class _LocationChip extends StatelessWidget {
 /// Optional descriptions per transport transition (index -> description).
 typedef TransportDescriptions = Map<int, String>;
 
-/// Returns empty widget when primary location is the same on consecutive days;
+/// Spacing between day cards when there is no transport connector (same place).
+const double _gapWhenNoTransport = 24;
+
+/// Returns spacing when primary location is the same on consecutive days (no transport);
 /// otherwise returns the dotted TimelineConnector.
 Widget _buildConnectorIfDifferentPlace({
   required List<ItineraryStop> dayILocations,
@@ -418,7 +444,15 @@ Widget _buildConnectorIfDifferentPlace({
       ? (loc1.lat == loc2.lat && loc1.lng == loc2.lng)
       : sameName;
   if (sameName && (loc1.lat == null || loc2.lat == null || sameCoords)) {
-    return const SizedBox.shrink();
+    // No transport between these cards: add vertical space for visual separation.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(width: 56),
+        const SizedBox(width: AppTheme.spacingMd),
+        Expanded(child: SizedBox(height: _gapWhenNoTransport)),
+      ],
+    );
   }
   // Match LocationCard layout: Row with day column (56) + spacing + centered connector
   return Row(

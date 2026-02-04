@@ -80,7 +80,13 @@ class PlacesService {
         params['lon'] = locationLatLng.$2.toString();
       }
       if (placeType != null && placeType.isNotEmpty) {
-        params['osm_tag'] = _osmTagForPlaceType(placeType);
+        final type = placeType.toLowerCase();
+        if (type == 'country' || type == 'countries') {
+          params['layer'] = 'country';
+        } else {
+          final osmTag = _osmTagForPlaceType(placeType);
+          if (osmTag.isNotEmpty) params['osm_tag'] = osmTag;
+        }
       }
 
       final uri = Uri.parse(_photonBase).replace(queryParameters: params);
