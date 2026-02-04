@@ -1646,6 +1646,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                           selected.remove(e.key);
                         } else {
                           selected.add(e.key);
+                          Navigator.pop(ctx);
                         }
                         setState(() => _selectedCountries = List.from(selected));
                       },
@@ -1978,13 +1979,14 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         builder: (ctx, setModalState) => SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, MediaQuery.viewPaddingOf(ctx).bottom + AppTheme.spacingLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('${AppStrings.t(context, 'add')} ${_venueCategoryLabel(category)}', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 12),
-              PlacesField(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('${AppStrings.t(context, 'add')} ${_venueCategoryLabel(category)}', style: Theme.of(ctx).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  PlacesField(
                 hint: '${AppStrings.t(context, 'search')} ${_venueCategoryLabel(category)}…',
                 countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                 locationLatLng: _cities[cityIndex].lat != null && _cities[cityIndex].lng != null ? (_cities[cityIndex].lat!, _cities[cityIndex].lng!) : null,
@@ -2050,6 +2052,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                   child: Text(AppStrings.t(context, 'add')),
                 ),
               ],
+            ),
             ),
           ),
         ),
