@@ -8,7 +8,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/main_shell.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/search_screen.dart';
+import 'screens/explore_screen.dart';
 import 'screens/create_itinerary_screen.dart';
 import 'screens/saved_screen.dart';
 import 'screens/itinerary_detail_screen.dart';
@@ -53,6 +53,9 @@ GoRouter createRouter() {
       if (!needsOnboarding && state.matchedLocation == '/') {
         return '/home';
       }
+      if (!needsOnboarding && state.matchedLocation == '/search') {
+        return '/explore';
+      }
       return null;
     },
     routes: [
@@ -77,8 +80,8 @@ GoRouter createRouter() {
             pageBuilder: (_, state) => const NoTransitionPage(child: HomeScreen()),
           ),
           GoRoute(
-            path: '/search',
-            pageBuilder: (_, state) => const NoTransitionPage(child: SearchScreen()),
+            path: '/explore',
+            pageBuilder: (_, state) => const NoTransitionPage(child: ExploreScreen()),
           ),
           GoRoute(
             path: '/create',

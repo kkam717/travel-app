@@ -15,6 +15,7 @@ import '../services/supabase_service.dart';
 import '../services/translation_service.dart' show translate;
 import '../core/locale_notifier.dart';
 import '../l10n/app_strings.dart';
+import 'profile_screen_2026.dart' show useProfile2026, ProfileScreen2026;
 
 /// Merges profile visited countries with countries from all user itineraries.
 List<String> _mergedVisitedCountries(Profile profile, List<Itinerary> itineraries) {
@@ -170,6 +171,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (useProfile2026) return const ProfileScreen2026();
     Analytics.logScreenView('profile');
     if (_isLoading && _profile == null) {
       return Scaffold(

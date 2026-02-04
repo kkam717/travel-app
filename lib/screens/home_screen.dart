@@ -8,6 +8,7 @@ import '../core/app_link.dart';
 import '../core/home_cache.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
+import '../models/user_city.dart';
 import '../services/supabase_service.dart';
 import '../core/locale_notifier.dart';
 import '../l10n/app_strings.dart';
@@ -46,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   String? _error;
   final Map<String, bool> _bookmarked = {};
   final Map<String, bool> _liked = {};
+  /// Author ID -> list of city names from profile (current city + past cities). Used for "From someone who lived here".
+  final Map<String, List<String>> _authorLivedInCities = {};
   late TabController _tabController;
   int _newTripsCount = 0;
 
@@ -179,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _isLoading = false;
         _hasMore = feedList.length >= _pageSize;
       });
+      _ensureAuthorLivedInCities();
       Analytics.logScreenView('home');
     } catch (e) {
       if (!mounted) return;
@@ -215,10 +219,38 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _isLoadingMore = false;
           _hasMore = more.length >= _pageSize;
         });
+        _ensureAuthorLivedInCities();
       }
     } catch (e) {
       if (mounted) setState(() => _isLoadingMore = false);
     }
+  }
+
+  /// Fetches profile + past cities for feed authors not yet in _authorLivedInCities; updates state.
+  Future<void> _ensureAuthorLivedInCities() async {
+    final ids = _feed.map((i) => i.authorId).toSet().where((id) => !_authorLivedInCities.containsKey(id)).toList();
+    if (ids.isEmpty) return;
+    final updates = <String, List<String>>{};
+    for (final authorId in ids) {
+      try {
+        final profile = await SupabaseService.getProfile(authorId);
+        final pastCities = await SupabaseService.getPastCities(authorId);
+        final cities = <String>[];
+        final current = profile?.currentCity?.trim();
+        if (current != null && current.isNotEmpty) cities.add(current);
+        for (final c in pastCities) {
+          final name = c.cityName.trim();
+          if (name.isNotEmpty && !cities.contains(name)) cities.add(name);
+        }
+        updates[authorId] = cities;
+      } catch (_) {
+        updates[authorId] = [];
+      }
+    }
+    if (!mounted || updates.isEmpty) return;
+    setState(() {
+      for (final e in updates.entries) _authorLivedInCities[e.key] = e.value;
+    });
   }
 
   Future<void> _onRefresh() async {
@@ -433,6 +465,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     onAuthorTap: () => context.push('/author/${it.authorId}'),
                     variant: _CardVariant.standard,
                     index: i,
+                    authorLivedInCityNames: _authorLivedInCities[it.authorId],
                   ),
                   );
                 },
@@ -523,6 +556,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         onAuthorTap: () => context.push('/author/${it.authorId}'),
                         variant: _CardVariant.standard,
                         index: i,
+                        authorLivedInCityNames: _authorLivedInCities[it.authorId],
                       ),
                       );
                     },
@@ -664,7 +698,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             const SizedBox(height: AppTheme.spacingXl),
             FilledButton.icon(
-              onPressed: () => context.go('/search'),
+              onPressed: () => context.go('/explore'),
               icon: const Icon(Icons.search_rounded, size: 20),
               label: Text(AppStrings.t(context, 'discover_trips')),
             ),
@@ -723,34 +757,38 @@ class _DiscoverHeader extends StatelessWidget {
         bottom: 8 + t * 4,
         top: 12 * (1 - t),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            AppStrings.t(context, 'discover'),
-            style: theme.textTheme.headlineLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              letterSpacing: -0.5,
-              fontSize: titleSize,
-              color: onSurface,
-            ),
-          ),
-          if (subtitleOpacity > 0.01) ...[
-            SizedBox(height: 6 * (1 - t)),
-            Opacity(
-              opacity: subtitleOpacity,
-              child: Text(
-                AppStrings.t(context, 'trips_from_people_with_taste'),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: onSurfaceVariant,
-                  fontWeight: FontWeight.w400,
-                ),
+      child: FittedBox(
+        alignment: Alignment.bottomLeft,
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              AppStrings.t(context, 'discover'),
+              style: theme.textTheme.headlineLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+                fontSize: titleSize,
+                color: onSurface,
               ),
             ),
+            if (subtitleOpacity > 0.01) ...[
+              SizedBox(height: 6 * (1 - t)),
+              Opacity(
+                opacity: subtitleOpacity,
+                child: Text(
+                  AppStrings.t(context, 'trips_from_people_with_taste'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: onSurfaceVariant,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -771,6 +809,7 @@ class _SwipeableFeedCard extends StatelessWidget {
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
   final int index;
+  final List<String>? authorLivedInCityNames;
 
   const _SwipeableFeedCard({
     required this.itinerary,
@@ -785,6 +824,7 @@ class _SwipeableFeedCard extends StatelessWidget {
     required this.onAuthorTap,
     required this.variant,
     required this.index,
+    this.authorLivedInCityNames,
   });
 
   @override
@@ -816,6 +856,7 @@ class _SwipeableFeedCard extends StatelessWidget {
                 onLike: onLike,
                 onTap: onTap,
                 onAuthorTap: onAuthorTap,
+                authorLivedInCityNames: authorLivedInCityNames,
               ),
             )
           : _EdgeAwareSwipeCard(
@@ -842,7 +883,7 @@ class _SwipeableFeedCard extends StatelessWidget {
                   onBookmark();
                   return false;
                 },
-                child: useFeedCard2026
+                child:                     useFeedCard2026
                     ? ItineraryFeedCard2026(
                         itinerary: itinerary,
                         description: description,
@@ -854,6 +895,7 @@ class _SwipeableFeedCard extends StatelessWidget {
                         onLike: onLike,
                         onTap: onTap,
                         onAuthorTap: onAuthorTap,
+                        authorLivedInCityNames: authorLivedInCityNames,
                       )
                     : _FeedCard(
                         itinerary: itinerary,

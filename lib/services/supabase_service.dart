@@ -469,6 +469,20 @@ class SupabaseService {
     }
   }
 
+  /// Bookmarked itineraries with stops loaded (so static maps match Explore/feed).
+  static Future<List<Itinerary>> getBookmarkedItinerariesWithStops(String userId) async {
+    final list = await getBookmarkedItineraries(userId);
+    if (list.isEmpty) return list;
+    final ids = list.map((i) => i.id).toList();
+    final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+    final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+    final stopsByItinerary = <String, List<ItineraryStop>>{};
+    for (final s in stopsList) {
+      stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
+    }
+    return list.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [])).toList();
+  }
+
   static Future<List<Itinerary>> getPlanningItineraries(String userId) async {
     try {
       final res = await _client
@@ -482,6 +496,20 @@ class SupabaseService {
       Analytics.logEvent('planning_fetch_error', {'error': e.toString()});
       rethrow;
     }
+  }
+
+  /// Planning itineraries with stops loaded (for "X of Y days planned").
+  static Future<List<Itinerary>> getPlanningItinerariesWithStops(String userId) async {
+    final list = await getPlanningItineraries(userId);
+    if (list.isEmpty) return list;
+    final ids = list.map((i) => i.id).toList();
+    final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+    final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+    final stopsByItinerary = <String, List<ItineraryStop>>{};
+    for (final s in stopsList) {
+      stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
+    }
+    return list.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [])).toList();
   }
 
   static Future<List<Itinerary>> getUserItineraries(String userId, {bool publicOnly = false}) async {

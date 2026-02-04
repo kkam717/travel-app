@@ -19,6 +19,8 @@ class ItineraryFeedItemModern extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
+  /// Lived-in cities from author profile (current + past). Section only shown when non-null and non-empty.
+  final List<String>? authorLivedInCityNames;
 
   static const double _heroHeight = 300;
 
@@ -34,6 +36,7 @@ class ItineraryFeedItemModern extends StatelessWidget {
     this.onLike,
     required this.onTap,
     required this.onAuthorTap,
+    this.authorLivedInCityNames,
   });
 
   String _routeTitle(Itinerary it) {
@@ -43,10 +46,6 @@ class ItineraryFeedItemModern extends StatelessWidget {
     }
     if (locationStops.length == 1) return locationStops.first.name;
     return it.destination.isNotEmpty ? it.destination : it.title;
-  }
-
-  List<String> _highlights(Itinerary it) {
-    return it.stops.where((s) => s.isVenue).take(2).map((s) => s.name).toList();
   }
 
   static String _relativeTime(BuildContext context, DateTime dt) {
@@ -63,7 +62,7 @@ class ItineraryFeedItemModern extends StatelessWidget {
     final theme = Theme.of(context);
     final it = itinerary;
     final routeTitle = _routeTitle(it);
-    final highlights = _highlights(it);
+    final livedHereCities = authorLivedInCityNames;
     final subtitleText = it.destination.trim().isNotEmpty
         ? '${it.daysCount} ${AppStrings.t(context, 'days')} ${AppStrings.t(context, 'across')} ${it.destination}'
         : '${it.daysCount} ${AppStrings.t(context, 'days')}';
@@ -274,8 +273,8 @@ class ItineraryFeedItemModern extends StatelessWidget {
             ),
             const SizedBox(height: AppTheme.spacingSm),
           ],
-          // 6. Highlights (plain text, muted; max 2)
-          if (highlights.isNotEmpty) ...[
+          // 6. From someone who lived here (author profile: current + past cities only)
+          if (livedHereCities != null && livedHereCities.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg),
               child: Column(
@@ -289,7 +288,7 @@ class ItineraryFeedItemModern extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    highlights.join(' · '),
+                    livedHereCities.join(' · '),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),

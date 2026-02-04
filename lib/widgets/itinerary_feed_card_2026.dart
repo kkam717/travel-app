@@ -19,6 +19,8 @@ class ItineraryFeedCard2026 extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
+  /// Lived-in cities from author profile (current + past). Section only shown when non-null and non-empty.
+  final List<String>? authorLivedInCityNames;
 
   static const double _cardRadius = 0; // Sharp edges (no rounded corners on static map)
   static const double _heroHeight = 220;
@@ -35,6 +37,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     this.onLike,
     required this.onTap,
     required this.onAuthorTap,
+    this.authorLivedInCityNames,
   });
 
   /// Route title: location stops joined by " → " or destination.
@@ -45,23 +48,6 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     }
     if (locationStops.length == 1) return locationStops.first.name;
     return it.destination.isNotEmpty ? it.destination : it.title;
-  }
-
-  /// First 2 venue stops (name, category) for highlights with icons.
-  List<(String name, String? category)> _highlights(Itinerary it) {
-    return it.stops.where((s) => s.isVenue).take(2).map((s) => (s.name, s.category)).toList();
-  }
-
-  static IconData _highlightIcon(String? category) {
-    switch (category?.toLowerCase()) {
-      case 'hotel':
-        return Icons.bed_rounded;
-      case 'restaurant':
-      case 'bar':
-        return Icons.storefront_rounded;
-      default:
-        return Icons.place_rounded;
-    }
   }
 
   static String _relativeTime(BuildContext context, DateTime dt) {
@@ -78,7 +64,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     final theme = Theme.of(context);
     final it = itinerary;
     final routeTitle = _routeTitle(it);
-    final highlights = _highlights(it);
+    final livedHereCities = authorLivedInCityNames;
     final subtitleText = it.destination.trim().isNotEmpty
         ? '${it.daysCount} ${AppStrings.t(context, 'days')} ${AppStrings.t(context, 'across')} ${it.destination}'
         : '${it.daysCount} ${AppStrings.t(context, 'days')}';
@@ -306,8 +292,8 @@ class ItineraryFeedCard2026 extends StatelessWidget {
                       },
                     ),
                   ),
-                  // Highlights (optional): "From someone who lived here:" + icon + name per stop
-                  if (highlights.isNotEmpty) ...[
+                  // From someone who lived here (author profile: current + past cities only)
+                  if (livedHereCities != null && livedHereCities.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingSm, AppTheme.spacingMd, 0),
                       child: Column(
@@ -320,19 +306,19 @@ class ItineraryFeedCard2026 extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          ...highlights.map((h) => Padding(
+                          ...livedHereCities.map((cityName) => Padding(
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Row(
                               children: [
                                 Icon(
-                                  _highlightIcon(h.$2),
+                                  Icons.place_rounded,
                                   size: 18,
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    h.$1,
+                                    cityName,
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.onSurfaceVariant,
                                     ),
