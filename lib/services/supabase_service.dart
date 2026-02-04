@@ -258,6 +258,7 @@ class SupabaseService {
     int? durationMonth,
     String? durationSeason,
     List<TransportTransition>? transportTransitions,
+    int? costPerPerson,
   }) async {
     try {
       final insertData = <String, dynamic>{
@@ -278,6 +279,7 @@ class SupabaseService {
       if (durationSeason != null) insertData['duration_season'] = durationSeason;
       if (transportTransitions != null && transportTransitions.isNotEmpty)
         insertData['transport_transitions'] = transportTransitions.map((t) => t.toJson()).toList();
+      if (costPerPerson != null) insertData['cost_per_person'] = costPerPerson;
       final res = await _client.from('itineraries').insert(insertData).select().single();
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);

@@ -88,6 +88,32 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   final MapController _tripBuilderMapController = MapController();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   List<String> _selectedStyleTags = [];
+  bool _costPerPersonEnabled = false;
+  int _costPerPerson = 0; // USD, 0–10000+ (slider max 10000; text field can set higher)
+  final TextEditingController _costPerPersonController = TextEditingController();
+
+  /// Cost range depends on travel mode (budget / standard / luxury).
+  int get _costMin {
+    switch (_mode) {
+      case modeBudget: return 0;
+      case modeLuxury: return 800;
+      default: return 200; // standard
+    }
+  }
+  int get _costSliderMax {
+    switch (_mode) {
+      case modeBudget: return 2000;   // $0 – $2k
+      case modeLuxury: return 10000;  // $800 – $10k
+      default: return 4000;           // standard: $200 – $4k
+    }
+  }
+  int get _costMax {
+    switch (_mode) {
+      case modeBudget: return 2000;
+      case modeLuxury: return 999999; // text field can go above 10k
+      default: return 4000;
+    }
+  }
 
   bool get _isEditMode => widget.itineraryId != null;
 
@@ -197,6 +223,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         }
         return s.length > 1 ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : s.toUpperCase();
       }).toList();
+      _costPerPersonEnabled = it.costPerPerson != null;
+      _costPerPerson = (it.costPerPerson ?? 0).clamp(0, 999999999); // allow any non-negative; no mode max
+      _costPerPersonController.text = _costPerPerson.toString();
       _useDates = it.useDates ?? false;
       _startDate = it.startDate;
       _endDate = it.endDate;
@@ -271,6 +300,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     _removeCountryOverlay();
     _titleController.dispose();
     _countryQueryController.dispose();
+    _costPerPersonController.dispose();
     super.dispose();
   }
 
@@ -519,6 +549,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           updateData['transport_transitions'] = transportTransitions!.map((t) => t.toJson()).toList();
         }
         updateData['style_tags'] = _selectedStyleTags.map((s) => s.toLowerCase()).toList();
+        updateData['cost_per_person'] = _costPerPersonEnabled ? _costPerPerson : null;
         await SupabaseService.updateItinerary(id, updateData);
         await SupabaseService.updateItineraryStops(id, stopsData);
         Analytics.logEvent('itinerary_updated', {'id': id});
@@ -541,6 +572,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           durationMonth: _useDates ? null : _durationMonth,
           durationSeason: _useDates ? null : _durationSeason,
           transportTransitions: transportTransitions,
+          costPerPerson: _costPerPersonEnabled ? _costPerPerson : null,
         );
         Analytics.logEvent('itinerary_created', {'id': it.id});
         if (mounted) context.go('/itinerary/${it.id}');
@@ -813,6 +845,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                 _buildRouteStrip(theme),
                                 const SizedBox(height: AppTheme.spacingLg),
                                 _buildDetailsTimeline(theme),
+                                const SizedBox(height: AppTheme.spacingLg),
+                                _buildCostPerPersonRow(theme),
                               ],
                             ),
                           ),
@@ -1097,6 +1131,86 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
+  Widget _buildCostPerPersonRow(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                AppStrings.t(context, 'cost_per_person_optional'),
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Switch(
+              value: _costPerPersonEnabled,
+              onChanged: (v) {
+                setState(() {
+                  _costPerPersonEnabled = v;
+                  if (!v) {
+                    _costPerPerson = 0;
+                  }
+                  // when enabling, keep _costPerPerson as-is (often 0) so text input can type any value
+                  _costPerPersonController.text = _costPerPerson.toString();
+                });
+              },
+            ),
+          ],
+        ),
+        if (_costPerPersonEnabled) ...[
+          const SizedBox(height: 8),
+          Slider(
+            value: _costPerPerson.clamp(_costMin, _costSliderMax).toDouble(),
+            min: _costMin.toDouble(),
+            max: _costSliderMax.toDouble(),
+            divisions: 20,
+            label: _costPerPerson >= _costSliderMax ? '\$$_costSliderMax+' : '\$$_costPerPerson',
+            onChanged: (v) {
+              final n = v.round().clamp(_costMin, _costSliderMax);
+              setState(() {
+                _costPerPerson = n;
+                _costPerPersonController.text = n.toString();
+              });
+            },
+          ),
+          Row(
+            children: [
+              Text(
+                _costPerPerson >= _costSliderMax ? '\$$_costSliderMax+' : '\$$_costPerPerson',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _costPerPersonController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    prefixText: '\$ ',
+                    hintText: '0',
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  onChanged: (s) {
+                    final n = int.tryParse(s.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+                    final value = n < 0 ? 0 : n; // only block negative
+                    if (value != _costPerPerson) setState(() => _costPerPerson = value);
+                    if (n < 0 && _costPerPersonController.text != '0') {
+                      _costPerPersonController.text = '0';
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildCountriesRow(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1354,7 +1468,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 title: Text(m == modeBudget ? AppStrings.t(context, 'budget') : m == modeLuxury ? AppStrings.t(context, 'luxury') : AppStrings.t(context, 'standard')),
                 selected: _mode == m,
                 onTap: () {
-                  setState(() => _mode = m);
+                  setState(() {
+                    _mode = m;
+                    if (_costPerPersonEnabled) {
+                      _costPerPersonController.text = _costPerPerson.toString();
+                    }
+                  });
                   Navigator.pop(ctx);
                 },
               )),
