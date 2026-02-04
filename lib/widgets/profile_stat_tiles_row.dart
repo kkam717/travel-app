@@ -36,7 +36,7 @@ class ProfileStatTilesRow extends StatelessWidget {
           Expanded(
             child: _StatTile(
               icon: Icons.public_rounded,
-              label: AppStrings.t(context, 'countries'),
+              label: '${AppStrings.t(context, 'countries')} ($countriesCount)',
               tint: theme.colorScheme.primary.withValues(alpha: 0.25),
               onTap: onCountriesTap,
             ),
@@ -45,7 +45,7 @@ class ProfileStatTilesRow extends StatelessWidget {
           Expanded(
             child: _StatTile(
               icon: Icons.location_city_rounded,
-              label: AppStrings.t(context, 'lived'),
+              label: '${AppStrings.t(context, 'lived')} ($livedCount)',
               tint: Colors.orange.withValues(alpha: 0.25),
               onTap: onLivedTap,
             ),
