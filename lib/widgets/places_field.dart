@@ -9,6 +9,8 @@ class PlacesField extends StatefulWidget {
   final String? placeType;
   final List<String>? countryCodes;
   final (double, double)? locationLatLng;
+  /// UI language code for autofill suggestions (e.g. from Localizations.localeOf(context).languageCode).
+  final String? lang;
 
   const PlacesField({
     super.key,
@@ -17,6 +19,7 @@ class PlacesField extends StatefulWidget {
     this.placeType,
     this.countryCodes,
     this.locationLatLng,
+    this.lang,
   });
 
   @override
@@ -52,6 +55,7 @@ class _PlacesFieldState extends State<PlacesField> {
           countryCodes: widget.countryCodes,
           placeType: widget.placeType,
           locationLatLng: widget.locationLatLng,
+          lang: widget.lang,
         );
         if (mounted) {
           setState(() {

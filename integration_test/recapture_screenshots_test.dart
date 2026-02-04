@@ -8,8 +8,9 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final screenshotDir = Directory('/Users/kiankamshad/Travel App/screenshots');
-  
-  Future<void> takeScreenshot(WidgetTester tester, String path, String filename) async {
+
+  Future<void> takeScreenshot(
+      WidgetTester tester, String path, String filename) async {
     final fullPath = '${screenshotDir.path}/$path/$filename.png';
     final dir = Directory('${screenshotDir.path}/$path');
     if (!await dir.exists()) {
@@ -17,7 +18,8 @@ void main() {
     }
     // Wait longer to ensure screen is stable
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    final bytes = await IntegrationTestWidgetsFlutterBinding.instance.takeScreenshot(fullPath);
+    final bytes = await IntegrationTestWidgetsFlutterBinding.instance
+        .takeScreenshot(fullPath);
     final file = File(fullPath);
     await file.writeAsBytes(bytes);
     print('✓ $path/$filename.png');
@@ -39,7 +41,8 @@ void main() {
     // Try bottom navigation
     final bottomNav = find.byType(BottomNavigationBar);
     if (bottomNav.evaluate().isNotEmpty) {
-      await tester.tapAt(const Offset(200, 700)); // Approximate Profile tab position
+      await tester
+          .tapAt(const Offset(200, 700)); // Approximate Profile tab position
       await tester.pumpAndSettle(const Duration(seconds: 2));
     }
   }
@@ -60,7 +63,8 @@ void main() {
     // Try bottom navigation
     final bottomNav = find.byType(BottomNavigationBar);
     if (bottomNav.evaluate().isNotEmpty) {
-      await tester.tapAt(const Offset(50, 700)); // Approximate Home tab position
+      await tester
+          .tapAt(const Offset(50, 700)); // Approximate Home tab position
       await tester.pumpAndSettle(const Duration(seconds: 2));
     }
   }
@@ -75,13 +79,13 @@ void main() {
       await tester.tap(continueEmail);
       await tester.pumpAndSettle();
     }
-    
+
     final signInFields = find.byType(TextField);
     if (signInFields.evaluate().length >= 2) {
       await tester.enterText(signInFields.at(0), 'marble717@gmail.com');
       await tester.enterText(signInFields.at(1), 'Marble17!');
       await tester.pumpAndSettle();
-      
+
       final signInButton = find.text('Sign in');
       if (signInButton.evaluate().isNotEmpty) {
         await tester.tap(signInButton);
@@ -95,19 +99,20 @@ void main() {
     print('\n=== Creating Itinerary Screenshots ===');
     await navigateToHome(tester);
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    
+
     final fab = find.byType(FloatingActionButton);
     if (fab.evaluate().isNotEmpty) {
       await tester.tap(fab.first);
       await tester.pumpAndSettle(const Duration(seconds: 2));
-      await takeScreenshot(tester, '05-create-itinerary/step1-start', '01-step1-form');
-      
+      await takeScreenshot(
+          tester, '05-create-itinerary/step1-start', '01-step1-form');
+
       final step1Fields = find.byType(TextField);
       if (step1Fields.evaluate().isNotEmpty) {
         await tester.enterText(step1Fields.first, 'Test Trip');
         await tester.pumpAndSettle();
       }
-      
+
       // Try multiple ways to find Next button
       var nextBtn = find.text('Next');
       if (nextBtn.evaluate().isEmpty) {
@@ -116,12 +121,13 @@ void main() {
       if (nextBtn.evaluate().isEmpty) {
         nextBtn = find.byType(ElevatedButton);
       }
-      
+
       if (nextBtn.evaluate().isNotEmpty) {
         await tester.tap(nextBtn.first);
         await tester.pumpAndSettle(const Duration(seconds: 3));
-        await takeScreenshot(tester, '05-create-itinerary/step2-destinations', '01-step2-destinations');
-        
+        await takeScreenshot(tester, '05-create-itinerary/step2-destinations',
+            '01-step2-destinations');
+
         // Step 3
         var nextBtn2 = find.text('Next');
         if (nextBtn2.evaluate().isEmpty) nextBtn2 = find.textContaining('Next');
@@ -129,54 +135,68 @@ void main() {
         if (nextBtn2.evaluate().isNotEmpty) {
           await tester.tap(nextBtn2.first);
           await tester.pumpAndSettle(const Duration(seconds: 3));
-          await takeScreenshot(tester, '05-create-itinerary/step3-assign-days', '01-step3-days');
-          
+          await takeScreenshot(
+              tester, '05-create-itinerary/step3-assign-days', '01-step3-days');
+
           // Step 4
           var nextBtn3 = find.text('Next');
-          if (nextBtn3.evaluate().isEmpty) nextBtn3 = find.textContaining('Next');
-          if (nextBtn3.evaluate().isEmpty) nextBtn3 = find.byType(ElevatedButton);
+          if (nextBtn3.evaluate().isEmpty)
+            nextBtn3 = find.textContaining('Next');
+          if (nextBtn3.evaluate().isEmpty)
+            nextBtn3 = find.byType(ElevatedButton);
           if (nextBtn3.evaluate().isNotEmpty) {
             await tester.tap(nextBtn3.first);
             await tester.pumpAndSettle(const Duration(seconds: 3));
-            await takeScreenshot(tester, '05-create-itinerary/step4-map', '01-step4-map');
-            
+            await takeScreenshot(
+                tester, '05-create-itinerary/step4-map', '01-step4-map');
+
             // Step 5
             var nextBtn4 = find.text('Next');
-            if (nextBtn4.evaluate().isEmpty) nextBtn4 = find.textContaining('Next');
-            if (nextBtn4.evaluate().isEmpty) nextBtn4 = find.byType(ElevatedButton);
+            if (nextBtn4.evaluate().isEmpty)
+              nextBtn4 = find.textContaining('Next');
+            if (nextBtn4.evaluate().isEmpty)
+              nextBtn4 = find.byType(ElevatedButton);
             if (nextBtn4.evaluate().isNotEmpty) {
               await tester.tap(nextBtn4.first);
               await tester.pumpAndSettle(const Duration(seconds: 3));
-              await takeScreenshot(tester, '05-create-itinerary/step5-details', '01-step5-venues');
-              
+              await takeScreenshot(tester, '05-create-itinerary/step5-details',
+                  '01-step5-venues');
+
               // Step 6
               var nextBtn5 = find.text('Next');
-              if (nextBtn5.evaluate().isEmpty) nextBtn5 = find.textContaining('Next');
-              if (nextBtn5.evaluate().isEmpty) nextBtn5 = find.byType(ElevatedButton);
+              if (nextBtn5.evaluate().isEmpty)
+                nextBtn5 = find.textContaining('Next');
+              if (nextBtn5.evaluate().isEmpty)
+                nextBtn5 = find.byType(ElevatedButton);
               if (nextBtn5.evaluate().isNotEmpty) {
                 await tester.tap(nextBtn5.first);
                 await tester.pumpAndSettle(const Duration(seconds: 3));
-                await takeScreenshot(tester, '05-create-itinerary/step6-review', '01-step6-review');
-                
+                await takeScreenshot(tester, '05-create-itinerary/step6-review',
+                    '01-step6-review');
+
                 // Step 7
                 var saveBtn = find.text('Save');
-                if (saveBtn.evaluate().isEmpty) saveBtn = find.textContaining('Save');
+                if (saveBtn.evaluate().isEmpty)
+                  saveBtn = find.textContaining('Save');
                 if (saveBtn.evaluate().isEmpty) {
                   var nextBtn6 = find.text('Next');
-                  if (nextBtn6.evaluate().isEmpty) nextBtn6 = find.textContaining('Next');
-                  if (nextBtn6.evaluate().isEmpty) nextBtn6 = find.byType(ElevatedButton);
+                  if (nextBtn6.evaluate().isEmpty)
+                    nextBtn6 = find.textContaining('Next');
+                  if (nextBtn6.evaluate().isEmpty)
+                    nextBtn6 = find.byType(ElevatedButton);
                   if (nextBtn6.evaluate().isNotEmpty) {
                     await tester.tap(nextBtn6.first);
                     await tester.pumpAndSettle(const Duration(seconds: 2));
                   }
                 }
-                await takeScreenshot(tester, '05-create-itinerary/step7-save', '01-step7-save');
+                await takeScreenshot(
+                    tester, '05-create-itinerary/step7-save', '01-step7-save');
               }
             }
           }
         }
       }
-      
+
       // Go back to home
       final backBtn = find.byIcon(Icons.arrow_back);
       if (backBtn.evaluate().isNotEmpty) {
@@ -196,29 +216,30 @@ void main() {
     print('\n=== Creating Author Profile Screenshots ===');
     await navigateToHome(tester);
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    
+
     // Try to find author avatar or name
     final authorAvatars = find.byType(CircleAvatar);
     final authorNames = find.byType(InkWell);
-    
+
     if (authorAvatars.evaluate().isNotEmpty) {
       try {
         await tester.tap(authorAvatars.first);
         await tester.pumpAndSettle(const Duration(seconds: 2));
         await takeScreenshot(tester, '10-author-profile', '01-author-profile');
-        
+
         // Look for follow button
         var followBtn = find.text('Follow');
         if (followBtn.evaluate().isEmpty) followBtn = find.text('Following');
-        if (followBtn.evaluate().isEmpty) followBtn = find.textContaining('Follow');
-        
+        if (followBtn.evaluate().isEmpty)
+          followBtn = find.textContaining('Follow');
+
         if (followBtn.evaluate().isNotEmpty) {
           await takeScreenshot(tester, '10-author-profile', '02-follow-button');
         } else {
           // Take screenshot anyway
           await takeScreenshot(tester, '10-author-profile', '02-follow-button');
         }
-        
+
         // Try to open author trips
         final tripsCard = find.text('Trips');
         if (tripsCard.evaluate().isNotEmpty) {
@@ -231,7 +252,7 @@ void main() {
             await tester.pumpAndSettle();
           }
         }
-        
+
         final backBtn3 = find.byIcon(Icons.arrow_back);
         if (backBtn3.evaluate().isNotEmpty) {
           await tester.tap(backBtn3.first);
@@ -262,7 +283,7 @@ void main() {
     print('\n=== Creating Translation Screenshots ===');
     await navigateToHome(tester);
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    
+
     // Try to find translate button on feed cards
     final translateButtons = find.byIcon(Icons.translate_outlined);
     if (translateButtons.evaluate().isEmpty) {
@@ -285,7 +306,7 @@ void main() {
     print('\n=== Creating QR Code Screenshots ===');
     await navigateToProfile(tester);
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    
+
     final qrButtons = find.byIcon(Icons.qr_code_2_outlined);
     if (qrButtons.evaluate().isEmpty) {
       // Try alternative icon
@@ -294,7 +315,7 @@ void main() {
         await tester.tap(qrAlt.first);
         await tester.pumpAndSettle(const Duration(seconds: 2));
         await takeScreenshot(tester, '16-qr-code/my-code', '01-my-code');
-        
+
         var scanTab = find.text('Scan');
         if (scanTab.evaluate().isEmpty) {
           scanTab = find.textContaining('Scan');
@@ -309,7 +330,7 @@ void main() {
       await tester.tap(qrButtons.first);
       await tester.pumpAndSettle(const Duration(seconds: 2));
       await takeScreenshot(tester, '16-qr-code/my-code', '01-my-code');
-      
+
       var scanTab = find.text('Scan');
       if (scanTab.evaluate().isEmpty) {
         scanTab = find.textContaining('Scan');
@@ -319,7 +340,7 @@ void main() {
         await tester.pumpAndSettle(const Duration(seconds: 2));
         await takeScreenshot(tester, '16-qr-code/scan', '01-scan-screen');
       }
-      
+
       // Try share from QR
       final shareButtons2 = find.byIcon(Icons.share_outlined);
       if (shareButtons2.evaluate().isEmpty) {
@@ -338,7 +359,7 @@ void main() {
         await tester.tapAt(const Offset(10, 10));
         await tester.pumpAndSettle();
       }
-      
+
       final backBtn7 = find.byIcon(Icons.arrow_back);
       if (backBtn7.evaluate().isNotEmpty) {
         await tester.tap(backBtn7.first);
@@ -350,7 +371,7 @@ void main() {
     print('\n=== Creating Settings Screenshots ===');
     await navigateToProfile(tester);
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    
+
     final settingsButtons = find.byIcon(Icons.settings_outlined);
     if (settingsButtons.evaluate().isEmpty) {
       final settingsAlt = find.byIcon(Icons.settings);
@@ -367,7 +388,7 @@ void main() {
       await takeScreenshot(tester, '17-settings', '01-settings-screen');
       await takeScreenshot(tester, '17-settings/appearance', '01-appearance');
       await takeScreenshot(tester, '17-settings/language', '01-language');
-      
+
       final backButton = find.byIcon(Icons.arrow_back);
       if (backButton.evaluate().isNotEmpty) {
         await tester.tap(backButton.first);

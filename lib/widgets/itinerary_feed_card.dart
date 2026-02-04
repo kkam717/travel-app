@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import '../core/locale_notifier.dart';
 import '../core/theme.dart';
 import '../core/app_link.dart';
 import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
+import '../services/translation_service.dart';
 import 'static_map_image.dart';
 
 /// Feed-style itinerary card. Supports optional author row, bookmark, edit, and in-place translate.
-class ItineraryFeedCard extends StatelessWidget {
+/// Shows the translate button only when the card text (title + description) is detected to be
+/// in a different language than the app's set language.
+class ItineraryFeedCard extends StatefulWidget {
   final Itinerary itinerary;
   final String description;
   final String locations;
@@ -39,8 +43,58 @@ class ItineraryFeedCard extends StatelessWidget {
   });
 
   @override
+  State<ItineraryFeedCard> createState() => _ItineraryFeedCardState();
+}
+
+class _ItineraryFeedCardState extends State<ItineraryFeedCard> {
+  bool? _showTranslate; // null = checking, true/false = content not in / in app language
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.onTranslate != null) _checkCardLanguage();
+  }
+
+  @override
+  void didUpdateWidget(ItineraryFeedCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.onTranslate != null &&
+        (oldWidget.itinerary.id != widget.itinerary.id ||
+            oldWidget.description != widget.description ||
+            oldWidget.itinerary.title != widget.itinerary.title ||
+            oldWidget.locations != widget.locations)) {
+      _checkCardLanguage();
+    }
+  }
+
+  Future<void> _checkCardLanguage() async {
+    // Use all visible user-generated text (title, description, locations) so phrases like "(7 days)" and venue names are included
+    final parts = <String>[widget.itinerary.title];
+    if (widget.description.isNotEmpty) parts.add(widget.description);
+    if (widget.locations.isNotEmpty) parts.add(widget.locations);
+    final text = parts.join('\n\n');
+    final different = await isContentInDifferentLanguage(
+      text,
+      LocaleNotifier.instance.localeCode,
+    );
+    if (mounted) setState(() => _showTranslate = different);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final it = itinerary;
+    final it = widget.itinerary;
+    final description = widget.description;
+    final locations = widget.locations;
+    final translatedContent = widget.translatedContent;
+    final onTranslate = widget.onTranslate;
+    final isBookmarked = widget.isBookmarked;
+    final onTap = widget.onTap;
+    final onBookmark = widget.onBookmark;
+    final onAuthorTap = widget.onAuthorTap;
+    final onEdit = widget.onEdit;
+    final isLiked = widget.isLiked;
+    final likeCount = widget.likeCount;
+    final onLike = widget.onLike;
     const mapHeight = 200.0;
 
     return Card(
@@ -123,7 +177,7 @@ class ItineraryFeedCard extends StatelessWidget {
                           onPressed: onLike,
                           style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                         ),
-                      if (onTranslate != null)
+                      if (onTranslate != null && _showTranslate == true)
                         IconButton(
                           icon: Icon(Icons.translate_outlined, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
                           onPressed: onTranslate,
@@ -222,14 +276,11 @@ class ItineraryFeedCard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppTheme.spacingMd),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: StaticMapImage(
-                      itinerary: it,
-                      width: contentWidth,
-                      height: mapHeight,
-                      pathColor: Theme.of(context).colorScheme.primary,
-                    ),
+                  StaticMapImage(
+                    itinerary: it,
+                    width: contentWidth,
+                    height: mapHeight,
+                    pathColor: Theme.of(context).colorScheme.primary,
                   ),
                 ],
               );

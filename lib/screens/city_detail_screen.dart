@@ -54,7 +54,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _error = 'Could not load spots.';
+        _error = 'could_not_load_spots';
       });
     }
   }
@@ -79,6 +79,16 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
         return Icons.beach_access;
       default:
         return Icons.place;
+    }
+  }
+
+  static String _topSpotCategoryLabel(BuildContext context, String cat) {
+    switch (cat) {
+      case 'eat': return AppStrings.t(context, 'top_spot_eat');
+      case 'drink': return AppStrings.t(context, 'top_spot_drink');
+      case 'date': return AppStrings.t(context, 'top_spot_date');
+      case 'chill': return AppStrings.t(context, 'top_spot_chill');
+      default: return cat;
     }
   }
 
@@ -125,7 +135,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                       children: [
                         Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.outline),
                         const SizedBox(height: AppTheme.spacingLg),
-                        Text(_error!, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
+                        Text(AppStrings.t(context, _error!), textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyLarge),
                         const SizedBox(height: AppTheme.spacingLg),
                         FilledButton.icon(onPressed: _load, icon: const Icon(Icons.refresh, size: 20), label: Text(AppStrings.t(context, 'retry'))),
                       ],
@@ -147,7 +157,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                         if (list.isEmpty && !widget.isOwnProfile) return const SizedBox.shrink();
                         return _CategorySection(
                           category: cat,
-                          label: topSpotCategoryLabels[cat] ?? cat,
+                          label: _topSpotCategoryLabel(context, cat),
                           icon: _iconForCategory(cat),
                           spots: list,
                           isOwnProfile: widget.isOwnProfile,
@@ -231,7 +241,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(AppStrings.t(context, 'remove_spot_confirm')),
-        content: Text('${AppStrings.t(context, 'remove')} "${spot.name}" ${topSpotCategoryLabels[spot.category]}?'),
+        content: Text('${AppStrings.t(context, 'remove')} "${spot.name}" ${_topSpotCategoryLabel(ctx, spot.category)}?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.t(context, 'cancel'))),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.t(context, 'remove'))),
@@ -472,7 +482,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
               DropdownButtonFormField<String>(
                 value: _category,
                 decoration: InputDecoration(labelText: AppStrings.t(context, 'category')),
-                items: ['eat', 'drink', 'date', 'chill'].map((c) => DropdownMenuItem(value: c, child: Text(topSpotCategoryLabels[c] ?? c))).toList(),
+                items: ['eat', 'drink', 'date', 'chill'].map((c) => DropdownMenuItem(value: c, child: Text(_CityDetailScreenState._topSpotCategoryLabel(context, c)))).toList(),
                 onChanged: (v) => setState(() => _category = v ?? 'eat'),
               ),
             const SizedBox(height: AppTheme.spacingMd),
@@ -483,7 +493,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                   final coords = snapshot.hasData ? snapshot.data![0] as (double, double)? : null;
                   final countryCode = snapshot.hasData ? snapshot.data![1] as String? : null;
                   return PlacesField(
-                    hint: 'Search for a place in ${widget.cityName}…',
+                    hint: '${AppStrings.t(context, 'search_place_in')} ${widget.cityName}…',
                     locationLatLng: coords,
                     countryCodes: countryCode != null && countryCode.isNotEmpty ? [countryCode] : null,
                     onSelected: (name, _, __, locationUrl) {

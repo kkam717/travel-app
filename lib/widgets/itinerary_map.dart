@@ -9,6 +9,7 @@ import 'package:latlong2/latlong.dart';
 import '../core/theme.dart';
 import '../core/web_tile_provider.dart';
 import '../models/itinerary.dart';
+import '../services/countries_geojson_service.dart';
 
 /// Interactive itinerary map using flutter_map (Geoapify/Carto tiles).
 /// Geocoding: Nominatim (free).
@@ -18,6 +19,12 @@ class ItineraryMap extends StatefulWidget {
   final double height;
   final bool fullScreen;
   final List<TransportTransition>? transportTransitions;
+  /// When true (e.g. new trip with no data), show world view zoomed out. Ignored if stops or countryCodes provide content.
+  final bool showWorldWhenEmpty;
+  /// When set and no stop coords, fit map to these countries' bounds. Used by Trip Builder when only countries are selected.
+  final List<String>? countryCodes;
+  /// When set, use this controller and do not show the built-in compass (caller shows it, e.g. in a sheet).
+  final MapController? mapController;
 
   const ItineraryMap({
     super.key,
@@ -26,6 +33,9 @@ class ItineraryMap extends StatefulWidget {
     this.height = 280,
     this.fullScreen = false,
     this.transportTransitions,
+    this.showWorldWhenEmpty = false,
+    this.countryCodes,
+    this.mapController,
   });
 
   @override
@@ -33,7 +43,7 @@ class ItineraryMap extends StatefulWidget {
 }
 
 class _ItineraryMapState extends State<ItineraryMap> {
-  final _mapController = MapController();
+  late final MapController _mapController;
   static const _defaultCenter = LatLng(40.0, -3.0);
 
   List<LatLng>? _geocodedCityPoints;
@@ -48,6 +58,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
   Map<int, List<LatLng>>? _routedSegments; // Index -> route points for car/plane/train segments
   bool _loadingRoutes = false;
   ItineraryStop? _selectedVenue;
+  LatLngBounds? _countryBoundsCache;
+  bool _loadingCountryBounds = false;
 
   static String? get _geoapifyKey {
     const fromDefine = String.fromEnvironment('GEOAPIFY_API_KEY', defaultValue: '');
@@ -123,22 +135,81 @@ class _ItineraryMapState extends State<ItineraryMap> {
     if (oldWidget.stops != widget.stops ||
         oldWidget.destination != widget.destination ||
         oldWidget.transportTransitions != widget.transportTransitions ||
-        oldWidget.fullScreen != widget.fullScreen) {
+        oldWidget.fullScreen != widget.fullScreen ||
+        oldWidget.showWorldWhenEmpty != widget.showWorldWhenEmpty ||
+        _listEquals(oldWidget.countryCodes, widget.countryCodes)) {
+      if (oldWidget.countryCodes != widget.countryCodes ||
+          oldWidget.stops != widget.stops) {
+        _countryBoundsCache = null;
+      }
       _invalidateStopsCache();
       _maybeGeocodeCities();
       if (widget.fullScreen) {
         _loadRoutesForCarSegments();
       }
+      _maybeLoadCountryBoundsAndFit();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _hasMapData) _fitBounds();
+      });
     }
+  }
+
+  static bool _listEquals(List<String>? a, List<String>? b) {
+    if (a == b) return true;
+    if (a == null || b == null || a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
+    return true;
+  }
+
+  Future<void> _maybeLoadCountryBoundsAndFit() async {
+    if (widget.countryCodes == null ||
+        widget.countryCodes!.isEmpty ||
+        _hasMapData ||
+        _loadingCountryBounds) return;
+    _loadingCountryBounds = true;
+    if (mounted) setState(() {});
+    try {
+      final bounds = await CountriesGeoJsonService.getBoundsForCountryCodes(
+          widget.countryCodes!.toSet());
+      if (mounted && bounds != null) {
+        _countryBoundsCache = bounds;
+        setState(() {});
+        _fitCountryBounds(bounds);
+      }
+    } catch (_) {}
+    if (mounted) {
+      _loadingCountryBounds = false;
+      setState(() {});
+    }
+  }
+
+  void _fitCountryBounds(LatLngBounds bounds) {
+    if (_isZeroAreaBounds(bounds)) {
+      _mapController.move(bounds.center, 6);
+    } else {
+      try {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: bounds,
+            padding: const EdgeInsets.all(50),
+          ),
+        );
+      } catch (_) {}
+    }
+    try {
+      _mapController.rotate(0);
+    } catch (_) {}
   }
 
   @override
   void initState() {
     super.initState();
+    _mapController = widget.mapController ?? MapController();
     _maybeGeocodeCities();
     if (widget.fullScreen) {
       _loadRoutesForCarSegments();
     }
+    _maybeLoadCountryBoundsAndFit();
   }
 
   void _maybeGeocodeCities() {
@@ -707,14 +778,18 @@ class _ItineraryMapState extends State<ItineraryMap> {
           ),
         );
       }
+      _mapController.rotate(0);
     } catch (_) {}
   }
 
   TileLayer _buildTileLayer(Brightness brightness) {
     final key = _geoapifyKey;
     final isDark = brightness == Brightness.dark;
-    // On web, use WebTileProvider (NetworkImage) to bypass CORS; default uses HTTP which can fail
-    final tileProvider = kIsWeb ? WebTileProvider() : null;
+    // On web, use WebTileProvider to bypass CORS. On iOS simulator (and other platforms where
+    // path_provider_foundation/objective_c can fail), disable built-in tile cache to avoid native crash.
+    final TileProvider tileProvider = kIsWeb
+        ? WebTileProvider()
+        : NetworkTileProvider(cachingProvider: const DisabledMapCachingProvider());
     if (key != null && key.trim().isNotEmpty) {
       // Use different styles for full-screen maps vs card maps
       final style = widget.fullScreen
@@ -744,13 +819,18 @@ class _ItineraryMapState extends State<ItineraryMap> {
 
     if (widget.fullScreen) {
       // Full-screen mode: just the map, no card styling
-      if (!hasCoords && !_geocodingCities) {
+      final showWorldOrCountries = widget.showWorldWhenEmpty ||
+          (widget.countryCodes != null &&
+              widget.countryCodes!.isNotEmpty &&
+              !hasCoords &&
+              !_geocodingCities);
+      if (!hasCoords && !_geocodingCities && !showWorldOrCountries) {
         return Container(
           height: widget.height,
           color: Theme.of(context).colorScheme.surface,
           child: _buildEmptyState(context),
         );
-      } else if (_geocodingCities) {
+      } else if (_geocodingCities && !showWorldOrCountries) {
         return Container(
           height: widget.height,
           color: Theme.of(context).colorScheme.surface,
@@ -777,58 +857,69 @@ class _ItineraryMapState extends State<ItineraryMap> {
           border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3), width: 1),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2))),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.route_outlined, size: 20, color: primaryColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Route',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: widget.height,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2))),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.route_outlined, size: 20, color: primaryColor),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Route',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                     ),
-                    child: Text(
-                      '$stopCount ${stopCount == 1 ? 'stop' : 'stops'}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: primaryColor,
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$stopCount ${stopCount == 1 ? 'stop' : 'stops'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: primaryColor,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            if (!hasCoords && !_geocodingCities) _buildEmptyState(context)
-            else if (_geocodingCities) _buildLoadingState(context)
-            else _buildMap(context, primaryColor),
-          ],
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (_, c) {
+                    final h = c.maxHeight;
+                    if (!hasCoords && !_geocodingCities) return _buildEmptyState(context, h);
+                    if (_geocodingCities) return _buildLoadingState(context, h);
+                    return _buildMap(context, primaryColor, h);
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildLoadingState(BuildContext context) {
+  Widget _buildLoadingState(BuildContext context, [double? height]) {
+    final h = height ?? widget.height;
     return Container(
-      height: widget.height,
+      height: h,
       padding: const EdgeInsets.all(AppTheme.spacingLg),
       child: Center(
         child: Column(
@@ -850,9 +941,10 @@ class _ItineraryMapState extends State<ItineraryMap> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context, [double? height]) {
+    final h = height ?? widget.height;
     return Container(
-      height: widget.height,
+      height: h,
       padding: const EdgeInsets.all(AppTheme.spacingLg),
       child: Center(
         child: Column(
@@ -886,51 +978,79 @@ class _ItineraryMapState extends State<ItineraryMap> {
     );
   }
 
-  Widget _buildMap(BuildContext context, Color primaryColor) {
+  static const _worldCenter = LatLng(20.0, 0.0);
+  /// ~20% more zoomed in than full world (zoom 2) when opening new trip.
+  static const _worldZoom = 2.4;
+
+  Widget _buildMap(BuildContext context, Color primaryColor, [double? height]) {
+    final h = height ?? widget.height;
     final brightness = Theme.of(context).brightness;
-    final initialPos = _polylinePointsList.isNotEmpty ? _polylinePointsList.first : _defaultCenter;
+    final useWorldView = !_hasMapData &&
+        (widget.showWorldWhenEmpty ||
+            (widget.countryCodes != null && widget.countryCodes!.isNotEmpty));
+    final initialPos = _polylinePointsList.isNotEmpty
+        ? _polylinePointsList.first
+        : (useWorldView ? _worldCenter : _defaultCenter);
     final bounds = _bounds();
     final CameraFit? initialFit = bounds != null && !_isZeroAreaBounds(bounds)
         ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(50))
         : null;
+    final initialZoom =
+        useWorldView ? _worldZoom : (initialFit != null ? null : 12.0);
     final routeData = widget.fullScreen && _locationStopsWithCoordsList.length >= 2
         ? _buildRouteData(primaryColor)
         : (polylines: <Polyline>[], transportMarkers: <Marker>[]);
     return SizedBox(
-      height: widget.height,
-      child: FlutterMap(
-        mapController: _mapController,
-        options: MapOptions(
-          initialCenter: initialPos,
-          initialZoom: 12,
-          initialCameraFit: initialFit,
-          onTap: (_, point) {
-            final nearVenue = _venueStopsWithCoordsList.any((s) =>
-                s.lat != null && s.lng != null && _haversineKm(point, LatLng(s.lat!, s.lng!)) < 0.05);
-            if (!nearVenue && _selectedVenue != null && mounted) {
-              setState(() => _selectedVenue = null);
-            }
-          },
-          onMapReady: () {
-            if (bounds == null) _fitBounds();
-            // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
-            Future.delayed(const Duration(milliseconds: 200), () async {
-              if (!mounted) return;
-              try {
-                final c = _mapController.camera;
-                _mapController.move(c.center, c.zoom + 0.02);
-                await Future.delayed(const Duration(milliseconds: 80));
-                if (!mounted) return;
-                _mapController.move(c.center, c.zoom);
-              } catch (_) {}
-            });
-          },
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all,
-          ),
-        ),
+      height: h,
+      child: Stack(
         children: [
-          _buildTileLayer(brightness),
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: initialPos,
+              initialZoom: initialZoom ?? 12,
+              initialCameraFit: initialZoom != null ? null : initialFit,
+              initialRotation: 0,
+              onTap: (_, point) {
+                final nearVenue = _venueStopsWithCoordsList.any((s) =>
+                    s.lat != null &&
+                    s.lng != null &&
+                    _haversineKm(point, LatLng(s.lat!, s.lng!)) < 0.05);
+                if (!nearVenue && _selectedVenue != null && mounted) {
+                  setState(() => _selectedVenue = null);
+                }
+              },
+              onMapReady: () {
+                if (bounds != null && !_isZeroAreaBounds(bounds)) {
+                  // already set via initialCameraFit
+                  try { _mapController.rotate(0); } catch (_) {}
+                } else if (useWorldView &&
+                    widget.countryCodes != null &&
+                    widget.countryCodes!.isNotEmpty) {
+                  _maybeLoadCountryBoundsAndFit();
+                } else if (bounds == null) {
+                  _fitBounds();
+                }
+                try { _mapController.rotate(0); } catch (_) {}
+                // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
+                Future.delayed(const Duration(milliseconds: 200), () async {
+                  if (!mounted) return;
+                  try {
+                    final c = _mapController.camera;
+                    _mapController.move(c.center, c.zoom + 0.02);
+                    await Future.delayed(const Duration(milliseconds: 80));
+                    if (!mounted) return;
+                    _mapController.move(c.center, c.zoom);
+                    _mapController.rotate(0);
+                  } catch (_) {}
+                });
+              },
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
+              ),
+            ),
+            children: [
+              _buildTileLayer(brightness),
           if (widget.fullScreen && _locationStopsWithCoordsList.length >= 2 && routeData.polylines.isNotEmpty)
             PolylineLayer(polylines: routeData.polylines)
           else if (_polylinePointsList.length >= 2)
@@ -983,7 +1103,33 @@ class _ItineraryMapState extends State<ItineraryMap> {
               ),
             ),
           ),
+            ],
+          ),
+          if (widget.mapController == null) _buildCompassOverlay(context),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompassOverlay(BuildContext context) {
+    final theme = Theme.of(context);
+    return Positioned(
+      top: 12,
+      right: 12,
+      child: Material(
+        color: theme.colorScheme.surface.withValues(alpha: 0.9),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        elevation: 1,
+        child: IconButton(
+          icon: const Icon(Icons.explore),
+          tooltip: 'Reset to north',
+          onPressed: () {
+            try {
+              _mapController.rotate(0);
+            } catch (_) {}
+          },
+        ),
       ),
     );
   }

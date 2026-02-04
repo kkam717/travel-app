@@ -8,44 +8,49 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   final screenshotDir = Directory('/Users/kiankamshad/Travel App/screenshots');
-  
-  Future<void> takeScreenshot(WidgetTester tester, String path, String filename) async {
+
+  Future<void> takeScreenshot(
+      WidgetTester tester, String path, String filename) async {
     final fullPath = '${screenshotDir.path}/$path/$filename.png';
     final dir = Directory('${screenshotDir.path}/$path');
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
     await tester.pumpAndSettle(const Duration(milliseconds: 500));
-    final bytes = await IntegrationTestWidgetsFlutterBinding.instance.takeScreenshot(fullPath);
+    final bytes = await IntegrationTestWidgetsFlutterBinding.instance
+        .takeScreenshot(fullPath);
     final file = File(fullPath);
     await file.writeAsBytes(bytes);
     print('✓ $path/$filename.png');
   }
 
-  testWidgets('Capture screenshots for all features', (WidgetTester tester) async {
+  testWidgets('Capture screenshots for all features',
+      (WidgetTester tester) async {
     app.main();
     await tester.pumpAndSettle(const Duration(seconds: 5));
 
     // 01. Welcome Screen
     await takeScreenshot(tester, '01-first-time-user', '01-welcome-screen');
-    
+
     // Sign In Flow (using existing account)
     final continueEmail = find.text('Continue with Email');
     if (continueEmail.evaluate().isNotEmpty) {
       await tester.tap(continueEmail);
       await tester.pumpAndSettle();
     }
-    
-    await takeScreenshot(tester, '02-returning-user/sign-in', '01-sign-in-form');
-    
+
+    await takeScreenshot(
+        tester, '02-returning-user/sign-in', '01-sign-in-form');
+
     // Enter sign in credentials
     final signInFields = find.byType(TextField);
     if (signInFields.evaluate().length >= 2) {
       await tester.enterText(signInFields.at(0), 'marble717@gmail.com');
       await tester.enterText(signInFields.at(1), 'Marble17!');
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '02-returning-user/sign-in', '02-sign-in-filled');
-      
+      await takeScreenshot(
+          tester, '02-returning-user/sign-in', '02-sign-in-filled');
+
       final signInButton = find.text('Sign in');
       if (signInButton.evaluate().isNotEmpty) {
         await tester.tap(signInButton);
@@ -57,7 +62,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
     await takeScreenshot(tester, '03-main-shell/home', '01-home-tab');
     await takeScreenshot(tester, '04-home-feed/for-you', '01-for-you-feed');
-    
+
     // Feed card with likes
     await takeScreenshot(tester, '04-home-feed', '01-feed-card-with-likes');
 
@@ -66,7 +71,8 @@ void main() {
     if (followingTab.evaluate().isNotEmpty) {
       await tester.tap(followingTab.first);
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '04-home-feed/following', '01-following-feed');
+      await takeScreenshot(
+          tester, '04-home-feed/following', '01-following-feed');
     }
 
     // Try to tap an itinerary card to go to detail
@@ -74,11 +80,12 @@ void main() {
     if (cards.evaluate().isNotEmpty) {
       await tester.tap(cards.first);
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '06-itinerary-detail', '01-itinerary-detail');
+      await takeScreenshot(
+          tester, '06-itinerary-detail', '01-itinerary-detail');
       await takeScreenshot(tester, '06-itinerary-detail', '02-like-button');
       await takeScreenshot(tester, '06-itinerary-detail', '03-map-section');
       await takeScreenshot(tester, '06-itinerary-detail', '04-timeline');
-      
+
       // Try to like (if it's someone else's post)
       final likeButtons = find.byIcon(Icons.thumb_up_outlined);
       if (likeButtons.evaluate().isEmpty) {
@@ -89,10 +96,10 @@ void main() {
       } else {
         await takeScreenshot(tester, '14-likes', '01-before-like');
       }
-      
+
       // State sync - before navigation
       await tester.pumpAndSettle();
-      
+
       // Go back
       final backBtn = find.byIcon(Icons.arrow_back);
       if (backBtn.evaluate().isNotEmpty) {
@@ -101,7 +108,7 @@ void main() {
         await takeScreenshot(tester, '19-state-sync', '02-after-return');
       }
     }
-    
+
     // State sync - before navigation (capture home feed state)
     await takeScreenshot(tester, '19-state-sync', '01-before-navigation');
 
@@ -118,18 +125,19 @@ void main() {
       await tester.pumpAndSettle();
     }
     await takeScreenshot(tester, '03-main-shell/search', '01-search-tab');
-    
+
     // Search - Profiles tab
     await tester.pumpAndSettle();
     await takeScreenshot(tester, '08-search/profiles', '01-profiles-results');
-    
+
     // Search - Itineraries tab
     final tripsTab = find.text('Trips');
     if (tripsTab.evaluate().isNotEmpty) {
       await tester.tap(tripsTab.first);
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '08-search/itineraries', '01-itineraries-results');
-      
+      await takeScreenshot(
+          tester, '08-search/itineraries', '01-itineraries-results');
+
       // Try to open filters
       final filterButton = find.byIcon(Icons.tune_rounded);
       if (filterButton.evaluate().isNotEmpty) {
@@ -158,14 +166,16 @@ void main() {
       await tester.pumpAndSettle();
     }
     await takeScreenshot(tester, '03-main-shell/saved', '01-saved-tab');
-    await takeScreenshot(tester, '07-saved-screen/bookmarked', '01-bookmarked-tab');
-    
+    await takeScreenshot(
+        tester, '07-saved-screen/bookmarked', '01-bookmarked-tab');
+
     // Planning tab
     final planningTab = find.text('Planning');
     if (planningTab.evaluate().isNotEmpty) {
       await tester.tap(planningTab.first);
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '07-saved-screen/planning', '01-planning-tab');
+      await takeScreenshot(
+          tester, '07-saved-screen/planning', '01-planning-tab');
     }
 
     // Navigate to Profile
@@ -257,7 +267,7 @@ void main() {
       await tester.tap(qrButtons.first);
       await tester.pumpAndSettle();
       await takeScreenshot(tester, '16-qr-code/my-code', '01-my-code');
-      
+
       // Switch to Scan tab
       final scanTab = find.text('Scan');
       if (scanTab.evaluate().isNotEmpty) {
@@ -265,7 +275,7 @@ void main() {
         await tester.pumpAndSettle();
         await takeScreenshot(tester, '16-qr-code/scan', '01-scan-screen');
       }
-      
+
       // Go back
       final backButton = find.byIcon(Icons.arrow_back);
       if (backButton.evaluate().isNotEmpty) {
@@ -292,7 +302,7 @@ void main() {
       await takeScreenshot(tester, '17-settings', '01-settings-screen');
       await takeScreenshot(tester, '17-settings/appearance', '01-appearance');
       await takeScreenshot(tester, '17-settings/language', '01-language');
-      
+
       // Go back
       final backButton = find.byIcon(Icons.arrow_back);
       if (backButton.evaluate().isNotEmpty) {
@@ -306,62 +316,70 @@ void main() {
     if (fab.evaluate().isNotEmpty) {
       await tester.tap(fab.first);
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '05-create-itinerary/step1-start', '01-step1-form');
-      
+      await takeScreenshot(
+          tester, '05-create-itinerary/step1-start', '01-step1-form');
+
       // Fill step 1
       final step1Fields = find.byType(TextField);
       if (step1Fields.evaluate().isNotEmpty) {
         await tester.enterText(step1Fields.first, 'Test Trip');
         await tester.pumpAndSettle();
       }
-      
+
       // Try to find and tap Next button
       final nextBtns = find.textContaining('Next');
       if (nextBtns.evaluate().isNotEmpty) {
         await tester.tap(nextBtns.first);
         await tester.pumpAndSettle();
-        await takeScreenshot(tester, '05-create-itinerary/step2-destinations', '01-step2-destinations');
-        
+        await takeScreenshot(tester, '05-create-itinerary/step2-destinations',
+            '01-step2-destinations');
+
         // Try to continue through steps
         final nextBtns2 = find.textContaining('Next');
         if (nextBtns2.evaluate().isNotEmpty) {
           await tester.tap(nextBtns2.first);
           await tester.pumpAndSettle();
-          await takeScreenshot(tester, '05-create-itinerary/step3-assign-days', '01-step3-days');
-          
+          await takeScreenshot(
+              tester, '05-create-itinerary/step3-assign-days', '01-step3-days');
+
           final nextBtns3 = find.textContaining('Next');
           if (nextBtns3.evaluate().isNotEmpty) {
             await tester.tap(nextBtns3.first);
             await tester.pumpAndSettle();
-            await takeScreenshot(tester, '05-create-itinerary/step4-map', '01-step4-map');
-            
+            await takeScreenshot(
+                tester, '05-create-itinerary/step4-map', '01-step4-map');
+
             final nextBtns4 = find.textContaining('Next');
             if (nextBtns4.evaluate().isNotEmpty) {
               await tester.tap(nextBtns4.first);
               await tester.pumpAndSettle();
-              await takeScreenshot(tester, '05-create-itinerary/step5-details', '01-step5-venues');
-              
+              await takeScreenshot(tester, '05-create-itinerary/step5-details',
+                  '01-step5-venues');
+
               final nextBtns5 = find.textContaining('Next');
               if (nextBtns5.evaluate().isNotEmpty) {
                 await tester.tap(nextBtns5.first);
                 await tester.pumpAndSettle();
-                await takeScreenshot(tester, '05-create-itinerary/step6-review', '01-step6-review');
-                
+                await takeScreenshot(tester, '05-create-itinerary/step6-review',
+                    '01-step6-review');
+
                 final nextBtns6 = find.textContaining('Save');
                 if (nextBtns6.evaluate().isEmpty) {
                   final nextBtns7 = find.textContaining('Next');
                   if (nextBtns7.evaluate().isNotEmpty) {
-                    await takeScreenshot(tester, '05-create-itinerary/step7-save', '01-step7-save');
+                    await takeScreenshot(tester,
+                        '05-create-itinerary/step7-save', '01-step7-save');
                   }
                 } else {
-                  await takeScreenshot(tester, '05-create-itinerary/step7-save', '01-step7-save');
+                  await takeScreenshot(tester, '05-create-itinerary/step7-save',
+                      '01-step7-save');
                 }
               }
             }
           }
         }
       }
-      
+
       // Go back to home (cancel create)
       final backBtn6 = find.byIcon(Icons.arrow_back);
       if (backBtn6.evaluate().isNotEmpty) {
@@ -395,12 +413,13 @@ void main() {
         if (followButton.evaluate().isEmpty) {
           final followingButton = find.text('Following');
           if (followingButton.evaluate().isNotEmpty) {
-            await takeScreenshot(tester, '10-author-profile', '02-follow-button');
+            await takeScreenshot(
+                tester, '10-author-profile', '02-follow-button');
           }
         } else {
           await takeScreenshot(tester, '10-author-profile', '02-follow-button');
         }
-        
+
         // Try to open author trips
         final authorTripsCard = find.text('Trips');
         if (authorTripsCard.evaluate().isNotEmpty) {
@@ -413,7 +432,7 @@ void main() {
             await tester.pumpAndSettle();
           }
         }
-        
+
         final backBtn7 = find.byIcon(Icons.arrow_back);
         if (backBtn7.evaluate().isNotEmpty) {
           await tester.tap(backBtn7.first);
@@ -447,7 +466,7 @@ void main() {
         await tester.tapAt(const Offset(10, 10));
         await tester.pumpAndSettle();
       }
-      
+
       // Try to like and capture after state
       final likeButtons2 = find.byIcon(Icons.thumb_up_outlined);
       if (likeButtons2.evaluate().isNotEmpty) {
@@ -455,7 +474,7 @@ void main() {
         await tester.pumpAndSettle();
         await takeScreenshot(tester, '14-likes', '02-after-like');
       }
-      
+
       final backBtn9 = find.byIcon(Icons.arrow_back);
       if (backBtn9.evaluate().isNotEmpty) {
         await tester.tap(backBtn9.first);
@@ -478,7 +497,7 @@ void main() {
     if (settingsBtn2.evaluate().isNotEmpty) {
       await tester.tap(settingsBtn2.first);
       await tester.pumpAndSettle();
-      
+
       final signOut = find.text('Sign out');
       if (signOut.evaluate().isNotEmpty) {
         await takeScreenshot(tester, '02-returning-user', '01-sign-out');
@@ -493,23 +512,25 @@ void main() {
       await tester.tap(continueEmail2);
       await tester.pumpAndSettle();
     }
-    
+
     final signUpLink = find.text("Don't have an account? Sign up");
     if (signUpLink.evaluate().isNotEmpty) {
       await tester.tap(signUpLink);
       await tester.pumpAndSettle();
     }
-    
-    await takeScreenshot(tester, '01-first-time-user/sign-up', '01-sign-up-form');
-    
+
+    await takeScreenshot(
+        tester, '01-first-time-user/sign-up', '01-sign-up-form');
+
     // Enter sign up credentials
     final textFields = find.byType(TextField);
     if (textFields.evaluate().length >= 2) {
       await tester.enterText(textFields.at(0), 'test4@123.com');
       await tester.enterText(textFields.at(1), 'Test123!');
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '01-first-time-user/sign-up', '02-sign-up-filled');
-      
+      await takeScreenshot(
+          tester, '01-first-time-user/sign-up', '02-sign-up-filled');
+
       final signUpButton = find.text('Sign up');
       if (signUpButton.evaluate().isNotEmpty) {
         await tester.tap(signUpButton);
@@ -523,8 +544,9 @@ void main() {
     if (nameFields.evaluate().isNotEmpty) {
       await tester.enterText(nameFields.first, 'Test User');
       await tester.pumpAndSettle();
-      await takeScreenshot(tester, '01-first-time-user/onboarding/step1-name', '01-name-input');
-      
+      await takeScreenshot(
+          tester, '01-first-time-user/onboarding/step1-name', '01-name-input');
+
       final nextButtons = find.text('Next');
       if (nextButtons.evaluate().isNotEmpty) {
         await tester.tap(nextButtons.first);
@@ -534,15 +556,18 @@ void main() {
 
     // Onboarding Step 2 - Countries
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    await takeScreenshot(tester, '01-first-time-user/onboarding/step2-countries', '01-countries-selection');
-    
+    await takeScreenshot(
+        tester,
+        '01-first-time-user/onboarding/step2-countries',
+        '01-countries-selection');
+
     // Select a country
     final checkboxes = find.byType(Checkbox);
     if (checkboxes.evaluate().isNotEmpty) {
       await tester.tap(checkboxes.first);
       await tester.pumpAndSettle();
     }
-    
+
     final nextButton2 = find.text('Next');
     if (nextButton2.evaluate().isNotEmpty) {
       await tester.tap(nextButton2.first);
@@ -551,15 +576,18 @@ void main() {
 
     // Onboarding Step 3 - Preferences
     await tester.pumpAndSettle(const Duration(seconds: 2));
-    await takeScreenshot(tester, '01-first-time-user/onboarding/step3-preferences', '01-preferences-selection');
-    
+    await takeScreenshot(
+        tester,
+        '01-first-time-user/onboarding/step3-preferences',
+        '01-preferences-selection');
+
     // Select preferences
     final chips = find.byType(FilterChip);
     if (chips.evaluate().isNotEmpty) {
       await tester.tap(chips.first);
       await tester.pumpAndSettle();
     }
-    
+
     final finishButton = find.text('Finish');
     if (finishButton.evaluate().isNotEmpty) {
       await tester.tap(finishButton.first);

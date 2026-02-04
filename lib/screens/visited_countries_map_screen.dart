@@ -151,15 +151,18 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   }
 
   /// No labels: Carto light_nolabels (day) / dark_nolabels (night) removes all map text.
-  /// On web, use WebTileProvider to bypass CORS.
+  /// On web, use WebTileProvider to bypass CORS. On iOS simulator, disable tile cache to avoid native crash.
   /// tileBounds restricts tiles to single world (-180..180) so underlying map doesn't spill.
   TileLayer _buildTileLayer(Brightness brightness) {
     final style = brightness == Brightness.dark ? 'dark_nolabels' : 'light_nolabels';
+    final TileProvider tileProvider = kIsWeb
+        ? WebTileProvider()
+        : NetworkTileProvider(cachingProvider: const DisabledMapCachingProvider());
     return TileLayer(
       urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$style/{z}/{x}/{y}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
-      tileProvider: kIsWeb ? WebTileProvider() : null,
+      tileProvider: tileProvider,
       tileBounds: LatLngBounds(
         const LatLng(-85, -180),
         const LatLng(85, 180),
@@ -195,7 +198,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
             IconButton(
               icon: const Icon(Icons.edit_outlined),
               onPressed: _showEditCountries,
-              tooltip: 'Edit countries',
+              tooltip: AppStrings.t(context, 'edit_countries'),
             ),
         ],
       ),
@@ -259,7 +262,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
               Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
               const SizedBox(height: 16),
               Text(
-                'Could not load map',
+                AppStrings.t(context, 'could_not_load_map'),
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey[700]),
               ),
               const SizedBox(height: 8),
@@ -274,54 +277,81 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
       );
     }
     final brightness = Theme.of(context).brightness;
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        initialCenter: const LatLng(20, 0),
-        initialZoom: 2,
-        crs: const Epsg3857NoWrap(),
-        cameraConstraint: const CameraConstraint.containLatitude(),
-        onMapReady: () {
-          if (_polygons.isNotEmpty) _fitWorld();
-          // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
-          Future.delayed(const Duration(milliseconds: 200), () async {
-            if (!mounted) return;
-            try {
-              final c = _mapController.camera;
-              _mapController.move(c.center, c.zoom + 0.02);
-              await Future.delayed(const Duration(milliseconds: 80));
-              if (!mounted) return;
-              _mapController.move(c.center, c.zoom);
-            } catch (_) {}
-          });
-        },
-        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-      ),
+    final theme = Theme.of(context);
+    return Stack(
       children: [
-        _buildTileLayer(brightness),
-        PolylineLayer(
-          polylines: _countryBorders,
-          drawInSingleWorld: true,
-        ),
-        PolygonLayer(
-          polygons: _polygons,
-          drawInSingleWorld: true,
-          simplificationTolerance: 0,
-        ),
-        Align(
-          alignment: Alignment.bottomRight,
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 120),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.bottomRight,
-                  child: Text(
-                  '© CARTO | OSM',
-                  style: TextStyle(fontSize: 8, color: brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade600),
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: const LatLng(20, 0),
+            initialZoom: 2,
+            initialRotation: 0,
+            crs: const Epsg3857NoWrap(),
+            cameraConstraint: const CameraConstraint.containLatitude(),
+            onMapReady: () {
+              try { _mapController.rotate(0); } catch (_) {}
+              if (_polygons.isNotEmpty) _fitWorld();
+              // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
+              Future.delayed(const Duration(milliseconds: 200), () async {
+                if (!mounted) return;
+                try {
+                  final c = _mapController.camera;
+                  _mapController.move(c.center, c.zoom + 0.02);
+                  await Future.delayed(const Duration(milliseconds: 80));
+                  if (!mounted) return;
+                  _mapController.move(c.center, c.zoom);
+                  _mapController.rotate(0);
+                } catch (_) {}
+              });
+            },
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+          ),
+          children: [
+            _buildTileLayer(brightness),
+            PolylineLayer(
+              polylines: _countryBorders,
+              drawInSingleWorld: true,
+            ),
+            PolygonLayer(
+              polygons: _polygons,
+              drawInSingleWorld: true,
+              simplificationTolerance: 0,
+            ),
+            Align(
+              alignment: Alignment.bottomRight,
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.bottomRight,
+                    child: Text(
+                      '© CARTO | OSM',
+                      style: TextStyle(fontSize: 8, color: brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade600),
+                    ),
+                  ),
                 ),
               ),
+            ),
+          ],
+        ),
+        Positioned(
+          top: 12,
+          right: 12,
+          child: Material(
+            color: theme.colorScheme.surface.withValues(alpha: 0.9),
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            elevation: 1,
+            child: IconButton(
+              icon: const Icon(Icons.explore),
+              tooltip: 'Reset to north',
+              onPressed: () {
+                try {
+                  _mapController.rotate(0);
+                } catch (_) {}
+              },
             ),
           ),
         ),

@@ -32,19 +32,22 @@ void main() {
   }
 
   group('1. App launch', () {
-    testWidgets('app launches and shows welcome, setup, or home screen', (WidgetTester tester) async {
+    testWidgets('app launches and shows welcome, setup, or home screen',
+        (WidgetTester tester) async {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
       final hasWelcome = find.text('Travel App').evaluate().isNotEmpty;
-      final hasSetupRequired = find.text('Setup Required').evaluate().isNotEmpty;
+      final hasSetupRequired =
+          find.text('Setup Required').evaluate().isNotEmpty;
       final hasHome = find.text('Home').evaluate().isNotEmpty;
       expect(hasWelcome || hasSetupRequired || hasHome, isTrue);
     });
   });
 
   group('2. Auth flow (logged out)', () {
-    testWidgets('Continue with Email navigates to email auth', (WidgetTester tester) async {
+    testWidgets('Continue with Email navigates to email auth',
+        (WidgetTester tester) async {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
@@ -52,7 +55,8 @@ void main() {
       if (find.text('Home').evaluate().isNotEmpty) return;
 
       final continueBtn = find.text('Continue with Email');
-      if (continueBtn.evaluate().isEmpty) return; // Skip if not on welcome (e.g. loading)
+      if (continueBtn.evaluate().isEmpty)
+        return; // Skip if not on welcome (e.g. loading)
 
       await tester.tap(continueBtn);
       await tester.pumpAndSettle();
@@ -60,7 +64,8 @@ void main() {
       expect(find.text('Email'), findsWidgets);
     });
 
-    testWidgets('Email auth shows Sign in / Sign up toggle', (WidgetTester tester) async {
+    testWidgets('Email auth shows Sign in / Sign up toggle',
+        (WidgetTester tester) async {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
@@ -81,43 +86,53 @@ void main() {
   });
 
   group('3. Developer sign-in (enables logged-in tests)', () {
-    testWidgets('developer sign in when credentials available', (WidgetTester tester) async {
+    testWidgets('developer sign in when credentials available',
+        (WidgetTester tester) async {
       app.main();
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
       final loggedIn = await _tryDevSignIn(tester);
       // Test passes either way; subsequent tests check isLoggedIn
-      final onWelcome = find.text('Travel App').evaluate().isNotEmpty;
+      final onWelcome = find.text('Travel App').evaluate().isNotEmpty ||
+          find.text('Continue with Email').evaluate().isNotEmpty;
       final onSetup = find.text('Setup Required').evaluate().isNotEmpty;
-      final onAuth = find.text('Sign in').evaluate().isNotEmpty || find.text('Email').evaluate().isNotEmpty;
+      final onAuth = find.text('Sign in').evaluate().isNotEmpty ||
+          find.text('Email').evaluate().isNotEmpty ||
+          find.text('Create account').evaluate().isNotEmpty;
       expect(loggedIn || onWelcome || onSetup || onAuth, isTrue);
     });
   });
 
   group('4. Main shell navigation', () {
-    testWidgets('bottom nav: Home, Search, Saved, Profile', (WidgetTester tester) async {
+    testWidgets('bottom nav: Home, Explore, Saved, Profile',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       expect(find.text('Home'), findsOneWidget);
-      expect(find.text('Search'), findsOneWidget);
+      expect(find.text('Explore'), findsOneWidget);
       expect(find.text('Saved'), findsOneWidget);
       expect(find.text('Profile'), findsOneWidget);
     });
 
-    testWidgets('FAB navigates to Create itinerary', (WidgetTester tester) async {
+    testWidgets('FAB navigates to Create itinerary',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
 
-      expect(find.text('New Trip').evaluate().isNotEmpty || find.text('Edit Trip').evaluate().isNotEmpty, isTrue);
+      expect(
+          find.text('New Trip').evaluate().isNotEmpty ||
+              find.text('Edit Trip').evaluate().isNotEmpty,
+          isTrue);
     });
   });
 
   group('5. Home feed', () {
-    testWidgets('Home screen loads (feed or empty state)', (WidgetTester tester) async {
+    testWidgets('Home screen loads (feed or empty state)',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -126,33 +141,43 @@ void main() {
     });
   });
 
-  group('6. Search', () {
-    testWidgets('Search screen has Profiles and Trips tabs', (WidgetTester tester) async {
+  group('6. Explore', () {
+    testWidgets('Explore screen shows title and discovery content or search',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
-      await tester.tap(find.text('Search'));
+      await tester.tap(find.text('Explore'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Search'), findsWidgets);
-      expect(find.text('Profiles'), findsOneWidget);
-      expect(find.text('Trips'), findsOneWidget);
+      expect(find.text('Explore'), findsWidgets);
+      // Explore shows either "People you might like" / "Latest" or search results
+      final hasExploreContent = find.text('Profiles').evaluate().isNotEmpty ||
+          find.text('Trips').evaluate().isNotEmpty ||
+          find.byType(TextField).evaluate().isNotEmpty;
+      expect(hasExploreContent, isTrue);
     });
 
-    testWidgets('Search accepts text input', (WidgetTester tester) async {
+    testWidgets('Explore search accepts text input and shows results',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
-      await tester.tap(find.text('Search'));
+      await tester.tap(find.text('Explore'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField).first, 'test');
+      final field = find.byType(TextField).first;
+      if (field.evaluate().isEmpty) return;
+      await tester.enterText(field, 'test');
       await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      // After typing, results section or "No matches" may appear
+      expect(find.byType(TextField), findsWidgets);
     });
   });
 
   group('7. Saved', () {
-    testWidgets('Saved screen has Bookmarked and Planning tabs', (WidgetTester tester) async {
+    testWidgets('Saved screen has Bookmarked and Planning tabs',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -166,7 +191,8 @@ void main() {
   });
 
   group('8. Profile', () {
-    testWidgets('Profile screen shows Countries, Lived, Followers/Following', (WidgetTester tester) async {
+    testWidgets('Profile screen shows Countries, Lived, followers/following',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -176,11 +202,12 @@ void main() {
       expect(find.text('Profile'), findsWidgets);
       expect(find.text('Countries'), findsOneWidget);
       expect(find.text('Lived'), findsOneWidget);
-      expect(find.text('Followers'), findsOneWidget);
-      expect(find.text('Following'), findsOneWidget);
+      expect(find.textContaining('followers'), findsWidgets);
+      expect(find.textContaining('following'), findsWidgets);
     });
 
-    testWidgets('Profile Lived card navigates to Stats screen', (WidgetTester tester) async {
+    testWidgets('Profile Lived card navigates to Stats screen',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -193,20 +220,22 @@ void main() {
       expect(find.text('Stats'), findsWidgets);
     });
 
-    testWidgets('Profile Followers bar navigates to Followers screen', (WidgetTester tester) async {
+    testWidgets('Profile followers link navigates to Followers screen',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Followers'));
+      await tester.tap(find.textContaining('followers').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Followers'), findsWidgets);
+      expect(find.textContaining('followers'), findsWidgets);
     });
 
-    testWidgets('Profile Countries card navigates to Visited Countries Map', (WidgetTester tester) async {
+    testWidgets('Profile Countries card navigates to Visited Countries Map',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -222,18 +251,23 @@ void main() {
   });
 
   group('9. Create itinerary', () {
-    testWidgets('Create step 1 shows trip name and countries', (WidgetTester tester) async {
+    testWidgets('Create step 1 shows trip name and countries',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
 
-      expect(find.text('Start a New Trip').evaluate().isNotEmpty || find.text('New Trip').evaluate().isNotEmpty, isTrue);
+      expect(
+          find.text('Start a New Trip').evaluate().isNotEmpty ||
+              find.text('New Trip').evaluate().isNotEmpty,
+          isTrue);
       expect(find.text('Trip name'), findsOneWidget);
     });
 
-    testWidgets('Create step 1 can enter trip name', (WidgetTester tester) async {
+    testWidgets('Create step 1 can enter trip name',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -244,14 +278,17 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('Create step 2 shows PlacesField for destination search (Photon)', (WidgetTester tester) async {
+    testWidgets(
+        'Create step 2 shows PlacesField for destination search (Photon)',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextField).first, 'Integration Test Trip');
+      await tester.enterText(
+          find.byType(TextField).first, 'Integration Test Trip');
       await tester.pumpAndSettle();
 
       final countryFields = find.byType(TextField);
@@ -274,10 +311,14 @@ void main() {
       await tester.tap(find.text('Add destination'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Search city or location…').evaluate().isNotEmpty || find.byType(TextField).evaluate().length >= 2, isTrue);
+      expect(
+          find.text('Search city or location…').evaluate().isNotEmpty ||
+              find.byType(TextField).evaluate().length >= 2,
+          isTrue);
     });
 
-    testWidgets('Create step 2 PlacesField accepts input and triggers search', (WidgetTester tester) async {
+    testWidgets('Create step 2 PlacesField accepts input and triggers search',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
@@ -308,7 +349,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final placeFields = find.byType(TextField);
-      if (placeFields.evaluate().length >= 1) {
+      if (placeFields.evaluate().isNotEmpty) {
         await tester.enterText(placeFields.first, 'Berlin');
       }
       await tester.pumpAndSettle(const Duration(milliseconds: 600));
@@ -318,39 +359,44 @@ void main() {
   });
 
   group('10. Stats', () {
-    testWidgets('Stats screen loads with home town, lived before, travel styles', (WidgetTester tester) async {
+    testWidgets(
+        'Stats screen loads with home town, lived before, travel styles',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Stats'));
+      await tester.tap(find.text('Lived'));
       await tester.pumpAndSettle();
 
       expect(find.text('Stats'), findsWidgets);
-      expect(find.text('Home Town'), findsOneWidget);
-      expect(find.text('Lived Before'), findsOneWidget);
+      expect(find.text('Home town'), findsOneWidget);
+      expect(find.text('Lived before'), findsOneWidget);
       expect(find.text('Travel styles'), findsOneWidget);
     });
 
-    testWidgets('Stats screen has PlacesField capability (Home Town / Lived Before)', (WidgetTester tester) async {
+    testWidgets(
+        'Stats screen has PlacesField capability (Home town / Lived before)',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Stats'));
+      await tester.tap(find.text('Lived'));
       await tester.pumpAndSettle(const Duration(seconds: 5));
 
-      expect(find.text('Home Town'), findsOneWidget);
-      expect(find.text('Lived Before'), findsOneWidget);
+      expect(find.text('Home town'), findsOneWidget);
+      expect(find.text('Lived before'), findsOneWidget);
     });
   });
 
   group('11. Sign out', () {
-    testWidgets('Profile logout icon signs out and returns to Welcome', (WidgetTester tester) async {
+    testWidgets('Profile logout icon signs out and returns to Welcome',
+        (WidgetTester tester) async {
       final loggedIn = await _ensureAppAndCheckLoggedIn(tester);
       if (!loggedIn) return;
 

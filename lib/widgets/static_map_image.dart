@@ -152,9 +152,21 @@ class _StaticMapImageState extends State<StaticMapImage> {
     return result.isEmpty ? cityPoints : result;
   }
 
+  double get _finiteWidth {
+    final w = widget.width;
+    if (w.isFinite && w > 0) return w;
+    return 400;
+  }
+
+  double get _finiteHeight {
+    final h = widget.height;
+    if (h.isFinite && h > 0) return h;
+    return 200;
+  }
+
   String _buildGeoapifyUrl(List<(double, double)> cityPoints, {List<(double, double)>? venuePoints, bool path = true}) {
-    final w = (widget.width * 2).toInt().clamp(100, 640);
-    final h = (widget.height * 2).toInt().clamp(100, 640);
+    final w = (_finiteWidth * 2).toInt().clamp(100, 640);
+    final h = (_finiteHeight * 2).toInt().clamp(100, 640);
 
     // Calculate bounds from all points (cities + venues)
     final allPoints = [...cityPoints, ...(venuePoints ?? [])];
@@ -339,11 +351,10 @@ class _StaticMapImageState extends State<StaticMapImage> {
   Widget build(BuildContext context) {
     if (_geocoding) {
       return Container(
-        width: widget.width,
-        height: widget.height,
+        width: _finiteWidth,
+        height: _finiteHeight,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(14),
         ),
         child: Center(
           child: SizedBox(
@@ -357,11 +368,10 @@ class _StaticMapImageState extends State<StaticMapImage> {
 
     if (_geocodedUrl == null) {
       return Container(
-        width: widget.width,
-        height: widget.height,
+        width: _finiteWidth,
+        height: _finiteHeight,
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(14),
         ),
         child: Center(
           child: Column(
@@ -379,12 +389,16 @@ class _StaticMapImageState extends State<StaticMapImage> {
       );
     }
 
-    final cacheWidth = (widget.width * 2).toInt().clamp(100, 640);
-    final cacheHeight = (widget.height * 2).toInt().clamp(100, 640);
+    final cacheWidth = (_finiteWidth * 2).toInt().clamp(100, 640);
+    final cacheHeight = (_finiteHeight * 2).toInt().clamp(100, 640);
     final theme = Theme.of(context);
     return Container(
+      width: widget.width.isFinite ? widget.width : null,
+      height: widget.height.isFinite ? widget.height : null,
+      constraints: (!widget.width.isFinite || !widget.height.isFinite)
+          ? BoxConstraints(maxWidth: _finiteWidth, maxHeight: _finiteHeight)
+          : null,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
             color: theme.colorScheme.shadow.withValues(alpha: 0.06),
@@ -393,20 +407,18 @@ class _StaticMapImageState extends State<StaticMapImage> {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: Image.network(
+      child: Image.network(
         _geocodedUrl!,
-        width: widget.width,
-        height: widget.height,
+        width: _finiteWidth,
+        height: _finiteHeight,
         fit: BoxFit.cover,
         cacheWidth: cacheWidth,
         cacheHeight: cacheHeight,
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Container(
-            width: widget.width,
-            height: widget.height,
+            width: _finiteWidth,
+            height: _finiteHeight,
             color: theme.colorScheme.surfaceContainerHighest,
             child: Center(
               child: SizedBox(
@@ -427,11 +439,10 @@ class _StaticMapImageState extends State<StaticMapImage> {
           debugPrint('StaticMapImage: Image load error: $error');
           debugPrint('StaticMapImage: URL was: ${_geocodedUrl?.substring(0, _geocodedUrl!.length.clamp(0, 200))}...');
           return Container(
-            width: widget.width,
-            height: widget.height,
+            width: _finiteWidth,
+            height: _finiteHeight,
             decoration: BoxDecoration(
               color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
             ),
             child: Center(
               child: Column(
@@ -449,7 +460,6 @@ class _StaticMapImageState extends State<StaticMapImage> {
             ),
           );
         },
-        ),
       ),
     );
   }

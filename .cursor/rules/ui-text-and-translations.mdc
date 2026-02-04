@@ -1,0 +1,41 @@
+---
+description: When adding UI text, add translations for all locales
+globs: lib/**/*.dart
+alwaysApply: false
+---
+
+# UI text and translations
+
+Whenever you add or change **user-visible text** in the app:
+
+1. **Do not hardcode English** in widgets. Use the app’s l10n system.
+2. **Add a string key** in `lib/l10n/app_strings.dart` and use `AppStrings.t(context, 'key')` in the UI.
+3. **Add the same key for every locale** in `app_strings.dart`: `en`, `es`, `fr`, `de`, `it`. Each locale must have a translation for the new key (not a copy of the English string unless the language is English).
+
+## In UI code (screens, widgets)
+
+```dart
+// ❌ BAD – hardcoded
+Text('Save Trip')
+title: 'Could not load map'
+
+// ✅ GOOD – use l10n
+Text(AppStrings.t(context, 'save_trip'))
+title: AppStrings.t(context, 'could_not_load_map')
+```
+
+## In app_strings.dart
+
+When adding a new key (e.g. `'save_trip': 'Save Trip'` under `'en'`), add the **same key** with the correct translation under `'es'`, `'fr'`, `'de'`, and `'it'`. Keep keys in the same order across locales when possible.
+
+## Exceptions
+
+- **Analytics / logging**: event names, property keys, and log messages do not need translation.
+- **Placeholder or debug-only text** that never ships is optional.
+- **Proper nouns** (e.g. "New York City") are usually not translated; use the string as-is in the UI and do not add a key for the name itself.
+
+## Checklist when adding UI text
+
+- [ ] Use `AppStrings.t(context, 'key')` in the widget.
+- [ ] Add `'key': 'English text'` to the `'en'` map in `lib/l10n/app_strings.dart`.
+- [ ] Add the same key with translations to `'es'`, `'fr'`, `'de'`, and `'it'`.

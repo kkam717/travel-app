@@ -66,6 +66,17 @@ class TransportConfig {
   }
 }
 
+String _categoryLabel(BuildContext context, String category) {
+  switch (category) {
+    case 'experience': return AppStrings.t(context, 'experience');
+    case 'restaurant': return AppStrings.t(context, 'restaurant');
+    case 'hotel': return AppStrings.t(context, 'hotel');
+    case 'guide': return AppStrings.t(context, 'guide');
+    case 'bar': return AppStrings.t(context, 'drinks');
+    default: return AppStrings.t(context, 'experience');
+  }
+}
+
 /// Vertical dotted connector between location cards with transport icon.
 /// Renders in the gap between cards - does not affect card layout.
 /// If [description] is provided and non-empty, tapping shows it in a dialog.
@@ -253,7 +264,7 @@ class LocationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final locationName = locations.isNotEmpty ? locations.first.name : 'Day $day';
+    final locationName = locations.isNotEmpty ? locations.first.name : '${AppStrings.t(context, 'day')} $day';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,7 +283,7 @@ class LocationCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Day $day',
+                      '${AppStrings.t(context, 'day')} $day',
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w600,
@@ -320,7 +331,7 @@ class LocationCard extends StatelessWidget {
                           ),
                           title: Text(s.name, style: theme.textTheme.titleSmall),
                           subtitle: s.category != null && s.category != 'location'
-                              ? Text(s.category!, style: theme.textTheme.bodySmall)
+                              ? Text(_categoryLabel(context, s.category!), style: theme.textTheme.bodySmall)
                               : null,
                           trailing: Icon(Icons.open_in_new, size: 18, color: theme.colorScheme.onSurfaceVariant),
                           onTap: () => onOpenInMaps(s),

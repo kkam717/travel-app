@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../core/profile_refresh_notifier.dart';
-import '../core/search_focus_notifier.dart';
 import '../l10n/app_strings.dart';
 
 class _AddTripButton extends StatefulWidget {
@@ -36,8 +35,8 @@ class _AddTripButtonState extends State<_AddTripButton> {
       onPressed: _handleTap,
       backgroundColor: Theme.of(context).colorScheme.primary,
       foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      elevation: 4,
-      child: const Icon(Icons.add_rounded, size: 28),
+      elevation: 2,
+      child: const Icon(Icons.add_rounded, size: 24),
     );
   }
 }
@@ -50,10 +49,14 @@ class MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final location = GoRouterState.of(context).matchedLocation;
+    final isCreateOrEditTrip = location == '/create' || location.startsWith('/itinerary/') && location.endsWith('/edit');
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: child,
-      bottomNavigationBar: Container(
+      bottomNavigationBar: isCreateOrEditTrip
+          ? null
+          : Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           boxShadow: [
@@ -71,7 +74,7 @@ class MainShell extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavItem(icon: Icons.home_outlined, activeIcon: Icons.home_rounded, label: AppStrings.t(context, 'home'), path: '/home'),
-                _NavItem(icon: Icons.search_rounded, activeIcon: Icons.search_rounded, label: AppStrings.t(context, 'search'), path: '/search'),
+                _NavItem(icon: Icons.explore_outlined, activeIcon: Icons.explore_rounded, label: AppStrings.t(context, 'explore'), path: '/explore'),
                 const SizedBox(width: 64),
                 _NavItem(icon: Icons.bookmark_outline_rounded, activeIcon: Icons.bookmark_rounded, label: AppStrings.t(context, 'saved'), path: '/saved'),
                 _NavItem(icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded, label: AppStrings.t(context, 'profile'), path: '/profile'),
@@ -80,10 +83,10 @@ class MainShell extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: keyboardVisible
+      floatingActionButton: (keyboardVisible || isCreateOrEditTrip)
           ? null
           : Transform.translate(
-              offset: const Offset(0, 20),
+              offset: const Offset(0, 18),
               child: _AddTripButton(onPressed: () => context.go('/create')),
             ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -110,13 +113,9 @@ class _NavItem extends StatelessWidget {
     final color = isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: () {
-        if (path == '/search' && isSelected) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => SearchFocusNotifier.notify());
-        } else {
-          context.go(path);
-          if (path == '/profile') {
-            WidgetsBinding.instance.addPostFrameCallback((_) => ProfileRefreshNotifier.notify());
-          }
+        context.go(path);
+        if (path == '/profile') {
+          WidgetsBinding.instance.addPostFrameCallback((_) => ProfileRefreshNotifier.notify());
         }
       },
       borderRadius: BorderRadius.circular(14),
@@ -125,7 +124,7 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(isSelected ? activeIcon : icon, size: 26, color: color),
+            Icon(isSelected ? activeIcon : icon, size: 22, color: color),
             const SizedBox(height: 4),
             Text(
               label,
