@@ -249,7 +249,6 @@ class ProfileInsightCardsRow extends StatelessWidget {
         label: '',
         backgroundColor: warmTint,
         foregroundColor: warmFg,
-        showAsNavigation: true,
         onTap: onPlacesTap,
       ),
       ProfileInsightCard(
