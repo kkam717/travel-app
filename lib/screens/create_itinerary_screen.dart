@@ -763,7 +763,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
                             ? PlacesField(
                                 hint: AppStrings.t(context, 'search_city_or_location'),
                                 countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
-                                onSelected: (name, lat, lng, locationUrl) {
+                                onSelected: (name, lat, lng, locationUrl, _) {
                                   d.name = name;
                                   d.lat = lat;
                                   d.lng = lng;
@@ -1381,7 +1381,7 @@ class _EditableLocationCard extends StatelessWidget {
                                         hint: '${AppStrings.t(context, 'search')} ${_venueCategoryLabel(context, v.category)}…',
                                         countryCodes: countryCodes,
                                         locationLatLng: locationLatLng,
-                                        onSelected: (name, lat, lng, locationUrl) => onVenueSelected(v, name, lat, lng, locationUrl),
+                                        onSelected: (name, lat, lng, locationUrl, _) => onVenueSelected(v, name, lat, lng, locationUrl),
                                       ),
                                     ),
                                     IconButton(

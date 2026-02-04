@@ -1,14 +1,56 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import '../data/countries.dart' show countries;
 
 /// Free place search and geocoding using Photon (OSM) and Nominatim.
 /// Replaces Google Places API.
+/// Classic picks (cities by country): optional GeoNames (free username at geonames.org).
 class PlacesService {
   static const _photonBase = 'https://photon.komoot.io/api';
   static const _nominatimBase = 'https://nominatim.openstreetmap.org';
+  // HTTP avoids CERTIFICATE_VERIFY_FAILED on iOS Simulator; API supports both
+  static const _geonamesSearch = 'http://api.geonames.org/searchJSON';
   static const _userAgent = 'FootprintTravelApp/1.0';
+
+  /// Fetches well-known populated places (cities) for one or more countries via GeoNames.
+  /// Returns up to [maxRows] results ordered by population (e.g. Rome, Milan for IT; or Rome, Paris for IT+FR).
+  /// Requires GEONAMES_USERNAME in .env (free at geonames.org). Returns [] if not set or on error.
+  static Future<List<PlacePrediction>> searchClassicCitiesByCountry(
+    List<String> countryCodes, {
+    int maxRows = 10,
+  }) async {
+    final username = dotenv.env['GEONAMES_USERNAME']?.trim();
+    if (username == null || username.isEmpty) return [];
+    final codes = countryCodes
+        .where((c) => c.length == 2)
+        .map((c) => c.toUpperCase())
+        .toSet()
+        .toList();
+    if (codes.isEmpty) return [];
+    try {
+      final max = maxRows.clamp(1, 50).toString();
+      final queryParts = <String>[
+        for (final c in codes) 'country=${Uri.encodeComponent(c)}',
+        'featureClass=P', 'q=a', 'maxRows=$max', 'orderby=population',
+        'username=${Uri.encodeComponent(username)}', 'type=json',
+      ];
+      final uri = Uri.parse('$_geonamesSearch?${queryParts.join('&')}');
+      final res = await http.get(uri, headers: {'User-Agent': _userAgent});
+      if (res.statusCode != 200) return [];
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      final list = json['geonames'] as List<dynamic>? ?? [];
+      return list
+          .cast<Map<String, dynamic>>()
+          .map(PlacePrediction.fromGeonames)
+          .where((p) => p.mainText.isNotEmpty)
+          .toList();
+    } catch (e) {
+      debugPrint('PlacesService GeoNames exception: $e');
+      return [];
+    }
+  }
 
   /// Search places (cities, venues) via Photon. Returns results with lat/lng - no separate details call.
   static Future<List<PlacePrediction>> search(
@@ -254,6 +296,31 @@ class PlacePrediction {
     this.osmUrl,
     this.countryCode,
   });
+
+  /// From GeoNames searchJSON response (populated places by country).
+  factory PlacePrediction.fromGeonames(Map<String, dynamic> json) {
+    final name = (json['name'] as String?)?.trim() ?? (json['toponymName'] as String?)?.trim() ?? '';
+    final latVal = json['lat'];
+    final lngVal = json['lng'];
+    final lat = latVal is num ? latVal.toDouble() : (latVal is String ? double.tryParse(latVal) : null);
+    final lng = lngVal is num ? lngVal.toDouble() : (lngVal is String ? double.tryParse(lngVal) : null);
+    final countryCodeRaw = json['countryCode'] as String?;
+    final countryCode = countryCodeRaw != null && countryCodeRaw.isNotEmpty
+        ? countryCodeRaw.toUpperCase()
+        : null;
+    final id = json['geonameId'];
+    final placeId = id != null ? 'geonames:$id' : 'geonames:${name.hashCode}';
+    return PlacePrediction(
+      placeId: placeId,
+      description: name,
+      mainText: name,
+      secondaryText: json['adminName1'] as String?,
+      lat: lat,
+      lng: lng,
+      osmUrl: null,
+      countryCode: countryCode,
+    );
+  }
 
   factory PlacePrediction.fromPhoton(Map<String, dynamic> feature) {
     final props = feature['properties'] as Map<String, dynamic>? ?? {};
