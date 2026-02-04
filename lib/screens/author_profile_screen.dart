@@ -9,7 +9,7 @@ import '../models/user_city.dart';
 import '../services/supabase_service.dart';
 import '../l10n/app_strings.dart';
 import '../widgets/profile_hero_banner.dart';
-import '../widgets/profile_stat_tiles_row.dart';
+import '../widgets/profile_insight_card.dart';
 import '../widgets/country_filter_chips.dart';
 import '../widgets/trip_photo_card.dart';
 
@@ -257,13 +257,13 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                 onCityTap: hasCity ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=${widget.authorId}') : null,
                 isUploadingPhoto: false,
                 editProfileLabel: AppStrings.t(context, 'edit_profile'),
-                statTilesRow: ProfileStatTilesRow(
+                statTilesRow: ProfileInsightCardsRow(
                   countriesCount: visitedCountries.length,
-                  livedCount: livedCount,
+                  placesCount: livedCount,
                   currentCity: hasCity ? currentCity : null,
                   onCountriesTap: () => context.push('/map/countries?codes=${visitedCountries.join(',')}'),
-                  onLivedTap: () => context.push('/profile/stats?userId=${widget.authorId}'),
-                  onHomeTap: hasCity ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=${widget.authorId}') : () => context.push('/profile/stats?userId=${widget.authorId}'),
+                  onPlacesTap: () => context.push('/profile/stats?userId=${widget.authorId}'),
+                  onBaseTap: hasCity ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=${widget.authorId}') : () => context.push('/profile/stats?userId=${widget.authorId}'),
                 ),
               ),
             ),
@@ -337,7 +337,7 @@ class _AuthorFollowersFollowingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final style = theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w500);
+    final style = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w400);
     return Row(
       children: [
         InkWell(
