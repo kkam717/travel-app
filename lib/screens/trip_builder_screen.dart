@@ -896,7 +896,6 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                       ),
                                     ),
                                   ),
-                                  _buildClassicPicksRow(theme),
                                 ],
                                 const SizedBox(height: AppTheme.spacingMd),
                                 _buildRouteStrip(theme),
@@ -1363,11 +1362,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
-  Widget _buildClassicPicksRow(ThemeData theme) {
+  /// [alwaysShowSection] when true (e.g. in add-destination sheet), show "Classic picks" label and empty state when no suggestions.
+  Widget _buildClassicPicksRow(ThemeData theme, {VoidCallback? onPickSelected, bool alwaysShowSection = false}) {
     final codes = _activeCountryCodesForSuggestions;
-    if (codes.isEmpty) return const SizedBox.shrink();
+    if (codes.isEmpty && !alwaysShowSection) return const SizedBox.shrink();
     final sortedCodes = List<String>.from(codes)..sort();
-    if (!_sameCountryCodes(sortedCodes, _classicPicksFetchedForCountryCodes)) {
+    if (codes.isNotEmpty && !_sameCountryCodes(sortedCodes, _classicPicksFetchedForCountryCodes)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _loadClassicPicksSuggestions());
     }
     final existingNames = _cities.map((c) => c.name).toSet();
@@ -1375,7 +1375,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         .where((p) => !existingNames.contains(p.mainText))
         .take(2)
         .toList();
-    if (toShow.isEmpty) return const SizedBox.shrink();
+    if (toShow.isEmpty && !alwaysShowSection) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Column(
@@ -1384,29 +1384,40 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         children: [
           Text(AppStrings.t(context, 'classic_picks'), style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: toShow.map((p) {
-              final url = p.osmUrl ?? (p.lat != null && p.lng != null ? 'https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}' : null);
-              return Material(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
-                borderRadius: BorderRadius.circular(999),
-                child: InkWell(
-                  onTap: () => _addCity(p.mainText, p.lat, p.lng, url, p.countryCode),
+          if (toShow.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: toShow.map((p) {
+                final url = p.osmUrl ?? (p.lat != null && p.lng != null ? 'https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}' : null);
+                return Material(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(999),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
-                      borderRadius: BorderRadius.circular(999),
+                  child: InkWell(
+                    onTap: () {
+                      _addCity(p.mainText, p.lat, p.lng, url, p.countryCode);
+                      onPickSelected?.call();
+                    },
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(p.mainText, style: theme.textTheme.labelLarge),
                     ),
-                    child: Text(p.mainText, style: theme.textTheme.labelLarge),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
+                );
+              }).toList(),
+            )
+          else if (alwaysShowSection)
+            Text(
+              codes.isEmpty
+                  ? AppStrings.t(context, 'add_at_least_one_country')
+                  : 'No city suggestions for this country',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
         ],
       ),
     );
@@ -1837,6 +1848,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
 
   Future<void> _showAddCitySheet() async {
     if (!mounted) return;
+    await _loadClassicPicksSuggestions();
+    if (!mounted) return;
+    final theme = Theme.of(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1858,6 +1872,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                   Navigator.pop(ctx);
                 },
               ),
+              _buildClassicPicksRow(theme, onPickSelected: () => Navigator.pop(ctx), alwaysShowSection: true),
             ],
           ),
         ),
