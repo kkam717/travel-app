@@ -15,7 +15,7 @@ import '../services/supabase_service.dart';
 import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
 import '../utils/map_urls.dart';
 import '../widgets/itinerary_map.dart';
-import '../widgets/itinerary_timeline.dart' show ItineraryTimeline, TransportDescriptions, TransportOverrides, TransportType, transportTypeFromString;
+import '../widgets/itinerary_timeline.dart' show ItineraryTimeline, TransportDescriptions, TransportOverrides, TransportType, transportTypeFromString, LocationCard;
 
 class ItineraryDetailScreen extends StatefulWidget {
   final String itineraryId;
@@ -171,6 +171,78 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_open_maps'))));
       }
     }
+  }
+
+  /// Shows a bottom sheet with itinerary for all days that include the given place (e.g. Nice → Day 1 & Day 2).
+  void _showPlaceItinerary(BuildContext context, String placeName, Itinerary it) {
+    final daysWithPlace = it.stops
+        .where((s) => s.isLocation && s.name == placeName)
+        .map((s) => s.day)
+        .toSet()
+        .toList()
+      ..sort();
+    if (daysWithPlace.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppTheme.spacingMd),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                placeName,
+                style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              if (daysWithPlace.length > 1)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    daysWithPlace.map((d) => '${AppStrings.t(context, 'day')} $d').join(' / '),
+                    style: Theme.of(ctx).textTheme.titleSmall?.copyWith(color: Theme.of(ctx).colorScheme.primary),
+                  ),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${AppStrings.t(context, 'day')} ${daysWithPlace.single}',
+                    style: Theme.of(ctx).textTheme.titleSmall?.copyWith(color: Theme.of(ctx).colorScheme.primary),
+                  ),
+                ),
+              const SizedBox(height: AppTheme.spacingMd),
+              ...daysWithPlace.map((day) {
+                final dayStops = it.stops.where((s) => s.day == day).toList();
+                final dayLocs = dayStops.where((s) => s.isLocation).toList();
+                final dayVenues = dayStops.where((s) => s.isVenue).toList();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${AppStrings.t(context, 'day')} $day',
+                        style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: AppTheme.spacingSm),
+                      LocationCard(
+                        day: day,
+                        locations: dayLocs,
+                        venues: dayVenues,
+                        onOpenInMaps: _openInMaps,
+                        showLocationName: true,
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _checkShowTranslate(Itinerary it) async {
@@ -373,6 +445,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
               fullScreen: true,
               transportTransitions: it.transportTransitions,
               mapController: _detailMapController,
+              onCityTap: (day, placeName) => _showPlaceItinerary(context, placeName, it),
             ),
             // Draggable bottom sheet with details
             DraggableScrollableSheet(
@@ -493,6 +566,18 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Text(AppStrings.t(context, it.mode!), style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary)),
+                                  ),
+                                if (it.costPerPerson != null && it.costPerPerson! > 0)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.payments_outlined, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '\$${it.costPerPerson!.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} ${AppStrings.t(context, 'per_person')}',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                      ),
+                                    ],
                                   ),
                               ],
                             ),
