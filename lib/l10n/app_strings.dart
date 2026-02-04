@@ -71,7 +71,7 @@ class AppStrings {
       'search_by_name': 'Search by name...',
       'destination_or_keywords': 'Destination or keywords...',
       'follow': 'Follow',
-      'followers': 'followers',
+      'followers': 'Followers',
       'could_not_refresh': 'Could not refresh. Pull down to retry.',
       'could_not_upload_photo': 'Could not upload photo. Please try again.',
       'loading_profile': 'Loading profile…',

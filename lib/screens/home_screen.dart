@@ -49,6 +49,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final Map<String, bool> _liked = {};
   /// Author ID -> list of city names from profile (current city + past cities). Used for "From someone who lived here".
   final Map<String, List<String>> _authorLivedInCities = {};
+  /// Author ID -> all top spots (bars/restaurants etc) for that user, by city. Used for lived-here recommendations.
+  final Map<String, List<UserTopSpot>> _authorTopSpots = {};
+  /// Current user's following IDs (friends). Used to prioritise friend recommendations.
+  Set<String> _followingAuthorIds = {};
   late TabController _tabController;
   int _newTripsCount = 0;
 
@@ -183,6 +187,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _hasMore = feedList.length >= _pageSize;
       });
       _ensureAuthorLivedInCities();
+      _ensureFollowingIds();
       Analytics.logScreenView('home');
     } catch (e) {
       if (!mounted) return;
@@ -226,11 +231,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  /// Fetches profile + past cities for feed authors not yet in _authorLivedInCities; updates state.
+  /// Fetches profile + past cities + top spots for feed authors not yet loaded; updates state.
   Future<void> _ensureAuthorLivedInCities() async {
     final ids = _feed.map((i) => i.authorId).toSet().where((id) => !_authorLivedInCities.containsKey(id)).toList();
     if (ids.isEmpty) return;
-    final updates = <String, List<String>>{};
+    final cityUpdates = <String, List<String>>{};
+    final spotUpdates = <String, List<UserTopSpot>>{};
     for (final authorId in ids) {
       try {
         final profile = await SupabaseService.getProfile(authorId);
@@ -242,15 +248,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           final name = c.cityName.trim();
           if (name.isNotEmpty && !cities.contains(name)) cities.add(name);
         }
-        updates[authorId] = cities;
+        cityUpdates[authorId] = cities;
+        final spots = await SupabaseService.getTopSpotsForUser(authorId);
+        spotUpdates[authorId] = spots;
       } catch (_) {
-        updates[authorId] = [];
+        cityUpdates[authorId] = [];
+        spotUpdates[authorId] = [];
       }
     }
-    if (!mounted || updates.isEmpty) return;
+    if (!mounted || (cityUpdates.isEmpty && spotUpdates.isEmpty)) return;
     setState(() {
-      for (final e in updates.entries) _authorLivedInCities[e.key] = e.value;
+      for (final e in cityUpdates.entries) {
+        _authorLivedInCities[e.key] = e.value;
+      }
+      for (final e in spotUpdates.entries) {
+        _authorTopSpots[e.key] = e.value;
+      }
     });
+  }
+
+  /// Load current user's following IDs so we can show friend badge and prioritise friend recommendations.
+  Future<void> _ensureFollowingIds() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final ids = await SupabaseService.getFollowedIds(userId);
+      if (!mounted) return;
+      setState(() => _followingAuthorIds = ids.toSet());
+    } catch (_) {}
+  }
+
+  /// Destination string (e.g. "Rome, Italy") -> first part normalized for matching.
+  static String _destinationCityNormalized(String destination) {
+    final t = destination.trim();
+    if (t.isEmpty) return '';
+    final comma = t.indexOf(',');
+    final city = comma >= 0 ? t.substring(0, comma).trim() : t;
+    return city.toLowerCase();
+  }
+
+  /// Returns lived city name from author's list that matches this itinerary's destination, or null.
+  String? _matchLivedCityToDestination(String destination, List<String> livedCities) {
+    final destNorm = _HomeScreenState._destinationCityNormalized(destination);
+    if (destNorm.isEmpty) return null;
+    for (final city in livedCities) {
+      final c = city.trim();
+      if (c.isEmpty) continue;
+      if (c.toLowerCase() == destNorm) return city;
+      if (destNorm.contains(c.toLowerCase())) return city;
+      if (c.toLowerCase().contains(destNorm)) return city;
+    }
+    return null;
+  }
+
+  /// Spot-level recommendations from this itinerary's author for the itinerary's destination (lived/current city that matches). Empty if no match or no spots.
+  List<UserTopSpot>? _authorLivedHereSpotsFor(Itinerary it) {
+    final cities = _authorLivedInCities[it.authorId];
+    if (cities == null || cities.isEmpty) return null;
+    final matchedCity = _matchLivedCityToDestination(it.destination, cities);
+    if (matchedCity == null) return null;
+    final spots = _authorTopSpots[it.authorId];
+    if (spots == null || spots.isEmpty) return null;
+    final forCity = spots.where((s) => s.cityName.trim().toLowerCase() == matchedCity.trim().toLowerCase()).toList();
+    return forCity.isEmpty ? null : forCity;
   }
 
   Future<void> _onRefresh() async {
@@ -465,7 +525,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     onAuthorTap: () => context.push('/author/${it.authorId}'),
                     variant: _CardVariant.standard,
                     index: i,
-                    authorLivedInCityNames: _authorLivedInCities[it.authorId],
+                    authorLivedHereSpots: _authorLivedHereSpotsFor(it),
+                    isAuthorFriend: _followingAuthorIds.contains(it.authorId),
                   ),
                   );
                 },
@@ -556,7 +617,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         onAuthorTap: () => context.push('/author/${it.authorId}'),
                         variant: _CardVariant.standard,
                         index: i,
-                        authorLivedInCityNames: _authorLivedInCities[it.authorId],
+                        authorLivedHereSpots: _authorLivedHereSpotsFor(it),
+                        isAuthorFriend: _followingAuthorIds.contains(it.authorId),
                       ),
                       );
                     },
@@ -809,7 +871,9 @@ class _SwipeableFeedCard extends StatelessWidget {
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
   final int index;
-  final List<String>? authorLivedInCityNames;
+  /// Spot-level recommendations (bars/restaurants etc) from author's lived city matching this itinerary's destination. Section hidden when null or empty.
+  final List<UserTopSpot>? authorLivedHereSpots;
+  final bool isAuthorFriend;
 
   const _SwipeableFeedCard({
     required this.itinerary,
@@ -824,7 +888,8 @@ class _SwipeableFeedCard extends StatelessWidget {
     required this.onAuthorTap,
     required this.variant,
     required this.index,
-    this.authorLivedInCityNames,
+    this.authorLivedHereSpots,
+    this.isAuthorFriend = false,
   });
 
   @override
@@ -856,7 +921,8 @@ class _SwipeableFeedCard extends StatelessWidget {
                 onLike: onLike,
                 onTap: onTap,
                 onAuthorTap: onAuthorTap,
-                authorLivedInCityNames: authorLivedInCityNames,
+                authorLivedHereSpots: authorLivedHereSpots,
+                isAuthorFriend: isAuthorFriend,
               ),
             )
           : _EdgeAwareSwipeCard(
@@ -895,7 +961,8 @@ class _SwipeableFeedCard extends StatelessWidget {
                         onLike: onLike,
                         onTap: onTap,
                         onAuthorTap: onAuthorTap,
-                        authorLivedInCityNames: authorLivedInCityNames,
+                        authorLivedHereSpots: authorLivedHereSpots,
+                        isAuthorFriend: isAuthorFriend,
                       )
                     : _FeedCard(
                         itinerary: itinerary,
