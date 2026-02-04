@@ -105,26 +105,36 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   /// Country codes we last fetched for (sorted list for comparison).
   List<String>? _classicPicksFetchedForCountryCodes;
 
-  /// Cost range depends on travel mode (budget / standard / luxury).
+  /// Per-day cost bounds by mode (Budget / Standard / Luxury). Trip total = per-day × trip length.
+  static const int _costPerDayStandardMin = 30;
+  static const int _costPerDayStandardMax = 300;
+  static const int _costPerDayBudgetMax = 200;
+  static const int _costPerDayLuxuryMin = 100;
+  static const int _costPerDayLuxuryMax = 1000;
+
+  /// Cost range depends on travel mode and trip length (day-by-day min/max).
   int get _costMin {
+    final days = _daysCount.clamp(1, 365);
     switch (_mode) {
       case modeBudget: return 0;
-      case modeLuxury: return 800;
-      default: return 200; // standard
+      case modeLuxury: return _costPerDayLuxuryMin * days;
+      default: return _costPerDayStandardMin * days; // standard
     }
   }
   int get _costSliderMax {
+    final days = _daysCount.clamp(1, 365);
     switch (_mode) {
-      case modeBudget: return 2000;   // $0 – $2k
-      case modeLuxury: return 10000;  // $800 – $10k
-      default: return 4000;           // standard: $200 – $4k
+      case modeBudget: return _costPerDayBudgetMax * days;
+      case modeLuxury: return _costPerDayLuxuryMax * days;
+      default: return _costPerDayStandardMax * days; // standard
     }
   }
   int get _costMax {
+    final days = _daysCount.clamp(1, 365);
     switch (_mode) {
-      case modeBudget: return 2000;
-      case modeLuxury: return 999999; // text field can go above 10k
-      default: return 4000;
+      case modeBudget: return _costPerDayBudgetMax * days;
+      case modeLuxury: return _costPerDayLuxuryMax * days;
+      default: return _costPerDayStandardMax * days; // standard
     }
   }
 
@@ -276,7 +286,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         return s.length > 1 ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : s.toUpperCase();
       }).toList();
       _costPerPersonEnabled = it.costPerPerson != null;
-      _costPerPerson = (it.costPerPerson ?? 0).clamp(0, 999999999); // allow any non-negative; no mode max
+      _costPerPerson = (it.costPerPerson ?? 0).clamp(0, 999999999);
       _costPerPersonController.text = _costPerPerson.toString();
       _useDates = it.useDates ?? false;
       _startDate = it.startDate;
@@ -1310,7 +1320,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                   ),
                   onChanged: (s) {
                     final n = int.tryParse(s.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
-                    final value = n < 0 ? 0 : n; // only block negative
+                    final value = n < 0 ? 0 : n;
                     if (value != _costPerPerson) setState(() => _costPerPerson = value);
                     if (n < 0 && _costPerPersonController.text != '0') {
                       _costPerPersonController.text = '0';
@@ -1626,13 +1636,15 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: () {
-                    setState(() => _daysCount = temp);
-                    if (_cities.isNotEmpty) {
-                      _allocations = allocateDaysAcrossCities(_daysCount, _cities.length);
-                      for (var i = 0; i < _cities.length; i++) {
-                        _cities[i].dayCount = _allocations[i];
+                    setState(() {
+                      _daysCount = temp;
+                      if (_cities.isNotEmpty) {
+                        _allocations = allocateDaysAcrossCities(_daysCount, _cities.length);
+                        for (var i = 0; i < _cities.length; i++) {
+                          _cities[i].dayCount = _allocations[i];
+                        }
                       }
-                    }
+                    });
                     Navigator.pop(ctx);
                   },
                   child: Text(AppStrings.t(context, 'done')),
