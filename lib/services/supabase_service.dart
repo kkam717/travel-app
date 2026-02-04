@@ -106,6 +106,17 @@ class SupabaseService {
     }
   }
 
+  /// All top spots for a user (all cities). Used for feed "From someone who lived here" recommendations.
+  static Future<List<UserTopSpot>> getTopSpotsForUser(String userId) async {
+    try {
+      final res = await _client.from('user_top_spots').select().eq('user_id', userId).order('city_name').order('category').order('position');
+      return (res as List).map((e) => UserTopSpot.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (e) {
+      Analytics.logEvent('top_spots_fetch_error', {'error': e.toString()});
+      return [];
+    }
+  }
+
   static Future<UserTopSpot?> addTopSpot(UserTopSpot spot) async {
     try {
       final existing = await _client.from('user_top_spots').select().eq('user_id', spot.userId).eq('city_name', spot.cityName).eq('category', spot.category);

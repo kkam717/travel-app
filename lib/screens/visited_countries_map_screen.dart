@@ -80,12 +80,17 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     if (userId == null) return;
     final profile = await SupabaseService.getProfile(userId);
     Set<String> selected = (profile?.visitedCountries ?? _selectedCodes).toSet();
+    String searchQuery = '';
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
         builder: (_, setModal) {
+          final q = searchQuery.trim().toLowerCase();
+          final filteredEntries = q.isEmpty
+              ? countries.entries.toList()
+              : countries.entries.where((e) => e.key.toLowerCase().contains(q) || e.value.toLowerCase().contains(q)).toList();
           return DraggableScrollableSheet(
             initialChildSize: 0.7,
             expand: false,
@@ -119,12 +124,26 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: AppStrings.t(context, 'search_and_add_countries'),
+                      prefixIcon: const Icon(Icons.search_outlined, size: 20),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      isDense: true,
+                    ),
+                    onChanged: (v) => setModal(() => searchQuery = v),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingSm),
                 Expanded(
                   child: ListView.builder(
                     controller: scrollController,
-                    itemCount: countries.length,
+                    itemCount: filteredEntries.length,
                     itemBuilder: (_, i) {
-                      final e = countries.entries.elementAt(i);
+                      final e = filteredEntries[i];
                       final sel = selected.contains(e.key);
                       return CheckboxListTile(
                         value: sel,
@@ -155,14 +174,18 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   /// tileBounds restricts tiles to single world (-180..180) so underlying map doesn't spill.
   TileLayer _buildTileLayer(Brightness brightness) {
     final style = brightness == Brightness.dark ? 'dark_nolabels' : 'light_nolabels';
+    final isRetina = MediaQuery.of(context).devicePixelRatio > 1.0;
     final TileProvider tileProvider = kIsWeb
         ? WebTileProvider()
         : NetworkTileProvider(cachingProvider: const DisabledMapCachingProvider());
     return TileLayer(
-      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$style/{z}/{x}/{y}.png',
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$style/{z}/{x}/{y}{r}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: tileProvider,
+      retinaMode: isRetina,
+      tileDimension: isRetina ? 512 : 256,
+      zoomOffset: isRetina ? -1.0 : 0.0,
       tileBounds: LatLngBounds(
         const LatLng(-85, -180),
         const LatLng(85, 180),

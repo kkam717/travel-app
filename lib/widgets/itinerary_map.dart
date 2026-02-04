@@ -785,6 +785,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   TileLayer _buildTileLayer(Brightness brightness) {
     final key = _geoapifyKey;
     final isDark = brightness == Brightness.dark;
+    final isRetina = MediaQuery.of(context).devicePixelRatio > 1.0;
     // On web, use WebTileProvider to bypass CORS. On iOS simulator (and other platforms where
     // path_provider_foundation/objective_c can fail), disable built-in tile cache to avoid native crash.
     final TileProvider tileProvider = kIsWeb
@@ -800,14 +801,19 @@ class _ItineraryMapState extends State<ItineraryMap> {
         userAgentPackageName: 'com.footprint.travel',
         maxNativeZoom: 20,
         tileProvider: tileProvider,
+        retinaMode: isRetina,
       );
     }
+    // Carto supports @2x tiles via {r}; use 512px tileDimension and zoomOffset -1 when retina
     final cartoStyle = isDark ? 'dark_nolabels' : 'light_nolabels';
     return TileLayer(
-      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$cartoStyle/{z}/{x}/{y}.png',
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$cartoStyle/{z}/{x}/{y}{r}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: tileProvider,
+      retinaMode: isRetina,
+      tileDimension: isRetina ? 512 : 256,
+      zoomOffset: isRetina ? -1.0 : 0.0,
     );
   }
 
