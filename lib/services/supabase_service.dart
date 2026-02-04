@@ -483,13 +483,15 @@ class SupabaseService {
     return list.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [])).toList();
   }
 
+  /// Planning = author's drafts (private) + forked copies. Used by Saved > Planning tab.
   static Future<List<Itinerary>> getPlanningItineraries(String userId) async {
     try {
+      // Own itineraries that are private (drafts) or forked (copies in progress)
       final res = await _client
           .from('itineraries')
           .select('*, profiles!itineraries_author_id_fkey(name,photo_url)')
           .eq('author_id', userId)
-          .not('forked_from_itinerary_id', 'is', null)
+          .or('visibility.eq.private,forked_from_itinerary_id.not.is.null')
           .order('updated_at', ascending: false);
       return (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
@@ -668,10 +670,10 @@ class SupabaseService {
       final followedIds = await getFollowedIds(userId);
       final mutualIds = await getMutualFriendIds(userId);
 
-      // 1. Own posts: all visibility
-      // 2. Others: public from followed, OR all from mutual friends
+      // 1. Own posts: only published (exclude private/planning)
+      // 2. Others: public from followed, OR published from mutual friends
       // Apply lt() before order/limit (lt is on FilterBuilder, not TransformBuilder)
-      var q1 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null);
+      var q1 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').eq('author_id', userId).isFilter('forked_from_itinerary_id', null).neq('visibility', 'private');
       if (afterCreatedAt != null) q1 = q1.lt('created_at', afterCreatedAt);
       final exec1 = q1.order('created_at', ascending: false).limit(limit * 2);
 
@@ -683,7 +685,7 @@ class SupabaseService {
         futures.add(exec2);
       }
       if (mutualIds.isNotEmpty) {
-        var q3 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').inFilter('author_id', mutualIds).isFilter('forked_from_itinerary_id', null);
+        var q3 = _client.from('itineraries').select('*, profiles!itineraries_author_id_fkey(name,photo_url)').inFilter('author_id', mutualIds).isFilter('forked_from_itinerary_id', null).neq('visibility', 'private');
         if (afterCreatedAt != null) q3 = q3.lt('created_at', afterCreatedAt);
         final exec3 = q3.order('created_at', ascending: false).limit(limit * 2);
         futures.add(exec3);

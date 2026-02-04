@@ -21,14 +21,7 @@ class TripPhotoCard extends StatelessWidget {
     this.onRefresh,
   });
 
-  String _routeTitle(Itinerary it) {
-    final locationStops = it.stops.where((s) => s.isLocation).toList();
-    if (locationStops.length >= 2) {
-      return locationStops.take(4).map((s) => s.name).join(' → ');
-    }
-    if (locationStops.length == 1) return locationStops.first.name;
-    return it.destination.isNotEmpty ? it.destination : it.title;
-  }
+  String _displayTitle(Itinerary it) => it.title.trim().isNotEmpty ? it.title : it.destination;
 
   List<String> _highlights(Itinerary it) {
     return it.stops.where((s) => s.isVenue).take(2).map((s) => s.name).toList();
@@ -44,7 +37,7 @@ class TripPhotoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final it = itinerary;
-    final routeTitle = _routeTitle(it);
+    final displayTitle = _displayTitle(it);
     final destinationLine = it.destination.trim().isNotEmpty ? it.destination : '${it.daysCount} ${AppStrings.t(context, 'days')}';
     final highlights = _highlights(it);
     final dateStr = _formatDate(it.startDate ?? it.createdAt ?? it.updatedAt);
@@ -122,7 +115,7 @@ class TripPhotoCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          routeTitle,
+                          displayTitle,
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.w700,
                             fontSize: 22,

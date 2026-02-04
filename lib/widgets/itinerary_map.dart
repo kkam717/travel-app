@@ -780,58 +780,69 @@ class _ItineraryMapState extends State<ItineraryMap> {
           border: Border.all(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3), width: 1),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2))),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.route_outlined, size: 20, color: primaryColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Route',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: primaryColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: widget.height,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                  border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2))),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.route_outlined, size: 20, color: primaryColor),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Route',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                     ),
-                    child: Text(
-                      '$stopCount ${stopCount == 1 ? 'stop' : 'stops'}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: primaryColor,
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: primaryColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$stopCount ${stopCount == 1 ? 'stop' : 'stops'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: primaryColor,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            if (!hasCoords && !_geocodingCities) _buildEmptyState(context)
-            else if (_geocodingCities) _buildLoadingState(context)
-            else _buildMap(context, primaryColor),
-          ],
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (_, c) {
+                    final h = c.maxHeight;
+                    if (!hasCoords && !_geocodingCities) return _buildEmptyState(context, h);
+                    if (_geocodingCities) return _buildLoadingState(context, h);
+                    return _buildMap(context, primaryColor, h);
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildLoadingState(BuildContext context) {
+  Widget _buildLoadingState(BuildContext context, [double? height]) {
+    final h = height ?? widget.height;
     return Container(
-      height: widget.height,
+      height: h,
       padding: const EdgeInsets.all(AppTheme.spacingLg),
       child: Center(
         child: Column(
@@ -853,9 +864,10 @@ class _ItineraryMapState extends State<ItineraryMap> {
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
+  Widget _buildEmptyState(BuildContext context, [double? height]) {
+    final h = height ?? widget.height;
     return Container(
-      height: widget.height,
+      height: h,
       padding: const EdgeInsets.all(AppTheme.spacingLg),
       child: Center(
         child: Column(
@@ -889,7 +901,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
     );
   }
 
-  Widget _buildMap(BuildContext context, Color primaryColor) {
+  Widget _buildMap(BuildContext context, Color primaryColor, [double? height]) {
+    final h = height ?? widget.height;
     final brightness = Theme.of(context).brightness;
     final initialPos = _polylinePointsList.isNotEmpty ? _polylinePointsList.first : _defaultCenter;
     final bounds = _bounds();
@@ -900,7 +913,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
         ? _buildRouteData(primaryColor)
         : (polylines: <Polyline>[], transportMarkers: <Marker>[]);
     return SizedBox(
-      height: widget.height,
+      height: h,
       child: FlutterMap(
         mapController: _mapController,
         options: MapOptions(

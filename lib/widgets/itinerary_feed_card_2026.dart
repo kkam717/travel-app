@@ -40,15 +40,8 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     this.authorLivedInCityNames,
   });
 
-  /// Route title: location stops joined by " → " or destination.
-  String _routeTitle(Itinerary it) {
-    final locationStops = it.stops.where((s) => s.isLocation).toList();
-    if (locationStops.length >= 2) {
-      return locationStops.take(4).map((s) => s.name).join(' → ');
-    }
-    if (locationStops.length == 1) return locationStops.first.name;
-    return it.destination.isNotEmpty ? it.destination : it.title;
-  }
+  /// User-inputted trip title (never route/destination).
+  String _displayTitle(Itinerary it) => it.title.trim().isNotEmpty ? it.title : it.destination;
 
   static String _relativeTime(BuildContext context, DateTime dt) {
     final now = DateTime.now();
@@ -63,7 +56,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final it = itinerary;
-    final routeTitle = _routeTitle(it);
+    final displayTitle = _displayTitle(it);
     final livedHereCities = authorLivedInCityNames;
     final subtitleText = it.destination.trim().isNotEmpty
         ? '${it.daysCount} ${AppStrings.t(context, 'days')} ${AppStrings.t(context, 'across')} ${it.destination}'
@@ -160,7 +153,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          routeTitle,
+                          displayTitle,
                           style: theme.textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                             letterSpacing: -0.2,

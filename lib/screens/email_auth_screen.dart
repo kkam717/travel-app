@@ -56,7 +56,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
           password: _passwordController.text,
         );
         Analytics.logEvent('auth_signin_success');
-        if (mounted) context.go('/home');
+        if (mounted) context.go('/explore');
       }
     } on AuthException catch (e) {
       setState(() {

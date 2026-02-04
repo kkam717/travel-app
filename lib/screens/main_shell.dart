@@ -49,10 +49,14 @@ class MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final location = GoRouterState.of(context).matchedLocation;
+    final isCreateOrEditTrip = location == '/create' || location.startsWith('/itinerary/') && location.endsWith('/edit');
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: child,
-      bottomNavigationBar: Container(
+      bottomNavigationBar: isCreateOrEditTrip
+          ? null
+          : Container(
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           boxShadow: [
@@ -79,7 +83,7 @@ class MainShell extends StatelessWidget {
           ),
         ),
       ),
-      floatingActionButton: keyboardVisible
+      floatingActionButton: (keyboardVisible || isCreateOrEditTrip)
           ? null
           : Transform.translate(
               offset: const Offset(0, 18),

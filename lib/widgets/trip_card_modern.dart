@@ -22,14 +22,7 @@ class TripCardModern extends StatelessWidget {
     this.onRefresh,
   });
 
-  String _routeTitle(Itinerary it) {
-    final locationStops = it.stops.where((s) => s.isLocation).toList();
-    if (locationStops.length >= 2) {
-      return locationStops.take(4).map((s) => s.name).join(' → ');
-    }
-    if (locationStops.length == 1) return locationStops.first.name;
-    return it.destination.isNotEmpty ? it.destination : it.title;
-  }
+  String _displayTitle(Itinerary it) => it.title.trim().isNotEmpty ? it.title : it.destination;
 
   List<String> _highlights(Itinerary it) {
     return it.stops.where((s) => s.isVenue).take(2).map((s) => s.name).toList();
@@ -45,7 +38,7 @@ class TripCardModern extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final it = itinerary;
-    final routeTitle = _routeTitle(it);
+    final displayTitle = _displayTitle(it);
     final subtitle = it.destination.trim().isNotEmpty
         ? '${it.destination} · ${it.daysCount} ${AppStrings.t(context, 'days')}'
         : '${it.daysCount} ${AppStrings.t(context, 'days')}';
@@ -99,7 +92,7 @@ class TripCardModern extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, 4),
                 child: Text(
-                  routeTitle,
+                  displayTitle,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w600,
                     fontSize: 22,

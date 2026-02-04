@@ -16,6 +16,7 @@ class PlacesService {
     List<String>? countryCodes,
     String? placeType,
     (double, double)? locationLatLng,
+    String? lang,
   }) async {
     if (input.trim().length < 2) return [];
 
@@ -24,6 +25,9 @@ class PlacesService {
         'q': input.trim(),
         'limit': '15',
       };
+      if (lang != null && lang.isNotEmpty) {
+        params['lang'] = lang;
+      }
       String? bboxStr;
       if (countryCodes != null && countryCodes.isNotEmpty) {
         bboxStr = _bboxForCountries(countryCodes);

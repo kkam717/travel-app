@@ -9,7 +9,7 @@ import 'screens/main_shell.dart';
 import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/explore_screen.dart';
-import 'screens/create_itinerary_screen.dart';
+import 'screens/trip_builder_screen.dart';
 import 'screens/saved_screen.dart';
 import 'screens/itinerary_detail_screen.dart';
 import 'screens/author_profile_screen.dart';
@@ -40,7 +40,7 @@ GoRouter createRouter() {
         return null;
       }
 
-      final userId = session!.user.id;
+      final userId = session.user.id;
       final profile = await SupabaseService.getProfile(userId);
       final needsOnboarding = profile == null || !profile.onboardingComplete;
 
@@ -48,10 +48,10 @@ GoRouter createRouter() {
         return '/onboarding';
       }
       if (!needsOnboarding && isOnboardingRoute) {
-        return '/home';
+        return '/explore';
       }
       if (!needsOnboarding && state.matchedLocation == '/') {
-        return '/home';
+        return '/explore';
       }
       if (!needsOnboarding && state.matchedLocation == '/search') {
         return '/explore';
@@ -85,7 +85,7 @@ GoRouter createRouter() {
           ),
           GoRoute(
             path: '/create',
-            pageBuilder: (_, state) => const NoTransitionPage(child: CreateItineraryScreen()),
+            pageBuilder: (_, state) => const NoTransitionPage(child: TripBuilderScreen()),
           ),
           GoRoute(
             path: '/saved',
@@ -108,7 +108,7 @@ GoRouter createRouter() {
         path: '/itinerary/:id/edit',
         builder: (_, state) {
           final id = state.pathParameters['id']!;
-          return CreateItineraryScreen(itineraryId: id);
+          return TripBuilderScreen(itineraryId: id);
         },
       ),
       GoRoute(

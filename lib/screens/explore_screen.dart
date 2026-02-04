@@ -812,7 +812,7 @@ class _ExploreTripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final it = itinerary;
-    final routeTitle = _routeTitle(it);
+    final displayTitle = _displayTitle(it);
     final styleTags = it.styleTags.take(2).toList();
 
     return Padding(
@@ -851,7 +851,7 @@ class _ExploreTripCard extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          routeTitle,
+                          displayTitle,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                             fontSize: 16,
@@ -937,12 +937,5 @@ class _ExploreTripCard extends StatelessWidget {
     );
   }
 
-  String _routeTitle(Itinerary it) {
-    final locationStops = it.stops.where((s) => s.isLocation).toList();
-    if (locationStops.length >= 2) {
-      return locationStops.take(3).map((s) => s.name).join(' → ');
-    }
-    if (locationStops.length == 1) return locationStops.first.name;
-    return it.destination.isNotEmpty ? it.destination : it.title;
-  }
+  String _displayTitle(Itinerary it) => it.title.trim().isNotEmpty ? it.title : it.destination;
 }

@@ -15,11 +15,11 @@ The user can start adding a trip from:
 | **My Trips** (empty) | Tap "Create Trip" button | `context.go('/create')` |
 | **Saved → Planning** (empty) | Tap "Create Trip" | `context.push('/create')` |
 
-The create flow is implemented by **`CreateItineraryScreen`** (`lib/screens/create_itinerary_screen.dart`) with no `itineraryId` (edit flow uses the same screen with `itineraryId` and route `/itinerary/:id/edit`).
+The create flow is implemented by **`TripBuilderScreen`** (`lib/screens/trip_builder_screen.dart`) — a single-screen Trip Builder with sticky header, live map, route strip, details timeline, and Save/Publish bar. Edit flow uses the same screen with `itineraryId` and route `/itinerary/:id/edit`. The previous 7-step wizard (`CreateItineraryScreen`) is deprecated and no longer used in navigation.
 
 ---
 
-## 2. Create flow — 7 steps (PageView)
+## 2. Legacy create flow — 7 steps (PageView) [deprecated]
 
 The screen uses a non-scrollable `PageView` with 7 pages. The user moves **Next** (or **Back**). Validation runs before advancing from steps 1–3.
 

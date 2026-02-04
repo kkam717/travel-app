@@ -32,7 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       Analytics.logEvent('onboarding_complete');
       if (mounted) {
         await Future.delayed(const Duration(milliseconds: 200));
-        if (mounted) context.go('/home');
+        if (mounted) context.go('/explore');
       }
     } catch (e) {
       if (mounted) {
