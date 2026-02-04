@@ -199,7 +199,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                   countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
                       ? _profile!.visitedCountries
                       : null,
-                  onSelected: (name, _, __, ___) {
+                  onSelected: (name, _, __, ___, ____) {
                     onSave(name);
                     Navigator.pop(ctx);
                     _load();
@@ -277,7 +277,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                             countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
                                                 ? _profile!.visitedCountries
                                                 : null,
-                                            onSelected: (placeName, _, __, ___) {
+                                            onSelected: (placeName, _, __, ___, ____) {
                                               Navigator.pop(dctx, placeName);
                                             },
                                           ),
@@ -346,43 +346,45 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (_, setModal) => Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(AppStrings.t(context, 'travel_styles'), style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: travelStyles.map((s) {
-                  final sel = selected.contains(s);
-                  return FilterChip(
-                    label: Text(s),
-                    selected: sel,
-                    onSelected: (_) => setModal(() {
-                      if (sel) selected.remove(s);
-                      else selected.add(s);
-                    }),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: () {
-                      onSave(selected.toList());
-                      Navigator.pop(ctx);
-                      _load();
-                    },
-                    child: Text(AppStrings.t(context, 'save')),
-                  ),
-                ],
-              ),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(AppStrings.t(context, 'travel_styles'), style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: travelStyles.map((s) {
+                    final sel = selected.contains(s);
+                    return FilterChip(
+                      label: Text(s),
+                      selected: sel,
+                      onSelected: (_) => setModal(() {
+                        if (sel) selected.remove(s);
+                        else selected.add(s);
+                      }),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    TextButton(onPressed: () => Navigator.pop(ctx), child: Text(AppStrings.t(context, 'cancel'))),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () {
+                        onSave(selected.toList());
+                        Navigator.pop(ctx);
+                        _load();
+                      },
+                      child: Text(AppStrings.t(context, 'save')),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

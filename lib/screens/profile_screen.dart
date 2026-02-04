@@ -351,7 +351,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: _StatCard(
                   icon: Icons.location_city_outlined,
                   value: '${(hasCity ? 1 : 0) + _pastCities.length}',
-                  label: AppStrings.t(context, 'lived'),
+                  label: AppStrings.t(context, 'travel_stats'),
                   color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.5),
                   iconColor: Theme.of(context).colorScheme.secondary,
                   onTap: () async {
@@ -496,7 +496,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.location_city_outlined),
-              title: Text(AppStrings.t(context, 'lived')),
+              title: Text(AppStrings.t(context, 'travel_stats')),
               subtitle: Text(AppStrings.t(context, 'home_town_lived_before')),
               trailing: const Icon(Icons.chevron_right),
               onTap: () async {

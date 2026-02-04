@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../services/places_service.dart';
 
 /// Place search field using Photon (OSM). Replaces GooglePlacesField.
+/// [onSelected] receives (name, lat, lng, url, countryCode). [countryCode] is from the API when available.
 class PlacesField extends StatefulWidget {
   final String hint;
-  final void Function(String name, double? lat, double? lng, String? locationUrl) onSelected;
+  final void Function(String name, double? lat, double? lng, String? locationUrl, String? countryCode) onSelected;
   final String? placeType;
   final List<String>? countryCodes;
   final (double, double)? locationLatLng;
@@ -85,7 +86,7 @@ class _PlacesFieldState extends State<PlacesField> {
         (p.lat != null && p.lng != null
             ? 'https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}'
             : null);
-    widget.onSelected(p.mainText, p.lat, p.lng, locationUrl);
+    widget.onSelected(p.mainText, p.lat, p.lng, locationUrl, p.countryCode);
     _controller.clear();
     setState(() => _predictions = []);
   }

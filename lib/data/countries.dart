@@ -229,6 +229,25 @@ List<String> destinationToCountryCodes(String destination) {
   return codes;
 }
 
-const List<String> travelStyles = ['Adventure', 'Nature', 'Food', 'Culture', 'Relax', 'Nightlife'];
+const List<String> travelStyles = [
+  'Adventure',
+  'Nature',
+  'Food',
+  'Culture',
+  'Relax',
+  'Nightlife',
+  'Urban',
+  'Outdoors',
+  'Slow Travel',
+  'Wellness',
+  'Romantic',
+  'Social',
+  'Family',
+  'Road Trip',
+  'City Break',
+  'Scenic',
+  'Local',
+  'Offbeat',
+];
 const List<String> travelModes = ['Budget', 'Standard', 'Luxury'];
 const List<String> stopCategories = ['restaurant', 'hotel', 'experience'];

@@ -13,9 +13,10 @@ import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/analytics.dart';
 import '../core/trip_builder_helpers.dart';
-import '../data/countries.dart' show countries, destinationToCountryCodes;
+import '../data/countries.dart' show countries, destinationToCountryCodes, travelStyles;
 import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
+import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 import '../widgets/places_field.dart';
 import '../widgets/itinerary_map.dart';
@@ -87,6 +88,39 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   bool _isLoadingData = false;
   final MapController _tripBuilderMapController = MapController();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
+  List<String> _selectedStyleTags = [];
+  bool _costPerPersonEnabled = false;
+  int _costPerPerson = 0; // USD, 0–10000+ (slider max 10000; text field can set higher)
+  final TextEditingController _costPerPersonController = TextEditingController();
+  /// Country code inferred from last added destination (API response). Not persisted.
+  String? _lastAddedCountryCode;
+  /// Runtime-only classic picks pool (up to 10). Not cached or persisted.
+  List<PlacePrediction> _classicPicksSuggestions = [];
+  /// Country codes we last fetched for (sorted list for comparison).
+  List<String>? _classicPicksFetchedForCountryCodes;
+
+  /// Cost range depends on travel mode (budget / standard / luxury).
+  int get _costMin {
+    switch (_mode) {
+      case modeBudget: return 0;
+      case modeLuxury: return 800;
+      default: return 200; // standard
+    }
+  }
+  int get _costSliderMax {
+    switch (_mode) {
+      case modeBudget: return 2000;   // $0 – $2k
+      case modeLuxury: return 10000;  // $800 – $10k
+      default: return 4000;           // standard: $200 – $4k
+    }
+  }
+  int get _costMax {
+    switch (_mode) {
+      case modeBudget: return 2000;
+      case modeLuxury: return 999999; // text field can go above 10k
+      default: return 4000;
+    }
+  }
 
   bool get _isEditMode => widget.itineraryId != null;
 
@@ -110,6 +144,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         _countryQuery = '';
         _showCountrySuggestions = false;
         _countryQueryController.text = '';
+        _classicPicksFetchedForCountryCodes = null;
       });
     }
   }
@@ -163,7 +198,10 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   }
 
   void _removeCountry(String code) {
-    setState(() => _selectedCountries.remove(code));
+    setState(() {
+      _selectedCountries.remove(code);
+      _classicPicksFetchedForCountryCodes = null;
+    });
   }
 
   @override
@@ -188,6 +226,18 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       _mode = (it.mode ?? modeStandard).toLowerCase();
       _visibility = it.visibility == visibilityPrivate ? visibilityFriends : it.visibility;
       _selectedCountries = destinationToCountryCodes(it.destination).toList();
+      _classicPicksFetchedForCountryCodes = null;
+      _selectedStyleTags = it.styleTags.map((s) {
+        if (s.isEmpty) return s;
+        final lower = s.toLowerCase();
+        for (final t in travelStyles) {
+          if (t.toLowerCase() == lower) return t;
+        }
+        return s.length > 1 ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : s.toUpperCase();
+      }).toList();
+      _costPerPersonEnabled = it.costPerPerson != null;
+      _costPerPerson = (it.costPerPerson ?? 0).clamp(0, 999999999); // allow any non-negative; no mode max
+      _costPerPersonController.text = _costPerPerson.toString();
       _useDates = it.useDates ?? false;
       _startDate = it.startDate;
       _endDate = it.endDate;
@@ -262,18 +312,63 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     _removeCountryOverlay();
     _titleController.dispose();
     _countryQueryController.dispose();
+    _costPerPersonController.dispose();
     super.dispose();
   }
 
   List<CityDayPair> get _chronologicalPairs => buildChronologicalPairsFromAllocations(_allocations);
 
-  void _addCity(String name, double? lat, double? lng, String? url) {
+  /// Active country codes for classic picks: all selected countries, or last-added destination's country. Not persisted.
+  List<String> get _activeCountryCodesForSuggestions {
+    if (_selectedCountries.isNotEmpty) return List.from(_selectedCountries);
+    if (_lastAddedCountryCode != null && _lastAddedCountryCode!.isNotEmpty) {
+      return [_lastAddedCountryCode!];
+    }
+    return [];
+  }
+
+  static bool _sameCountryCodes(List<String> a, List<String>? b) {
+    if (b == null || a.length != b.length) return false;
+    final sa = a.toSet();
+    final sb = b.toSet();
+    return sa.length == sb.length && sa.containsAll(sb);
+  }
+
+  Future<void> _loadClassicPicksSuggestions() async {
+    final codes = _activeCountryCodesForSuggestions;
+    if (codes.isEmpty) {
+      if (mounted) setState(() {
+        _classicPicksSuggestions = [];
+        _classicPicksFetchedForCountryCodes = null;
+      });
+      return;
+    }
+    final sorted = List<String>.from(codes)..sort();
+    if (_sameCountryCodes(sorted, _classicPicksFetchedForCountryCodes)) return;
+    try {
+      final results = await PlacesService.searchClassicCitiesByCountry(codes, maxRows: 10);
+      if (!mounted) return;
+      setState(() {
+        _classicPicksSuggestions = results;
+        _classicPicksFetchedForCountryCodes = sorted;
+      });
+    } catch (_) {
+      if (mounted) setState(() {
+        _classicPicksSuggestions = [];
+        _classicPicksFetchedForCountryCodes = sorted;
+      });
+    }
+  }
+
+  void _addCity(String name, double? lat, double? lng, String? url, [String? countryCode]) {
     setState(() {
+      _lastAddedCountryCode = countryCode;
       _cities.add(_CityEntry()..name = name..lat = lat..lng = lng..externalUrl = url..dayCount = 1);
       _allocations = allocateDaysAcrossCities(_daysCount, _cities.length);
       for (var i = 0; i < _cities.length; i++) {
         _cities[i].dayCount = _allocations[i];
       }
+      // Keep full pool; next build will show next 2 not yet in _cities
     });
   }
 
@@ -509,6 +604,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         if (pairs.length >= 2) {
           updateData['transport_transitions'] = transportTransitions!.map((t) => t.toJson()).toList();
         }
+        updateData['style_tags'] = _selectedStyleTags.map((s) => s.toLowerCase()).toList();
+        updateData['cost_per_person'] = _costPerPersonEnabled ? _costPerPerson : null;
         await SupabaseService.updateItinerary(id, updateData);
         await SupabaseService.updateItineraryStops(id, stopsData);
         Analytics.logEvent('itinerary_updated', {'id': id});
@@ -519,7 +616,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           title: _titleController.text.trim(),
           destination: destination,
           daysCount: _daysCount,
-          styleTags: [],
+          styleTags: _selectedStyleTags.map((s) => s.toLowerCase()).toList(),
           mode: _mode,
           visibility: publish ? _effectivePublishVisibility : visibilityPrivate,
           forkedFromId: null,
@@ -531,6 +628,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           durationMonth: _useDates ? null : _durationMonth,
           durationSeason: _useDates ? null : _durationSeason,
           transportTransitions: transportTransitions,
+          costPerPerson: _costPerPersonEnabled ? _costPerPerson : null,
         );
         Analytics.logEvent('itinerary_created', {'id': it.id});
         if (mounted) context.go('/itinerary/${it.id}');
@@ -753,6 +851,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
+                                _buildTravelStylesRow(theme),
+                                const SizedBox(height: 12),
                                 _buildCountriesRow(theme),
                                 const SizedBox(height: 8),
                                 Material(
@@ -781,7 +881,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                     ),
                                   ),
                                 ),
-                                if (_selectedCountries.isNotEmpty) ...[
+                                if (_selectedCountries.isNotEmpty || _cities.isNotEmpty) ...[
                                   const SizedBox(height: 10),
                                   SizedBox(
                                     width: double.infinity,
@@ -801,6 +901,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                 _buildRouteStrip(theme),
                                 const SizedBox(height: AppTheme.spacingLg),
                                 _buildDetailsTimeline(theme),
+                                const SizedBox(height: AppTheme.spacingLg),
+                                _buildCostPerPersonRow(theme),
                               ],
                             ),
                           ),
@@ -985,6 +1087,186 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
+  Widget _buildTravelStylesRow(ThemeData theme) {
+    final count = _selectedStyleTags.length;
+    final summary = count == 0
+        ? AppStrings.t(context, 'tap_to_select')
+        : count == 1
+            ? _selectedStyleTags.first
+            : '$count ${AppStrings.t(context, 'selected')}';
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: () => _showTravelStylesSheet(),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.label_outline, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  summary,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTravelStylesSheet() async {
+    if (!mounted) return;
+    List<String> selected = List.from(_selectedStyleTags);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (ctx, scrollController) => StatefulBuilder(
+          builder: (ctx, setModalState) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMd),
+                  child: Text(AppStrings.t(context, 'travel_styles'), style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: travelStyles.map((style) {
+                        final isSelected = selected.contains(style);
+                        return FilterChip(
+                          label: Text(style),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            setModalState(() {
+                              if (isSelected) {
+                                selected.remove(style);
+                              } else {
+                                selected.add(style);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMd),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        setState(() => _selectedStyleTags = selected);
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(AppStrings.t(context, 'done')),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCostPerPersonRow(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                AppStrings.t(context, 'cost_per_person_optional'),
+                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Switch(
+              value: _costPerPersonEnabled,
+              onChanged: (v) {
+                setState(() {
+                  _costPerPersonEnabled = v;
+                  if (!v) {
+                    _costPerPerson = 0;
+                  }
+                  // when enabling, keep _costPerPerson as-is (often 0) so text input can type any value
+                  _costPerPersonController.text = _costPerPerson.toString();
+                });
+              },
+            ),
+          ],
+        ),
+        if (_costPerPersonEnabled) ...[
+          const SizedBox(height: 8),
+          Slider(
+            value: _costPerPerson.clamp(_costMin, _costSliderMax).toDouble(),
+            min: _costMin.toDouble(),
+            max: _costSliderMax.toDouble(),
+            divisions: 20,
+            label: _costPerPerson >= _costSliderMax ? '\$$_costSliderMax+' : '\$$_costPerPerson',
+            onChanged: (v) {
+              final n = v.round().clamp(_costMin, _costSliderMax);
+              setState(() {
+                _costPerPerson = n;
+                _costPerPersonController.text = n.toString();
+              });
+            },
+          ),
+          Row(
+            children: [
+              Text(
+                _costPerPerson >= _costSliderMax ? '\$$_costSliderMax+' : '\$$_costPerPerson',
+                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _costPerPersonController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    prefixText: '\$ ',
+                    hintText: '0',
+                    isDense: true,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  onChanged: (s) {
+                    final n = int.tryParse(s.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+                    final value = n < 0 ? 0 : n; // only block negative
+                    if (value != _costPerPerson) setState(() => _costPerPerson = value);
+                    if (n < 0 && _costPerPersonController.text != '0') {
+                      _costPerPersonController.text = '0';
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildCountriesRow(ThemeData theme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1076,6 +1358,67 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// [alwaysShowSection] when true (e.g. in add-destination sheet), show "Classic picks" label and empty state when no suggestions.
+  Widget _buildClassicPicksRow(ThemeData theme, {VoidCallback? onPickSelected, bool alwaysShowSection = false}) {
+    final codes = _activeCountryCodesForSuggestions;
+    if (codes.isEmpty && !alwaysShowSection) return const SizedBox.shrink();
+    final sortedCodes = List<String>.from(codes)..sort();
+    if (codes.isNotEmpty && !_sameCountryCodes(sortedCodes, _classicPicksFetchedForCountryCodes)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadClassicPicksSuggestions());
+    }
+    final existingNames = _cities.map((c) => c.name).toSet();
+    final toShow = _classicPicksSuggestions
+        .where((p) => !existingNames.contains(p.mainText))
+        .take(2)
+        .toList();
+    if (toShow.isEmpty && !alwaysShowSection) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(AppStrings.t(context, 'classic_picks'), style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          if (toShow.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: toShow.map((p) {
+                final url = p.osmUrl ?? (p.lat != null && p.lng != null ? 'https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}' : null);
+                return Material(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                  borderRadius: BorderRadius.circular(999),
+                  child: InkWell(
+                    onTap: () {
+                      _addCity(p.mainText, p.lat, p.lng, url, p.countryCode);
+                      onPickSelected?.call();
+                    },
+                    borderRadius: BorderRadius.circular(999),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(p.mainText, style: theme.textTheme.labelLarge),
+                    ),
+                  ),
+                );
+              }).toList(),
+            )
+          else if (alwaysShowSection)
+            Text(
+              codes.isEmpty
+                  ? AppStrings.t(context, 'add_at_least_one_country')
+                  : 'No city suggestions for this country',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+        ],
       ),
     );
   }
@@ -1242,7 +1585,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 title: Text(m == modeBudget ? AppStrings.t(context, 'budget') : m == modeLuxury ? AppStrings.t(context, 'luxury') : AppStrings.t(context, 'standard')),
                 selected: _mode == m,
                 onTap: () {
-                  setState(() => _mode = m);
+                  setState(() {
+                    _mode = m;
+                    if (_costPerPersonEnabled) {
+                      _costPerPersonController.text = _costPerPerson.toString();
+                    }
+                  });
                   Navigator.pop(ctx);
                 },
               )),
@@ -1309,6 +1657,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                           selected.remove(e.key);
                         } else {
                           selected.add(e.key);
+                          Navigator.pop(ctx);
                         }
                         setState(() => _selectedCountries = List.from(selected));
                       },
@@ -1499,6 +1848,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
 
   Future<void> _showAddCitySheet() async {
     if (!mounted) return;
+    await _loadClassicPicksSuggestions();
+    if (!mounted) return;
+    final theme = Theme.of(context);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -1515,11 +1867,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 hint: AppStrings.t(context, 'search_city_or_location'),
                 countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                 lang: Localizations.localeOf(ctx).languageCode,
-                onSelected: (n, la, ln, u) {
-                  if (n.isNotEmpty) _addCity(n, la, ln, u);
+                onSelected: (n, la, ln, u, countryCode) {
+                  if (n.isNotEmpty) _addCity(n, la, ln, u, countryCode);
                   Navigator.pop(ctx);
                 },
               ),
+              _buildClassicPicksRow(theme, onPickSelected: () => Navigator.pop(ctx), alwaysShowSection: true),
             ],
           ),
         ),
@@ -1641,18 +1994,19 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         builder: (ctx, setModalState) => SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, MediaQuery.viewPaddingOf(ctx).bottom + AppTheme.spacingLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('${AppStrings.t(context, 'add')} ${_venueCategoryLabel(category)}', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 12),
-              PlacesField(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('${AppStrings.t(context, 'add')} ${_venueCategoryLabel(category)}', style: Theme.of(ctx).textTheme.titleMedium),
+                  const SizedBox(height: 12),
+                  PlacesField(
                 hint: '${AppStrings.t(context, 'search')} ${_venueCategoryLabel(category)}…',
                 countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                 locationLatLng: _cities[cityIndex].lat != null && _cities[cityIndex].lng != null ? (_cities[cityIndex].lat!, _cities[cityIndex].lng!) : null,
                 lang: Localizations.localeOf(ctx).languageCode,
-                onSelected: (n, la, ln, u) {
+                onSelected: (n, la, ln, u, _) {
                   name = n;
                   lat = la;
                   lng = ln;
@@ -1713,6 +2067,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                   child: Text(AppStrings.t(context, 'add')),
                 ),
               ],
+            ),
             ),
           ),
         ),

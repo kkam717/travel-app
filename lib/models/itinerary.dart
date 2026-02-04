@@ -57,6 +57,8 @@ class Itinerary {
   final int? durationMonth;
   final String? durationSeason;
   final List<TransportTransition>? transportTransitions;
+  /// Optional estimated cost per person in USD (null = not set).
+  final int? costPerPerson;
 
   const Itinerary({
     required this.id,
@@ -83,6 +85,7 @@ class Itinerary {
     this.durationMonth,
     this.durationSeason,
     this.transportTransitions,
+    this.costPerPerson,
   });
 
   factory Itinerary.fromJson(Map<String, dynamic> json, {List<ItineraryStop>? stops}) {
@@ -113,6 +116,7 @@ class Itinerary {
       transportTransitions: json['transport_transitions'] != null
           ? (json['transport_transitions'] as List).map((e) => TransportTransition.fromJson(e)).toList()
           : null,
+      costPerPerson: (json['cost_per_person'] as num?)?.toInt(),
     );
   }
 
@@ -135,6 +139,7 @@ class Itinerary {
       if (durationSeason != null) 'duration_season': durationSeason,
       if (transportTransitions != null && transportTransitions!.isNotEmpty)
         'transport_transitions': transportTransitions!.map((t) => t.toJson()).toList(),
+      if (costPerPerson != null) 'cost_per_person': costPerPerson,
     };
   }
 
@@ -152,6 +157,7 @@ class Itinerary {
     int? durationMonth,
     String? durationSeason,
     List<TransportTransition>? transportTransitions,
+    int? costPerPerson,
   }) =>
       Itinerary(
         id: id,
@@ -178,6 +184,7 @@ class Itinerary {
         durationMonth: durationMonth ?? this.durationMonth,
         durationSeason: durationSeason ?? this.durationSeason,
         transportTransitions: transportTransitions ?? this.transportTransitions,
+        costPerPerson: costPerPerson ?? this.costPerPerson,
       );
 }
 

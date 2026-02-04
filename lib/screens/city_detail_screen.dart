@@ -496,7 +496,7 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                     hint: '${AppStrings.t(context, 'search_place_in')} ${widget.cityName}…',
                     locationLatLng: coords,
                     countryCodes: countryCode != null && countryCode.isNotEmpty ? [countryCode] : null,
-                    onSelected: (name, _, __, locationUrl) {
+                    onSelected: (name, _, __, locationUrl, ___) {
                       setState(() {
                         _placeName = name;
                         _placeId = locationUrl;

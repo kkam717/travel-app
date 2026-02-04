@@ -4,6 +4,7 @@ import '../core/theme.dart';
 import '../core/app_link.dart';
 import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
+import '../models/user_city.dart';
 import 'static_map_image.dart';
 
 /// 2026-style feed card: content-first, low-chrome, premium look.
@@ -19,8 +20,9 @@ class ItineraryFeedCard2026 extends StatelessWidget {
   final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback onAuthorTap;
-  /// Lived-in cities from author profile (current + past). Section only shown when non-null and non-empty.
-  final List<String>? authorLivedInCityNames;
+  /// Spot-level recommendations (bars/restaurants etc) from author's lived city matching this itinerary's destination. Section only shown when non-null and non-empty.
+  final List<UserTopSpot>? authorLivedHereSpots;
+  final bool isAuthorFriend;
 
   static const double _cardRadius = 0; // Sharp edges (no rounded corners on static map)
   static const double _heroHeight = 220;
@@ -37,8 +39,19 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     this.onLike,
     required this.onTap,
     required this.onAuthorTap,
-    this.authorLivedInCityNames,
+    this.authorLivedHereSpots,
+    this.isAuthorFriend = false,
   });
+
+  static String _categoryLabel(BuildContext context, String cat) {
+    switch (cat) {
+      case 'eat': return AppStrings.t(context, 'top_spot_eat');
+      case 'drink': return AppStrings.t(context, 'top_spot_drink');
+      case 'date': return AppStrings.t(context, 'top_spot_date');
+      case 'chill': return AppStrings.t(context, 'top_spot_chill');
+      default: return cat;
+    }
+  }
 
   /// User-inputted trip title (never route/destination).
   String _displayTitle(Itinerary it) => it.title.trim().isNotEmpty ? it.title : it.destination;
@@ -57,7 +70,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     final theme = Theme.of(context);
     final it = itinerary;
     final displayTitle = _displayTitle(it);
-    final livedHereCities = authorLivedInCityNames;
+    final livedHereSpots = authorLivedHereSpots;
     final subtitleText = it.destination.trim().isNotEmpty
         ? '${it.daysCount} ${AppStrings.t(context, 'days')} ${AppStrings.t(context, 'across')} ${it.destination}'
         : '${it.daysCount} ${AppStrings.t(context, 'days')}';
@@ -285,43 +298,61 @@ class ItineraryFeedCard2026 extends StatelessWidget {
                       },
                     ),
                   ),
-                  // From someone who lived here (author profile: current + past cities only)
-                  if (livedHereCities != null && livedHereCities.isNotEmpty) ...[
+                  // From someone who lived here: spot-level recommendations (bars/restaurants etc) from author's lived city matching this itinerary's destination
+                  if (livedHereSpots != null && livedHereSpots.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingSm, AppTheme.spacingMd, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            AppStrings.t(context, 'from_someone_who_lived_here'),
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          ...livedHereCities.map((cityName) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.place_rounded,
-                                  size: 18,
+                          Row(
+                            children: [
+                              Text(
+                                AppStrings.t(context, 'from_someone_who_lived_here'),
+                                style: theme.textTheme.labelMedium?.copyWith(
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
+                              ),
+                              if (isAuthorFriend) ...[
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    cityName,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                Icon(Icons.people_rounded, size: 16, color: theme.colorScheme.primary),
+                                const SizedBox(width: 4),
+                                Text(
+                                  AppStrings.t(context, 'following'),
+                                  style: theme.textTheme.labelMedium?.copyWith(
+                                    color: theme.colorScheme.primary,
                                   ),
                                 ),
                               ],
-                            ),
-                          )),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ...livedHereSpots.map((spot) {
+                            final label = _categoryLabel(context, spot.category);
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.place_rounded,
+                                    size: 18,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '${spot.name} · $label',
+                                      style: theme.textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
                         ],
                       ),
                     ),

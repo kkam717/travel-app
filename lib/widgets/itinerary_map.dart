@@ -25,6 +25,8 @@ class ItineraryMap extends StatefulWidget {
   final List<String>? countryCodes;
   /// When set, use this controller and do not show the built-in compass (caller shows it, e.g. in a sheet).
   final MapController? mapController;
+  /// When set, tapping a city (location) marker calls this with the stop's day and place name (so the UI can show all days for that place).
+  final void Function(int day, String placeName)? onCityTap;
 
   const ItineraryMap({
     super.key,
@@ -36,6 +38,7 @@ class ItineraryMap extends StatefulWidget {
     this.showWorldWhenEmpty = false,
     this.countryCodes,
     this.mapController,
+    this.onCityTap,
   });
 
   @override
@@ -85,7 +88,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   List<ItineraryStop> get _locationStopsWithCoordsList =>
       _locationStopsWithCoords ??= widget.stops.where((s) => s.isLocation && s.lat != null && s.lng != null).toList();
 
-  /// Location stops to show as waypoint dots. In full-screen with route, show only the end of the route (one dot at the last stop).
+  /// Location stops to show as waypoint dots. Show all cities (route overlay does not hide them).
   List<ItineraryStop> get _orderedLocationStopsForMarkers {
     final list = _locationStopsWithCoordsList;
     if (list.isEmpty) return list;
@@ -94,9 +97,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
         final dayCmp = a.day.compareTo(b.day);
         return dayCmp != 0 ? dayCmp : a.position.compareTo(b.position);
       });
-    if (widget.fullScreen && ordered.length >= 2) {
-      return [ordered.last];
-    }
     return ordered;
   }
 
@@ -785,6 +785,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
   TileLayer _buildTileLayer(Brightness brightness) {
     final key = _geoapifyKey;
     final isDark = brightness == Brightness.dark;
+    final isRetina = MediaQuery.of(context).devicePixelRatio > 1.0;
     // On web, use WebTileProvider to bypass CORS. On iOS simulator (and other platforms where
     // path_provider_foundation/objective_c can fail), disable built-in tile cache to avoid native crash.
     final TileProvider tileProvider = kIsWeb
@@ -800,14 +801,19 @@ class _ItineraryMapState extends State<ItineraryMap> {
         userAgentPackageName: 'com.footprint.travel',
         maxNativeZoom: 20,
         tileProvider: tileProvider,
+        retinaMode: isRetina,
       );
     }
+    // Carto supports @2x tiles via {r}; use 512px tileDimension and zoomOffset -1 when retina
     final cartoStyle = isDark ? 'dark_nolabels' : 'light_nolabels';
     return TileLayer(
-      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$cartoStyle/{z}/{x}/{y}.png',
+      urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/$cartoStyle/{z}/{x}/{y}{r}.png',
       userAgentPackageName: 'com.footprint.travel',
       maxNativeZoom: 20,
       tileProvider: tileProvider,
+      retinaMode: isRetina,
+      tileDimension: isRetina ? 512 : 256,
+      zoomOffset: isRetina ? -1.0 : 0.0,
     );
   }
 
@@ -1065,19 +1071,29 @@ class _ItineraryMapState extends State<ItineraryMap> {
             ),
           MarkerLayer(
             markers: [
-              // City markers (locations) - larger circles. In full-screen route view, skip origin (first stop) and show dots from second stop through end of route.
-              ..._orderedLocationStopsForMarkers.map((stop) => Marker(
-                point: LatLng(stop.lat!, stop.lng!),
-                width: 16,
-                height: 16,
-                child: Container(
+              // City markers (locations) - 2x spot size (48); tappable when onCityTap is set.
+              ..._orderedLocationStopsForMarkers.map((stop) {
+                const citySize = 16.0; // city dot; venue markers stay 24
+                final child = Container(
                   decoration: BoxDecoration(
                     color: primaryColor,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                   ),
-                ),
-              )),
+                );
+                return Marker(
+                  point: LatLng(stop.lat!, stop.lng!),
+                  width: citySize,
+                  height: citySize,
+                  child: widget.onCityTap != null
+                      ? GestureDetector(
+                          onTap: () => widget.onCityTap!(stop.day, stop.name),
+                          behavior: HitTestBehavior.opaque,
+                          child: child,
+                        )
+                      : child,
+                );
+              }),
               // Venue markers (spots) - orange flags, tap shows name above (flag stays fixed)
               ..._venueStopsWithCoordsList.map((stop) => _buildVenueFlagMarker(stop)),
             ],

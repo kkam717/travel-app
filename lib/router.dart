@@ -47,11 +47,12 @@ GoRouter createRouter() {
       if (needsOnboarding && !isOnboardingRoute) {
         return '/onboarding';
       }
+      // Just finished onboarding: OnboardingScreen does context.go('/explore'). Default (opening app) = Home.
       if (!needsOnboarding && isOnboardingRoute) {
-        return '/explore';
+        return '/home';
       }
       if (!needsOnboarding && state.matchedLocation == '/') {
-        return '/explore';
+        return '/home';
       }
       if (!needsOnboarding && state.matchedLocation == '/search') {
         return '/explore';

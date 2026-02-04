@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/app_link.dart';
@@ -49,8 +53,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final Map<String, bool> _liked = {};
   /// Author ID -> list of city names from profile (current city + past cities). Used for "From someone who lived here".
   final Map<String, List<String>> _authorLivedInCities = {};
+  /// Author ID -> all top spots (bars/restaurants etc) for that user, by city. Used for lived-here recommendations.
+  final Map<String, List<UserTopSpot>> _authorTopSpots = {};
+  /// Current user's following IDs (friends). Used to prioritise friend recommendations.
+  Set<String> _followingAuthorIds = {};
+  /// FYP: itinerary id -> number of times the user has seen this post (persisted). Updated when viewing.
+  Map<String, int> _fypViewCounts = {};
+  /// FYP: snapshot used only for sorting; updated only on pull-to-refresh so order doesn't change while scrolling.
+  Map<String, int> _fypViewCountsForSorting = {};
+  /// FYP: ids we've already counted as "viewed" in this visibility session (reset when off-screen).
+  final Set<String> _fypViewedThisSession = {};
   late TabController _tabController;
   int _newTripsCount = 0;
+
+  static const String _fypViewCountsKeyPrefix = 'fyp_views_';
+  /// Each view makes a post count as 1 day "older" for sorting, so less-seen posts rise on refresh.
+  static const int _fypViewPenaltyMs = 24 * 60 * 60 * 1000;
 
   /// 0 = expanded, 1 = collapsed. Driven by scroll offset.
   double _headerCollapseT = 0;
@@ -131,6 +149,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           _error = null;
         });
       }
+      _loadFypViewCounts();
       _load(silent: true);
     } else {
       _load(silent: false);
@@ -181,8 +200,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         _liked.addAll(likedMap);
         _isLoading = false;
         _hasMore = feedList.length >= _pageSize;
+        // Update FYP sort snapshot only on refresh so order doesn't change while scrolling.
+        _fypViewCountsForSorting = Map.from(_fypViewCounts);
       });
       _ensureAuthorLivedInCities();
+      _ensureFollowingIds();
+      _loadFypViewCounts();
       Analytics.logScreenView('home');
     } catch (e) {
       if (!mounted) return;
@@ -226,11 +249,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
-  /// Fetches profile + past cities for feed authors not yet in _authorLivedInCities; updates state.
+  /// Fetches profile + past cities + top spots for feed authors not yet loaded; updates state.
   Future<void> _ensureAuthorLivedInCities() async {
     final ids = _feed.map((i) => i.authorId).toSet().where((id) => !_authorLivedInCities.containsKey(id)).toList();
     if (ids.isEmpty) return;
-    final updates = <String, List<String>>{};
+    final cityUpdates = <String, List<String>>{};
+    final spotUpdates = <String, List<UserTopSpot>>{};
     for (final authorId in ids) {
       try {
         final profile = await SupabaseService.getProfile(authorId);
@@ -242,15 +266,69 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           final name = c.cityName.trim();
           if (name.isNotEmpty && !cities.contains(name)) cities.add(name);
         }
-        updates[authorId] = cities;
+        cityUpdates[authorId] = cities;
+        final spots = await SupabaseService.getTopSpotsForUser(authorId);
+        spotUpdates[authorId] = spots;
       } catch (_) {
-        updates[authorId] = [];
+        cityUpdates[authorId] = [];
+        spotUpdates[authorId] = [];
       }
     }
-    if (!mounted || updates.isEmpty) return;
+    if (!mounted || (cityUpdates.isEmpty && spotUpdates.isEmpty)) return;
     setState(() {
-      for (final e in updates.entries) _authorLivedInCities[e.key] = e.value;
+      for (final e in cityUpdates.entries) {
+        _authorLivedInCities[e.key] = e.value;
+      }
+      for (final e in spotUpdates.entries) {
+        _authorTopSpots[e.key] = e.value;
+      }
     });
+  }
+
+  /// Load current user's following IDs so we can show friend badge and prioritise friend recommendations.
+  Future<void> _ensureFollowingIds() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final ids = await SupabaseService.getFollowedIds(userId);
+      if (!mounted) return;
+      setState(() => _followingAuthorIds = ids.toSet());
+    } catch (_) {}
+  }
+
+  /// Destination string (e.g. "Rome, Italy") -> first part normalized for matching.
+  static String _destinationCityNormalized(String destination) {
+    final t = destination.trim();
+    if (t.isEmpty) return '';
+    final comma = t.indexOf(',');
+    final city = comma >= 0 ? t.substring(0, comma).trim() : t;
+    return city.toLowerCase();
+  }
+
+  /// Returns lived city name from author's list that matches this itinerary's destination, or null.
+  String? _matchLivedCityToDestination(String destination, List<String> livedCities) {
+    final destNorm = _HomeScreenState._destinationCityNormalized(destination);
+    if (destNorm.isEmpty) return null;
+    for (final city in livedCities) {
+      final c = city.trim();
+      if (c.isEmpty) continue;
+      if (c.toLowerCase() == destNorm) return city;
+      if (destNorm.contains(c.toLowerCase())) return city;
+      if (c.toLowerCase().contains(destNorm)) return city;
+    }
+    return null;
+  }
+
+  /// Spot-level recommendations from this itinerary's author for the itinerary's destination (lived/current city that matches). Empty if no match or no spots.
+  List<UserTopSpot>? _authorLivedHereSpotsFor(Itinerary it) {
+    final cities = _authorLivedInCities[it.authorId];
+    if (cities == null || cities.isEmpty) return null;
+    final matchedCity = _matchLivedCityToDestination(it.destination, cities);
+    if (matchedCity == null) return null;
+    final spots = _authorTopSpots[it.authorId];
+    if (spots == null || spots.isEmpty) return null;
+    final forCity = spots.where((s) => s.cityName.trim().toLowerCase() == matchedCity.trim().toLowerCase()).toList();
+    return forCity.isEmpty ? null : forCity;
   }
 
   Future<void> _onRefresh() async {
@@ -465,7 +543,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     onAuthorTap: () => context.push('/author/${it.authorId}'),
                     variant: _CardVariant.standard,
                     index: i,
-                    authorLivedInCityNames: _authorLivedInCities[it.authorId],
+                    authorLivedHereSpots: _authorLivedHereSpotsFor(it),
+                    isAuthorFriend: _followingAuthorIds.contains(it.authorId),
                   ),
                   );
                 },
@@ -483,8 +562,47 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   List<Itinerary> get _forYouItems {
     final seen = <String>{};
     final merged = <Itinerary>[..._feed, ..._discover];
-    return merged.where((i) => seen.add(i.id)).toList()
-      ..sort((a, b) => (b.createdAt ?? DateTime(0)).compareTo(a.createdAt ?? DateTime(0)));
+    final list = merged.where((i) => seen.add(i.id)).toList();
+    list.sort((a, b) {
+      final aMs = (a.createdAt ?? DateTime(0)).millisecondsSinceEpoch;
+      final bMs = (b.createdAt ?? DateTime(0)).millisecondsSinceEpoch;
+      final aViews = _fypViewCountsForSorting[a.id] ?? 0;
+      final bViews = _fypViewCountsForSorting[b.id] ?? 0;
+      final aScore = aMs - aViews * _fypViewPenaltyMs;
+      final bScore = bMs - bViews * _fypViewPenaltyMs;
+      return bScore.compareTo(aScore);
+    });
+    return list;
+  }
+
+  Future<void> _loadFypViewCounts() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('$_fypViewCountsKeyPrefix$userId');
+      if (raw == null && !mounted) return;
+      final Map<String, dynamic> decoded = raw != null
+          ? (jsonDecode(raw) as Map<String, dynamic>? ?? {})
+          : {};
+      final counts = decoded.map((k, v) => MapEntry(k as String, (v as num).toInt()));
+      if (!mounted) return;
+      setState(() {
+        _fypViewCounts = counts;
+        _fypViewCountsForSorting = Map.from(counts);
+      });
+    } catch (_) {}
+  }
+
+  /// Records a view for FYP sorting. Updates in memory and persists; does not rebuild so order only changes on user refresh.
+  Future<void> _recordFypView(String itineraryId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    _fypViewCounts[itineraryId] = (_fypViewCounts[itineraryId] ?? 0) + 1;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_fypViewCountsKeyPrefix$userId', jsonEncode(_fypViewCounts));
+    } catch (_) {}
   }
 
   Widget _buildForYouTab(BuildContext context) {
@@ -542,22 +660,37 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       final it = items[i];
                       final userId = Supabase.instance.client.auth.currentUser?.id;
                       final isOthersPost = userId != null && it.authorId != userId;
-                      return RepaintBoundary(
+                      final card = RepaintBoundary(
                         child: _SwipeableFeedCard(
-                        itinerary: it,
-                        description: _descriptionFor(it),
-                        locations: _locationsFor(it),
-                        isBookmarked: _bookmarked[it.id] ?? false,
-                        onBookmark: () => _toggleBookmark(it.id),
-                        isLiked: _liked[it.id] ?? false,
-                        likeCount: it.likeCount ?? 0,
-                        onLike: isOthersPost ? () => _toggleLike(it.id) : null,
-                        onTap: () => context.push('/itinerary/${it.id}').then((result) => _onReturnFromItinerary(it.id, result)),
-                        onAuthorTap: () => context.push('/author/${it.authorId}'),
-                        variant: _CardVariant.standard,
-                        index: i,
-                        authorLivedInCityNames: _authorLivedInCities[it.authorId],
-                      ),
+                          itinerary: it,
+                          description: _descriptionFor(it),
+                          locations: _locationsFor(it),
+                          isBookmarked: _bookmarked[it.id] ?? false,
+                          onBookmark: () => _toggleBookmark(it.id),
+                          isLiked: _liked[it.id] ?? false,
+                          likeCount: it.likeCount ?? 0,
+                          onLike: isOthersPost ? () => _toggleLike(it.id) : null,
+                          onTap: () => context.push('/itinerary/${it.id}').then((result) => _onReturnFromItinerary(it.id, result)),
+                          onAuthorTap: () => context.push('/author/${it.authorId}'),
+                          variant: _CardVariant.standard,
+                          index: i,
+                          authorLivedHereSpots: _authorLivedHereSpotsFor(it),
+                          isAuthorFriend: _followingAuthorIds.contains(it.authorId),
+                        ),
+                      );
+                      return VisibilityDetector(
+                        key: Key('fyp_vis_${it.id}'),
+                        onVisibilityChanged: (info) {
+                          if (info.visibleFraction >= 0.5) {
+                            if (!_fypViewedThisSession.contains(it.id)) {
+                              _fypViewedThisSession.add(it.id);
+                              _recordFypView(it.id);
+                            }
+                          } else if (info.visibleFraction < 0.2) {
+                            _fypViewedThisSession.remove(it.id);
+                          }
+                        },
+                        child: card,
                       );
                     },
                     childCount: items.length + 1,
@@ -809,7 +942,9 @@ class _SwipeableFeedCard extends StatelessWidget {
   final VoidCallback onAuthorTap;
   final _CardVariant variant;
   final int index;
-  final List<String>? authorLivedInCityNames;
+  /// Spot-level recommendations (bars/restaurants etc) from author's lived city matching this itinerary's destination. Section hidden when null or empty.
+  final List<UserTopSpot>? authorLivedHereSpots;
+  final bool isAuthorFriend;
 
   const _SwipeableFeedCard({
     required this.itinerary,
@@ -824,7 +959,8 @@ class _SwipeableFeedCard extends StatelessWidget {
     required this.onAuthorTap,
     required this.variant,
     required this.index,
-    this.authorLivedInCityNames,
+    this.authorLivedHereSpots,
+    this.isAuthorFriend = false,
   });
 
   @override
@@ -856,7 +992,8 @@ class _SwipeableFeedCard extends StatelessWidget {
                 onLike: onLike,
                 onTap: onTap,
                 onAuthorTap: onAuthorTap,
-                authorLivedInCityNames: authorLivedInCityNames,
+                authorLivedHereSpots: authorLivedHereSpots,
+                isAuthorFriend: isAuthorFriend,
               ),
             )
           : _EdgeAwareSwipeCard(
@@ -895,7 +1032,8 @@ class _SwipeableFeedCard extends StatelessWidget {
                         onLike: onLike,
                         onTap: onTap,
                         onAuthorTap: onAuthorTap,
-                        authorLivedInCityNames: authorLivedInCityNames,
+                        authorLivedHereSpots: authorLivedHereSpots,
+                        isAuthorFriend: isAuthorFriend,
                       )
                     : _FeedCard(
                         itinerary: itinerary,
