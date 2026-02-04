@@ -45,7 +45,7 @@ class ProfileStatTilesRow extends StatelessWidget {
           Expanded(
             child: _StatTile(
               icon: Icons.location_city_rounded,
-              label: '${AppStrings.t(context, 'lived')} ($livedCount)',
+              label: '${AppStrings.t(context, 'travel_stats')} ($livedCount)',
               tint: Colors.orange.withValues(alpha: 0.25),
               onTap: onLivedTap,
             ),
