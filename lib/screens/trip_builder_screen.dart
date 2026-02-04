@@ -16,6 +16,7 @@ import '../core/trip_builder_helpers.dart';
 import '../data/countries.dart' show countries, destinationToCountryCodes, travelStyles;
 import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
+import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 import '../widgets/places_field.dart';
 import '../widgets/itinerary_map.dart';
@@ -91,6 +92,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   bool _costPerPersonEnabled = false;
   int _costPerPerson = 0; // USD, 0–10000+ (slider max 10000; text field can set higher)
   final TextEditingController _costPerPersonController = TextEditingController();
+  /// Country code inferred from last added destination (API response). Not persisted.
+  String? _lastAddedCountryCode;
+  /// Runtime-only classic picks pool (up to 10). Not cached or persisted.
+  List<PlacePrediction> _classicPicksSuggestions = [];
+  /// Country codes we last fetched for (sorted list for comparison).
+  List<String>? _classicPicksFetchedForCountryCodes;
 
   /// Cost range depends on travel mode (budget / standard / luxury).
   int get _costMin {
@@ -137,6 +144,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         _countryQuery = '';
         _showCountrySuggestions = false;
         _countryQueryController.text = '';
+        _classicPicksFetchedForCountryCodes = null;
       });
     }
   }
@@ -190,7 +198,10 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   }
 
   void _removeCountry(String code) {
-    setState(() => _selectedCountries.remove(code));
+    setState(() {
+      _selectedCountries.remove(code);
+      _classicPicksFetchedForCountryCodes = null;
+    });
   }
 
   @override
@@ -215,6 +226,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       _mode = (it.mode ?? modeStandard).toLowerCase();
       _visibility = it.visibility == visibilityPrivate ? visibilityFriends : it.visibility;
       _selectedCountries = destinationToCountryCodes(it.destination).toList();
+      _classicPicksFetchedForCountryCodes = null;
       _selectedStyleTags = it.styleTags.map((s) {
         if (s.isEmpty) return s;
         final lower = s.toLowerCase();
@@ -306,13 +318,57 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
 
   List<CityDayPair> get _chronologicalPairs => buildChronologicalPairsFromAllocations(_allocations);
 
-  void _addCity(String name, double? lat, double? lng, String? url) {
+  /// Active country codes for classic picks: all selected countries, or last-added destination's country. Not persisted.
+  List<String> get _activeCountryCodesForSuggestions {
+    if (_selectedCountries.isNotEmpty) return List.from(_selectedCountries);
+    if (_lastAddedCountryCode != null && _lastAddedCountryCode!.isNotEmpty) {
+      return [_lastAddedCountryCode!];
+    }
+    return [];
+  }
+
+  static bool _sameCountryCodes(List<String> a, List<String>? b) {
+    if (b == null || a.length != b.length) return false;
+    final sa = a.toSet();
+    final sb = b.toSet();
+    return sa.length == sb.length && sa.containsAll(sb);
+  }
+
+  Future<void> _loadClassicPicksSuggestions() async {
+    final codes = _activeCountryCodesForSuggestions;
+    if (codes.isEmpty) {
+      if (mounted) setState(() {
+        _classicPicksSuggestions = [];
+        _classicPicksFetchedForCountryCodes = null;
+      });
+      return;
+    }
+    final sorted = List<String>.from(codes)..sort();
+    if (_sameCountryCodes(sorted, _classicPicksFetchedForCountryCodes)) return;
+    try {
+      final results = await PlacesService.searchClassicCitiesByCountry(codes, maxRows: 10);
+      if (!mounted) return;
+      setState(() {
+        _classicPicksSuggestions = results;
+        _classicPicksFetchedForCountryCodes = sorted;
+      });
+    } catch (_) {
+      if (mounted) setState(() {
+        _classicPicksSuggestions = [];
+        _classicPicksFetchedForCountryCodes = sorted;
+      });
+    }
+  }
+
+  void _addCity(String name, double? lat, double? lng, String? url, [String? countryCode]) {
     setState(() {
+      _lastAddedCountryCode = countryCode;
       _cities.add(_CityEntry()..name = name..lat = lat..lng = lng..externalUrl = url..dayCount = 1);
       _allocations = allocateDaysAcrossCities(_daysCount, _cities.length);
       for (var i = 0; i < _cities.length; i++) {
         _cities[i].dayCount = _allocations[i];
       }
+      // Keep full pool; next build will show next 2 not yet in _cities
     });
   }
 
@@ -825,7 +881,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                     ),
                                   ),
                                 ),
-                                if (_selectedCountries.isNotEmpty) ...[
+                                if (_selectedCountries.isNotEmpty || _cities.isNotEmpty) ...[
                                   const SizedBox(height: 10),
                                   SizedBox(
                                     width: double.infinity,
@@ -840,6 +896,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                       ),
                                     ),
                                   ),
+                                  _buildClassicPicksRow(theme),
                                 ],
                                 const SizedBox(height: AppTheme.spacingMd),
                                 _buildRouteStrip(theme),
@@ -1306,6 +1363,55 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
+  Widget _buildClassicPicksRow(ThemeData theme) {
+    final codes = _activeCountryCodesForSuggestions;
+    if (codes.isEmpty) return const SizedBox.shrink();
+    final sortedCodes = List<String>.from(codes)..sort();
+    if (!_sameCountryCodes(sortedCodes, _classicPicksFetchedForCountryCodes)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadClassicPicksSuggestions());
+    }
+    final existingNames = _cities.map((c) => c.name).toSet();
+    final toShow = _classicPicksSuggestions
+        .where((p) => !existingNames.contains(p.mainText))
+        .take(2)
+        .toList();
+    if (toShow.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(AppStrings.t(context, 'classic_picks'), style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: toShow.map((p) {
+              final url = p.osmUrl ?? (p.lat != null && p.lng != null ? 'https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=17/${p.lat}/${p.lng}' : null);
+              return Material(
+                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(999),
+                child: InkWell(
+                  onTap: () => _addCity(p.mainText, p.lat, p.lng, url, p.countryCode),
+                  borderRadius: BorderRadius.circular(999),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(p.mainText, style: theme.textTheme.labelLarge),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRouteStrip(ThemeData theme) {
     if (_cities.isEmpty) return const SizedBox.shrink();
     final n = _cities.length;
@@ -1746,8 +1852,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 hint: AppStrings.t(context, 'search_city_or_location'),
                 countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                 lang: Localizations.localeOf(ctx).languageCode,
-                onSelected: (n, la, ln, u) {
-                  if (n.isNotEmpty) _addCity(n, la, ln, u);
+                onSelected: (n, la, ln, u, countryCode) {
+                  if (n.isNotEmpty) _addCity(n, la, ln, u, countryCode);
                   Navigator.pop(ctx);
                 },
               ),
@@ -1883,7 +1989,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
                 locationLatLng: _cities[cityIndex].lat != null && _cities[cityIndex].lng != null ? (_cities[cityIndex].lat!, _cities[cityIndex].lng!) : null,
                 lang: Localizations.localeOf(ctx).languageCode,
-                onSelected: (n, la, ln, u) {
+                onSelected: (n, la, ln, u, _) {
                   name = n;
                   lat = la;
                   lng = ln;

@@ -199,7 +199,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                   countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
                       ? _profile!.visitedCountries
                       : null,
-                  onSelected: (name, _, __, ___) {
+                  onSelected: (name, _, __, ___, ____) {
                     onSave(name);
                     Navigator.pop(ctx);
                     _load();
@@ -277,7 +277,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                                             countryCodes: (_profile?.visitedCountries != null && _profile!.visitedCountries.isNotEmpty)
                                                 ? _profile!.visitedCountries
                                                 : null,
-                                            onSelected: (placeName, _, __, ___) {
+                                            onSelected: (placeName, _, __, ___, ____) {
                                               Navigator.pop(dctx, placeName);
                                             },
                                           ),
