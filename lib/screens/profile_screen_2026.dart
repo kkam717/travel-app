@@ -300,7 +300,7 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
             // B) Main section: followers/following links, then Trips header + country filter chips
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingSm),
+                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingSm),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -310,7 +310,7 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
                       onFollowersTap: () => context.push('/profile/followers'),
                       onFollowingTap: () => context.push('/profile/following'),
                     ),
-                    const SizedBox(height: AppTheme.spacingLg),
+                    const SizedBox(height: AppTheme.spacingMd),
                     Text(
                       AppStrings.t(context, 'trips'),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
