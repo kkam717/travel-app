@@ -13,7 +13,7 @@ import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/analytics.dart';
 import '../core/trip_builder_helpers.dart';
-import '../data/countries.dart' show countries, destinationToCountryCodes;
+import '../data/countries.dart' show countries, destinationToCountryCodes, travelStyles;
 import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../services/supabase_service.dart';
@@ -87,6 +87,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   bool _isLoadingData = false;
   final MapController _tripBuilderMapController = MapController();
   final DraggableScrollableController _sheetController = DraggableScrollableController();
+  List<String> _selectedStyleTags = [];
 
   bool get _isEditMode => widget.itineraryId != null;
 
@@ -188,6 +189,14 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       _mode = (it.mode ?? modeStandard).toLowerCase();
       _visibility = it.visibility == visibilityPrivate ? visibilityFriends : it.visibility;
       _selectedCountries = destinationToCountryCodes(it.destination).toList();
+      _selectedStyleTags = it.styleTags.map((s) {
+        if (s.isEmpty) return s;
+        final lower = s.toLowerCase();
+        for (final t in travelStyles) {
+          if (t.toLowerCase() == lower) return t;
+        }
+        return s.length > 1 ? '${s[0].toUpperCase()}${s.substring(1).toLowerCase()}' : s.toUpperCase();
+      }).toList();
       _useDates = it.useDates ?? false;
       _startDate = it.startDate;
       _endDate = it.endDate;
@@ -509,6 +518,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         if (pairs.length >= 2) {
           updateData['transport_transitions'] = transportTransitions!.map((t) => t.toJson()).toList();
         }
+        updateData['style_tags'] = _selectedStyleTags.map((s) => s.toLowerCase()).toList();
         await SupabaseService.updateItinerary(id, updateData);
         await SupabaseService.updateItineraryStops(id, stopsData);
         Analytics.logEvent('itinerary_updated', {'id': id});
@@ -519,7 +529,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           title: _titleController.text.trim(),
           destination: destination,
           daysCount: _daysCount,
-          styleTags: [],
+          styleTags: _selectedStyleTags.map((s) => s.toLowerCase()).toList(),
           mode: _mode,
           visibility: publish ? _effectivePublishVisibility : visibilityPrivate,
           forkedFromId: null,
@@ -753,6 +763,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 12),
+                                _buildTravelStylesRow(theme),
+                                const SizedBox(height: 12),
                                 _buildCountriesRow(theme),
                                 const SizedBox(height: 8),
                                 Material(
@@ -982,6 +994,106 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       showWorldWhenEmpty: true,
       countryCodes: _selectedCountries.isEmpty ? null : _selectedCountries,
       mapController: _tripBuilderMapController,
+    );
+  }
+
+  Widget _buildTravelStylesRow(ThemeData theme) {
+    final count = _selectedStyleTags.length;
+    final summary = count == 0
+        ? AppStrings.t(context, 'tap_to_select')
+        : count == 1
+            ? _selectedStyleTags.first
+            : '$count ${AppStrings.t(context, 'selected')}';
+    return Material(
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: () => _showTravelStylesSheet(),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.label_outline, size: 20, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  summary,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTravelStylesSheet() async {
+    if (!mounted) return;
+    List<String> selected = List.from(_selectedStyleTags);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (ctx, scrollController) => StatefulBuilder(
+          builder: (ctx, setModalState) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMd),
+                  child: Text(AppStrings.t(context, 'travel_styles'), style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: travelStyles.map((style) {
+                        final isSelected = selected.contains(style);
+                        return FilterChip(
+                          label: Text(style),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            setModalState(() {
+                              if (isSelected) {
+                                selected.remove(style);
+                              } else {
+                                selected.add(style);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(AppTheme.spacingMd),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () {
+                        setState(() => _selectedStyleTags = selected);
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(AppStrings.t(context, 'done')),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
