@@ -1484,6 +1484,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
             onAddHotel: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'hotel'),
             onAddRestaurant: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'restaurant'),
             onAddExperience: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'guide'),
+            onAddDrinks: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'bar'),
+            onAddCoffee: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'coffee'),
             onRemoveVenue: _removeVenue,
             onRemoveVenueGroup: _removeVenueGroup,
             onMoveDay: _moveVenueDay,
@@ -2080,6 +2082,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       case 'hotel': return AppStrings.t(context, 'hotel');
       case 'guide': return AppStrings.t(context, 'guide');
       case 'bar': return AppStrings.t(context, 'drinks');
+      case 'coffee': return AppStrings.t(context, 'coffee');
       default: return AppStrings.t(context, 'restaurant');
     }
   }
@@ -2258,6 +2261,8 @@ class _DestinationSection extends StatelessWidget {
   final VoidCallback onAddHotel;
   final VoidCallback onAddRestaurant;
   final VoidCallback onAddExperience;
+  final VoidCallback onAddDrinks;
+  final VoidCallback onAddCoffee;
   final void Function(String key, int venueIndex) onRemoveVenue;
   final void Function(int cityIndex, String name, String category) onRemoveVenueGroup;
   final void Function(String key, int venueIndex, int newDay) onMoveDay;
@@ -2273,6 +2278,8 @@ class _DestinationSection extends StatelessWidget {
     required this.onAddHotel,
     required this.onAddRestaurant,
     required this.onAddExperience,
+    required this.onAddDrinks,
+    required this.onAddCoffee,
     required this.onRemoveVenue,
     required this.onRemoveVenueGroup,
     required this.onMoveDay,
@@ -2317,9 +2324,11 @@ class _DestinationSection extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                FilledButton.tonal(onPressed: onAddHotel, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.hotel, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'hotel'))])),
-                FilledButton.tonal(onPressed: onAddRestaurant, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.restaurant, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'restaurant'))])),
-                FilledButton.tonal(onPressed: onAddExperience, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.tour, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'guide'))])),
+                FilledButton.tonal(onPressed: onAddHotel, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.hotel_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'hotel'))])),
+                FilledButton.tonal(onPressed: onAddRestaurant, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.restaurant_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'restaurant'))])),
+                FilledButton.tonal(onPressed: onAddExperience, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.account_balance_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'guide'))])),
+                FilledButton.tonal(onPressed: onAddDrinks, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.local_bar_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'drinks'))])),
+                FilledButton.tonal(onPressed: onAddCoffee, child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.coffee_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'coffee'))])),
               ],
             ),
             const SizedBox(height: 12),

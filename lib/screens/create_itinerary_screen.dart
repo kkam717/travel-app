@@ -20,6 +20,7 @@ String _venueCategoryLabel(BuildContext context, String? cat) {
     case 'hotel': return AppStrings.t(context, 'hotel');
     case 'guide': return AppStrings.t(context, 'guide');
     case 'bar': return AppStrings.t(context, 'drinks');
+    case 'coffee': return AppStrings.t(context, 'coffee');
     case 'restaurant': return AppStrings.t(context, 'restaurant');
     default: return AppStrings.t(context, 'restaurant');
   }
@@ -1266,10 +1267,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
 
   IconData _iconForCategory(String? cat) {
     switch (cat) {
-      case 'hotel': return Icons.hotel;
-      case 'guide': return Icons.tour;
-      case 'bar': return Icons.local_bar;
-      default: return Icons.restaurant;
+      case 'hotel': return Icons.hotel_rounded;
+      case 'guide': return Icons.account_balance_rounded;
+      case 'bar': return Icons.local_bar_rounded;
+      case 'coffee': return Icons.coffee_rounded;
+      case 'restaurant': return Icons.restaurant_rounded;
+      default: return Icons.restaurant_rounded;
     }
   }
 
@@ -1349,19 +1352,23 @@ class _EditableLocationCard extends StatelessWidget {
                       children: [
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('restaurant'),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'restaurant'))]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.restaurant_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'restaurant'))]),
                         ),
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('hotel'),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'hotel'))]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.hotel_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'hotel'))]),
                         ),
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('guide'),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.tour, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'guide'))]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.account_balance_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'guide'))]),
                         ),
                         FilledButton.tonal(
                           onPressed: () => onAddVenue('bar'),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'drinks'))]),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.local_bar_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'drinks'))]),
+                        ),
+                        FilledButton.tonal(
+                          onPressed: () => onAddVenue('coffee'),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.coffee_rounded, size: 18), const SizedBox(width: 6), Text(AppStrings.t(context, 'coffee'))]),
                         ),
                       ],
                     ),

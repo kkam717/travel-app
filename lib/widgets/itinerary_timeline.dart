@@ -73,7 +73,20 @@ String _categoryLabel(BuildContext context, String category) {
     case 'hotel': return AppStrings.t(context, 'hotel');
     case 'guide': return AppStrings.t(context, 'guide');
     case 'bar': return AppStrings.t(context, 'drinks');
+    case 'coffee': return AppStrings.t(context, 'coffee');
     default: return AppStrings.t(context, 'experience');
+  }
+}
+
+IconData _iconForVenueCategory(String? category) {
+  switch (category) {
+    case 'restaurant': return Icons.restaurant_rounded;
+    case 'hotel': return Icons.hotel_rounded;
+    case 'guide':
+    case 'experience': return Icons.account_balance_rounded;
+    case 'bar': return Icons.local_bar_rounded;
+    case 'coffee': return Icons.coffee_rounded;
+    default: return Icons.place_rounded;
   }
 }
 
@@ -327,7 +340,7 @@ class LocationCard extends StatelessWidget {
                           contentPadding: EdgeInsets.zero,
                           leading: CircleAvatar(
                             backgroundColor: theme.colorScheme.primaryContainer,
-                            child: Icon(Icons.place_outlined, size: 22, color: theme.colorScheme.onPrimaryContainer),
+                            child: Icon(_iconForVenueCategory(s.category), size: 22, color: theme.colorScheme.onPrimaryContainer),
                           ),
                           title: Text(s.name, style: theme.textTheme.titleSmall),
                           subtitle: s.category != null && s.category != 'location'
