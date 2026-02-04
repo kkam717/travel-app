@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,6 +34,8 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
   bool _isFollowing = false;
   bool _isLoading = true;
   String? _error;
+  final MapController _detailMapController = MapController();
+  final DraggableScrollableController _detailSheetController = DraggableScrollableController();
   String? _translatedTitle;
   String? _translatedDestination;
   bool _isTranslating = false;
@@ -369,9 +372,11 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
               height: MediaQuery.of(context).size.height,
               fullScreen: true,
               transportTransitions: it.transportTransitions,
+              mapController: _detailMapController,
             ),
             // Draggable bottom sheet with details
             DraggableScrollableSheet(
+              controller: _detailSheetController,
               initialChildSize: 0.4,
               minChildSize: 0.3,
               maxChildSize: 0.95,
@@ -539,6 +544,43 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                         ),
                       ),
                     ],
+                  ),
+                );
+              },
+            ),
+            ListenableBuilder(
+              listenable: _detailSheetController,
+              builder: (context, _) {
+                final theme = Theme.of(context);
+                final height = MediaQuery.sizeOf(context).height;
+                final fraction = _detailSheetController.isAttached
+                    ? _detailSheetController.size
+                    : 0.4;
+                final bottom = height * fraction + 8;
+                return Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: bottom,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Material(
+                        color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        elevation: 2,
+                        child: IconButton(
+                          icon: const Icon(Icons.explore),
+                          tooltip: 'Reset to north',
+                          onPressed: () {
+                            try {
+                              _detailMapController.rotate(0);
+                            } catch (_) {}
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 );
               },

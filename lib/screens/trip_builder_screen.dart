@@ -6,6 +6,7 @@
 // - transport_transitions: length == chronologicalPairs.length - 1, type + optional description
 
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
@@ -84,6 +85,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   final Map<String, List<_VenueEntry>> _venuesByCityDay = {};
   bool _isLoading = false;
   bool _isLoadingData = false;
+  final MapController _tripBuilderMapController = MapController();
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
 
   bool get _isEditMode => widget.itineraryId != null;
 
@@ -696,6 +699,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     child: _buildFullScreenMap(theme),
                   ),
                   DraggableScrollableSheet(
+                    controller: _sheetController,
                     initialChildSize: 0.45,
                     minChildSize: 0.35,
                     maxChildSize: 0.95,
@@ -713,20 +717,20 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                       ),
                       child: Column(
                         children: [
-                          Container(
-                            margin: const EdgeInsets.symmetric(vertical: 12),
-                            width: 40,
-                            height: 4,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.outline.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          Expanded(
-                            child: ListView(
-                              controller: scrollController,
-                              padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
-                              children: [
+                              Container(
+                                margin: const EdgeInsets.symmetric(vertical: 12),
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              Expanded(
+                                child: ListView(
+                                  controller: scrollController,
+                                  padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
+                                  children: [
                                 TextField(
                                   controller: _titleController,
                                   decoration: InputDecoration(
@@ -804,6 +808,42 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                         ],
                       ),
                     ),
+                  ),
+                  ListenableBuilder(
+                    listenable: _sheetController,
+                    builder: (context, _) {
+                      final height = MediaQuery.sizeOf(context).height;
+                      final fraction = _sheetController.isAttached
+                          ? _sheetController.size
+                          : 0.45;
+                      final bottom = height * fraction + 8;
+                      return Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: bottom,
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: Material(
+                              color: theme.colorScheme.surface.withValues(alpha: 0.95),
+                              shape: const CircleBorder(),
+                              clipBehavior: Clip.antiAlias,
+                              elevation: 2,
+                              child: IconButton(
+                                icon: const Icon(Icons.explore),
+                                tooltip: 'Reset to north',
+                                onPressed: () {
+                                  try {
+                                    _tripBuilderMapController.rotate(0);
+                                  } catch (_) {}
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -933,29 +973,15 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   }
 
   Widget _buildFullScreenMap(ThemeData theme) {
-    final hasStops = _stopsForMap.any((s) => s.lat != null && s.lng != null);
     final height = MediaQuery.sizeOf(context).height;
-    if (hasStops) {
-      return ItineraryMap(
-        stops: _stopsForMap,
-        destination: _selectedCountries.isNotEmpty ? _selectedCountries.map((c) => countries[c]).join(', ') : _cities.map((c) => c.name).join(', '),
-        height: height,
-        fullScreen: true,
-      );
-    }
-    return Container(
+    return ItineraryMap(
+      stops: _stopsForMap,
+      destination: _selectedCountries.isNotEmpty ? _selectedCountries.map((c) => countries[c]).join(', ') : _cities.map((c) => c.name).join(', '),
       height: height,
-      color: theme.colorScheme.surfaceContainerHighest,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.map_outlined, size: 48, color: theme.colorScheme.onSurfaceVariant),
-            const SizedBox(height: 8),
-            Text(AppStrings.t(context, 'add_destinations_for_map'), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant), textAlign: TextAlign.center),
-          ],
-        ),
-      ),
+      fullScreen: true,
+      showWorldWhenEmpty: true,
+      countryCodes: _selectedCountries.isEmpty ? null : _selectedCountries,
+      mapController: _tripBuilderMapController,
     );
   }
 

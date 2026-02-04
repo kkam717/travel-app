@@ -140,4 +140,51 @@ class CountriesGeoJsonService {
     }
     return out;
   }
+
+  /// Returns bounds encompassing all given country codes (from cached GeoJSON). Use for fitting map to selected countries.
+  static Future<LatLngBounds?> getBoundsForCountryCodes(Set<String> isoCodes) async {
+    if (isoCodes.isEmpty) return null;
+    final codes = isoCodes.map((c) => c.toUpperCase()).toSet();
+
+    String json;
+    if (_cachedJson != null) {
+      json = _cachedJson!;
+    } else {
+      final resp = await http.get(Uri.parse(_url));
+      if (resp.statusCode != 200) return null;
+      json = resp.body;
+      _cachedJson = json;
+    }
+
+    final data = jsonDecode(json) as Map<String, dynamic>;
+    final features = data['features'] as List<dynamic>? ?? [];
+    final allPoints = <LatLng>[];
+
+    for (final f in features) {
+      final props = f['properties'] as Map<String, dynamic>? ?? {};
+      final iso = (props['ISO_A2'] ?? props['iso_a2'])?.toString().trim().toUpperCase();
+      if (iso == null || iso == '-99' || iso.isEmpty || !codes.contains(iso)) continue;
+
+      final geom = f['geometry'] as Map<String, dynamic>?;
+      if (geom == null) continue;
+
+      final type = (geom['type'] ?? '').toString();
+      final coords = geom['coordinates'];
+
+      if (type == 'Polygon' && coords is List) {
+        for (final ring in _parsePolygonCoords(coords)) {
+          allPoints.addAll(ring);
+        }
+      } else if (type == 'MultiPolygon' && coords is List) {
+        for (final poly in coords) {
+          if (poly is! List) continue;
+          for (final ring in _parsePolygonCoords(poly)) {
+            allPoints.addAll(ring);
+          }
+        }
+      }
+    }
+    if (allPoints.isEmpty) return null;
+    return LatLngBounds.fromPoints(allPoints);
+  }
 }
