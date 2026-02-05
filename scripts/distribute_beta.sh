@@ -78,8 +78,8 @@ if [ "$PLATFORM" == "android" ]; then
   echo "   Testers will receive an email invite."
   
 elif [ "$PLATFORM" == "ios" ]; then
-  echo "📱 Building iOS IPA..."
-  flutter build ipa
+  echo "📱 Building iOS IPA (Ad Hoc for Firebase App Distribution)..."
+  flutter build ipa --export-method ad-hoc
   
   IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -1)
   
