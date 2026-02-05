@@ -11,6 +11,7 @@ import 'static_map_image.dart';
 class TripPhotoCard extends StatelessWidget {
   final Itinerary itinerary;
   final VoidCallback? onRefresh;
+  final bool canEdit;
 
   static const double _cardRadius = 28;
   static const double _heroHeight = 220;
@@ -19,6 +20,7 @@ class TripPhotoCard extends StatelessWidget {
     super.key,
     required this.itinerary,
     this.onRefresh,
+    this.canEdit = false,
   });
 
   String _displayTitle(Itinerary it) => it.title.trim().isNotEmpty ? it.title : it.destination;
@@ -194,14 +196,15 @@ class TripPhotoCard extends StatelessWidget {
                   shareItineraryLink(it.id, title: it.title);
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: Text(AppStrings.t(ctx, 'edit_trip')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/itinerary/${it.id}/edit').then((_) => onRefresh?.call());
-                },
-              ),
+              if (canEdit)
+                ListTile(
+                  leading: const Icon(Icons.edit_outlined),
+                  title: Text(AppStrings.t(ctx, 'edit_trip')),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    context.push('/itinerary/${it.id}/edit').then((_) => onRefresh?.call());
+                  },
+                ),
             ],
           ),
         ),

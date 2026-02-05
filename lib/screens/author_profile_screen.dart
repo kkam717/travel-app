@@ -309,7 +309,11 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
             else
               SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (_, i) => TripPhotoCard(itinerary: filteredTrips[i], onRefresh: _load),
+                  (_, i) => TripPhotoCard(
+                    itinerary: filteredTrips[i],
+                    onRefresh: _load,
+                    canEdit: _isOwnProfile,
+                  ),
                   childCount: filteredTrips.length,
                   addRepaintBoundaries: true,
                 ),
