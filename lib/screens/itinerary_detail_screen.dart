@@ -416,23 +416,6 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                 onPressed: _toggleBookmark,
               ),
             ),
-            Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                shape: BoxShape.circle,
-              ),
-              child: PopupMenuButton(
-                itemBuilder: (_) => [
-                  PopupMenuItem(value: 'fork', child: Text(AppStrings.t(context, 'add_to_planning'))),
-                  PopupMenuItem(value: 'author', child: Text(AppStrings.t(context, 'view_author_profile'))),
-                ],
-                onSelected: (v) {
-                  if (v == 'fork') _forkItinerary();
-                  else if (v == 'author') context.push('/author/${it.authorId}');
-                },
-              ),
-            ),
           ],
         ),
         body: Stack(
@@ -542,6 +525,16 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                                     const SizedBox(width: 4),
                                     Text('$_likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                   ],
+                                  const SizedBox(width: AppTheme.spacingMd),
+                                  FilledButton.tonal(
+                                    onPressed: _forkItinerary,
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: Text(AppStrings.t(context, 'save_to_planning')),
+                                  ),
                                 ],
                               ),
                             ],
