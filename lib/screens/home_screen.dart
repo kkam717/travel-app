@@ -803,39 +803,41 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacingXl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
+    return SingleChildScrollView(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spacingXl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.explore_rounded, size: 56, color: Theme.of(context).colorScheme.primary),
               ),
-              child: Icon(Icons.explore_rounded, size: 56, color: Theme.of(context).colorScheme.primary),
-            ),
-            const SizedBox(height: AppTheme.spacingLg),
-            Text(
-              AppStrings.t(context, 'no_trips_in_feed'),
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppTheme.spacingSm),
-            Text(
-              AppStrings.t(context, 'follow_or_create_first_trip'),
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppTheme.spacingXl),
-            FilledButton.icon(
-              onPressed: () => context.go('/explore'),
-              icon: const Icon(Icons.search_rounded, size: 20),
-              label: Text(AppStrings.t(context, 'discover_trips')),
-            ),
-          ],
+              const SizedBox(height: AppTheme.spacingLg),
+              Text(
+                AppStrings.t(context, 'no_trips_in_feed'),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppTheme.spacingSm),
+              Text(
+                AppStrings.t(context, 'follow_or_create_first_trip'),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppTheme.spacingXl),
+              FilledButton.icon(
+                onPressed: () => context.go('/explore'),
+                icon: const Icon(Icons.search_rounded, size: 20),
+                label: Text(AppStrings.t(context, 'discover_trips')),
+              ),
+            ],
+          ),
         ),
       ),
     );
