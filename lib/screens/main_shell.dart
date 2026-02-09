@@ -13,9 +13,11 @@ class MainShell extends StatelessWidget {
     final location = GoRouterState.of(context).matchedLocation;
     final isCreateOrEditTrip = location == '/create' ||
         (location.startsWith('/itinerary/') && location.endsWith('/edit'));
+    final isExploreOrSearch = location == '/explore' || location == '/search';
     final showNav = !keyboardVisible && !isCreateOrEditTrip;
+    final avoidResizeForKeyboard = isExploreOrSearch;
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      resizeToAvoidBottomInset: !avoidResizeForKeyboard,
       body: Stack(
         fit: StackFit.expand,
         children: [
