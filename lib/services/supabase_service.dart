@@ -185,13 +185,13 @@ class SupabaseService {
       var itineraries = rows.map((e) => Itinerary.fromJson(e)).toList();
       if (itineraries.isNotEmpty) {
         final ids = itineraries.map((i) => i.id).toList();
-        final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
-        final counts = <String, int>{};
-        for (final row in stopsRes as List) {
-          final itId = (row as Map)['itinerary_id'] as String;
-          counts[itId] = (counts[itId] ?? 0) + 1;
+        final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+        final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+        final stopsByItinerary = <String, List<ItineraryStop>>{};
+        for (final s in stopsList) {
+          stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
         }
-        itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
+        itineraries = itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], stopsCount: stopsByItinerary[i.id]?.length ?? 0)).toList();
       }
       return itineraries;
     } on PostgrestException catch (e) {
@@ -264,13 +264,13 @@ class SupabaseService {
         var itineraries = rows.map((e) => Itinerary.fromJson(e)).toList();
         if (itineraries.isNotEmpty) {
           final ids = itineraries.map((i) => i.id).toList();
-          final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
-          final counts = <String, int>{};
-          for (final row in stopsRes as List) {
-            final itId = (row as Map)['itinerary_id'] as String;
-            counts[itId] = (counts[itId] ?? 0) + 1;
+          final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+          final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+          final stopsByItinerary = <String, List<ItineraryStop>>{};
+          for (final s in stopsList) {
+            stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
           }
-          itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
+          itineraries = itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], stopsCount: stopsByItinerary[i.id]?.length ?? 0)).toList();
         }
         return itineraries;
       } on PostgrestException catch (e) {
@@ -295,13 +295,13 @@ class SupabaseService {
       var itineraries = (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
       if (itineraries.isNotEmpty) {
         final ids = itineraries.map((i) => i.id).toList();
-        final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
-        final counts = <String, int>{};
-        for (final row in stopsRes as List) {
-          final itId = (row as Map)['itinerary_id'] as String;
-          counts[itId] = (counts[itId] ?? 0) + 1;
+        final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+        final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+        final stopsByItinerary = <String, List<ItineraryStop>>{};
+        for (final s in stopsList) {
+          stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
         }
-        itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
+        itineraries = itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], stopsCount: stopsByItinerary[i.id]?.length ?? 0)).toList();
       }
       return itineraries;
     } catch (e) {
