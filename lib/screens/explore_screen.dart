@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +8,7 @@ import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
+import '../services/places_service.dart';
 import '../widgets/static_map_image.dart';
 
 const double _kHeroHeight = 300.0;
@@ -114,29 +116,83 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (query.trim().isEmpty) return;
     setState(() => _isSearching = true);
     try {
-      final results = await Future.wait([
-        SupabaseService.searchProfiles(query, limit: 20),
-        SupabaseService.searchItineraries(
-          query: query,
-          limit: 20,
-          daysCount: _filterDaysCount,
-          mode: _filterMode,
-          styles: _filterStyles.isEmpty ? null : _filterStyles,
-        ),
-      ]);
-      final people = results[0] as List<ProfileSearchResult>;
-      var trips = results[1] as List<Itinerary>;
-      if (trips.isNotEmpty) {
-        final ids = trips.map((i) => i.id).toList();
-        final likeCounts = await SupabaseService.getLikeCounts(ids);
-        trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+      final location = await PlacesService.resolvePlace(query);
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+
+      if (location != null) {
+        // Location search: search both trips and people by location
+        // Use larger radius for country-level searches (1000km covers large countries like Italy, USA, etc.)
+        debugPrint('Location resolved: ${location.$1}, ${location.$2} for query: $query');
+        try {
+          final results = await Future.wait([
+            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 50),
+            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 30),
+            userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
+          ]);
+          final trips = results[0] as List<Itinerary>;
+          final people = results[1] as List<ProfileSearchResult>;
+          final followedIds = results[2] as List<String>;
+          debugPrint('Location search results: ${trips.length} trips, ${people.length} profiles');
+          
+          // Apply filters to trips if needed
+          var filteredTrips = trips;
+          if (_filterDaysCount != null || _filterMode != null || _filterStyles.isNotEmpty) {
+            filteredTrips = trips.where((t) {
+              if (_filterDaysCount != null && t.daysCount != _filterDaysCount) return false;
+              if (_filterMode != null && t.mode != _filterMode) return false;
+              if (_filterStyles.isNotEmpty && !_filterStyles.contains(t.style)) return false;
+              return true;
+            }).toList();
+          }
+          
+          // Get like counts for trips
+          if (filteredTrips.isNotEmpty) {
+            final ids = filteredTrips.map((i) => i.id).toList();
+            final likeCounts = await SupabaseService.getLikeCounts(ids);
+            filteredTrips = filteredTrips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+          }
+          
+          // Update follow status for people
+          final peopleWithFollowStatus = people.map((p) => p.copyWith(isFollowing: followedIds.contains(p.id))).toList();
+          
+          if (!mounted) return;
+          setState(() {
+            _searchPeople = peopleWithFollowStatus;
+            _searchTrips = filteredTrips;
+            _isSearching = false;
+          });
+        } catch (e) {
+          debugPrint('Location search failed, falling back to text search: $e');
+          // Fall through to text search
+        }
       }
-      if (!mounted) return;
-      setState(() {
-        _searchPeople = people;
-        _searchTrips = trips;
-        _isSearching = false;
-      });
+      
+      // Text search: search both profiles and trips by text
+      if (_isSearching) {
+        final results = await Future.wait([
+          SupabaseService.searchProfiles(query, limit: 20),
+          SupabaseService.searchItineraries(
+            query: query,
+            limit: 20,
+            daysCount: _filterDaysCount,
+            mode: _filterMode,
+            styles: _filterStyles.isEmpty ? null : _filterStyles,
+          ),
+        ]);
+        final people = results[0] as List<ProfileSearchResult>;
+        var trips = results[1] as List<Itinerary>;
+        if (trips.isNotEmpty) {
+          final ids = trips.map((i) => i.id).toList();
+          final likeCounts = await SupabaseService.getLikeCounts(ids);
+          trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+        }
+        if (!mounted) return;
+        setState(() {
+          _searchPeople = people;
+          _searchTrips = trips;
+          _isSearching = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSearching = false);
