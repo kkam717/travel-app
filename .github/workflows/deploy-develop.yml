@@ -4,6 +4,8 @@ name: Deploy Develop to Vercel
 on:
   push:
     branches: [develop]
+  pull_request:
+    branches: [develop]
   workflow_dispatch:
 
 env:
