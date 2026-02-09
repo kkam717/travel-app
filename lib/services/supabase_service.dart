@@ -213,6 +213,7 @@ class SupabaseService {
     int limit = 30,
   }) async {
     try {
+      debugPrint('[searchPeopleByLocation] Searching: lat=$lat, lng=$lng, radius=${radiusKm}km');
       final res = await _client.rpc(
         'search_people_by_location',
         params: {
@@ -222,15 +223,18 @@ class SupabaseService {
           'p_result_limit': limit,
         },
       );
-      return (res as List)
+      final profiles = (res as List)
           .map((e) => ProfileSearchResult.fromJson(e as Map<String, dynamic>))
           .toList();
+      debugPrint('[searchPeopleByLocation] Found ${profiles.length} profiles');
+      return profiles;
     } on PostgrestException catch (e) {
       // RPC may not exist (migration not run) - return empty list
       debugPrint('[searchPeopleByLocation] RPC failed: ${e.message}');
       Analytics.logEvent('location_people_search_error', {'error': e.toString()});
       return [];
     } catch (e) {
+      debugPrint('[searchPeopleByLocation] Error: $e');
       Analytics.logEvent('location_people_search_error', {'error': e.toString()});
       return [];
     }

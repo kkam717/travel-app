@@ -142,16 +142,19 @@ class _SearchScreenState extends State<SearchScreen> {
       
       if (location != null) {
         // Location search: search both trips and people by location
+        // Use larger radius for country-level searches (1000km covers large countries like Italy, USA, etc.)
         _isLocationSearch = true;
+        debugPrint('Location resolved: ${location.$1}, ${location.$2} for query: $query');
         try {
           final results = await Future.wait([
-            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 50),
-            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 30),
+            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 50),
+            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 30),
             userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
           ]);
           final trips = results[0] as List<Itinerary>;
           final profiles = results[1] as List<ProfileSearchResult>;
           final followedIds = results[2] as List<String>;
+          debugPrint('Location search results: ${trips.length} trips, ${profiles.length} profiles');
           
           if (trips.isNotEmpty && userId != null) {
             final ids = trips.map((i) => i.id).toList();
