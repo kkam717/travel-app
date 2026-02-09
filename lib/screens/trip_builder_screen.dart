@@ -785,6 +785,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   Widget build(BuildContext context) {
     Analytics.logScreenView('trip_builder');
     final theme = Theme.of(context);
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -809,6 +810,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         }
       },
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: theme.colorScheme.surface,
         appBar: _isLoadingData
             ? null
@@ -864,25 +866,39 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                   Positioned.fill(
                     child: _buildFullScreenMap(theme),
                   ),
-                  DraggableScrollableSheet(
-                    controller: _sheetController,
-                    initialChildSize: 0.45,
-                    minChildSize: 0.35,
-                    maxChildSize: 0.95,
-                    builder: (context, scrollController) => Container(
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, -2),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: MediaQuery.removeViewInsets(
+                      context: context,
+                      removeBottom: true,
+                      child: SizedBox(
+                        height: MediaQuery.sizeOf(context).height * 0.95,
+                        child: DraggableScrollableSheet(
+                          controller: _sheetController,
+                          expand: false,
+                          initialChildSize: 0.45,
+                          minChildSize: 0.35,
+                          maxChildSize: 0.95,
+                          builder: (context, scrollController) {
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final minContentHeight = (constraints.maxHeight - 40).clamp(400.0, double.infinity);
+                          return Container(
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.1),
+                                blurRadius: 10,
+                                offset: const Offset(0, -2),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Column(
-                        children: [
+                          child: Column(
+                            children: [
                               Container(
                                 margin: const EdgeInsets.symmetric(vertical: 12),
                                 width: 40,
@@ -893,11 +909,23 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                 ),
                               ),
                               Expanded(
-                                child: ListView(
-                                  controller: scrollController,
-                                  padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
-                                  children: [
-                                TextField(
+                                child: Container(
+                                  color: theme.colorScheme.surface,
+                                  child: ListView(
+                                    controller: scrollController,
+                                    padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, 0, AppTheme.spacingMd, AppTheme.spacingMd),
+                                    children: [
+                                      LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          final minH = (minContentHeight - 100).clamp(320.0, double.infinity);
+                                          return Container(
+                                            constraints: BoxConstraints(minHeight: minH),
+                                            color: theme.colorScheme.surface,
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                                              children: [
+                                                TextField(
                                   controller: _titleController,
                                   decoration: InputDecoration(
                                     hintText: AppStrings.t(context, 'trip_name_hint'),
@@ -906,78 +934,113 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    _ChipLabel(
-                                      label: '$_daysCount ${AppStrings.t(context, 'days')}',
-                                      onTap: () => _showDaysSheet(),
-                                    ),
-                                    _ChipLabel(label: _modeLabel(theme), onTap: () => _showModeSheet()),
-                                    _ChipLabel(label: _visibilityLabel(theme), onTap: () => _showVisibilitySheet()),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                _buildTravelStylesRow(theme),
-                                const SizedBox(height: 12),
-                                _buildCountriesRow(theme),
-                                const SizedBox(height: 8),
-                                Material(
-                                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: InkWell(
-                                    onTap: () => _showDatesSheet(),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.calendar_today_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              _useDates && _startDate != null && _endDate != null
-                                                  ? '${_startDate!.month}/${_startDate!.day} – ${_endDate!.month}/${_endDate!.day} (${_endDate!.difference(_startDate!).inDays + 1} ${AppStrings.t(context, 'days')})'
-                                                  : AppStrings.t(context, 'add_dates_optional'),
-                                              style: theme.textTheme.bodyMedium,
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 44),
+                                            child: Wrap(
+                                              spacing: 8,
+                                              runSpacing: 8,
+                                              children: [
+                                                _ChipLabel(
+                                                  label: '$_daysCount ${AppStrings.t(context, 'days')}',
+                                                  onTap: () => _showDaysSheet(),
+                                                ),
+                                                _ChipLabel(label: _modeLabel(theme), onTap: () => _showModeSheet()),
+                                                _ChipLabel(label: _visibilityLabel(theme), onTap: () => _showVisibilitySheet()),
+                                              ],
                                             ),
                                           ),
-                                          Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
+                                          const SizedBox(height: 12),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 48),
+                                            child: _buildTravelStylesRow(theme),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 48),
+                                            child: _buildCountriesRow(theme),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 48),
+                                            child: Material(
+                                              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                                              borderRadius: BorderRadius.circular(12),
+                                              child: InkWell(
+                                                onTap: () => _showDatesSheet(),
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: Padding(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                  child: Row(
+                                                    children: [
+                                                      Icon(Icons.calendar_today_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                                                      const SizedBox(width: 10),
+                                                      Expanded(
+                                                        child: Text(
+                                                          _useDates && _startDate != null && _endDate != null
+                                                              ? '${_startDate!.month}/${_startDate!.day} – ${_endDate!.month}/${_endDate!.day} (${_endDate!.difference(_startDate!).inDays + 1} ${AppStrings.t(context, 'days')})'
+                                                              : AppStrings.t(context, 'add_dates_optional'),
+                                                          style: theme.textTheme.bodyMedium,
+                                                        ),
+                                                      ),
+                                                      Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          if (_selectedCountries.isNotEmpty || _cities.isNotEmpty) ...[
+                                            const SizedBox(height: 10),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: FilledButton.icon(
+                                                onPressed: () => _showAddCitySheet(),
+                                                icon: const Icon(Icons.add, size: 20),
+                                                label: Text(AppStrings.t(context, 'add_destination')),
+                                                style: FilledButton.styleFrom(
+                                                  backgroundColor: theme.colorScheme.primary,
+                                                  foregroundColor: theme.colorScheme.onPrimary,
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                          const SizedBox(height: AppTheme.spacingMd),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 40),
+                                            child: _buildRouteStrip(theme),
+                                          ),
+                                          const SizedBox(height: AppTheme.spacingLg),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 80),
+                                            child: _buildDetailsTimeline(theme),
+                                          ),
+                                          const SizedBox(height: AppTheme.spacingLg),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(minHeight: 40),
+                                            child: _buildCostPerPersonRow(theme),
+                                          ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                    const SizedBox(height: AppTheme.spacingMd),
+                                    _buildBottomBar(theme),
+                                    SizedBox(height: viewInsetsBottom),
+                                  ],
                                 ),
-                                if (_selectedCountries.isNotEmpty || _cities.isNotEmpty) ...[
-                                  const SizedBox(height: 10),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: FilledButton.icon(
-                                      onPressed: () => _showAddCitySheet(),
-                                      icon: const Icon(Icons.add, size: 20),
-                                      label: Text(AppStrings.t(context, 'add_destination')),
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: theme.colorScheme.primary,
-                                        foregroundColor: theme.colorScheme.onPrimary,
-                                        padding: const EdgeInsets.symmetric(vertical: 12),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: AppTheme.spacingMd),
-                                _buildRouteStrip(theme),
-                                const SizedBox(height: AppTheme.spacingLg),
-                                _buildDetailsTimeline(theme),
-                                const SizedBox(height: AppTheme.spacingLg),
-                                _buildCostPerPersonRow(theme),
-                              ],
+                              ),
                             ),
+                            ],
                           ),
-                          _buildBottomBar(theme),
-                        ],
-                      ),
-                    ),
+                        );
+                        },
+                      );
+                    },
+                  ),
+                  ),
+                  ),
                   ),
                   ListenableBuilder(
                     listenable: _sheetController,
@@ -1585,8 +1648,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   }
 
   Widget _buildBottomBar(ThemeData theme) {
+    final bottomPadding = MediaQuery.paddingOf(context).bottom + 12;
     return Container(
-      padding: EdgeInsets.fromLTRB(AppTheme.spacingMd, 12, AppTheme.spacingMd, MediaQuery.paddingOf(context).bottom + 12),
+      padding: EdgeInsets.fromLTRB(AppTheme.spacingMd, 12, AppTheme.spacingMd, bottomPadding),
       decoration: BoxDecoration(color: theme.colorScheme.surface, boxShadow: [BoxShadow(color: theme.colorScheme.shadow.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, -4))]),
       child: Row(
         children: [

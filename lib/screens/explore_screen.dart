@@ -287,6 +287,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
               ),
             ],
           ],
+          SliverToBoxAdapter(
+            child: SizedBox(height: MediaQuery.viewInsetsOf(context).bottom),
+          ),
         ],
         ),
       ),

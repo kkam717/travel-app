@@ -468,6 +468,9 @@ class _SearchScreenState extends State<SearchScreen> {
               childCount: _tripResults.length,
             ),
           ),
+        SliverToBoxAdapter(
+          child: SizedBox(height: MediaQuery.viewInsetsOf(context).bottom),
+        ),
       ],
     );
   }
