@@ -12,10 +12,34 @@ class CountriesGeoJsonService {
 
   static String? _cachedJson;
 
+  /// Alternate ISO codes that Natural Earth does not use; map to the code used in the GeoJSON.
+  static const Map<String, String> _isoAliases = {
+    'UK': 'GB', // United Kingdom
+  };
+
+  static Set<String> _normalizeCodes(Set<String> isoCodes) {
+    final out = <String>{};
+    for (final c in isoCodes) {
+      final upper = c.trim().toUpperCase();
+      if (upper.isEmpty) continue;
+      out.add(_isoAliases[upper] ?? upper);
+    }
+    return out;
+  }
+
+  /// Extracts ISO 3166-1 alpha-2 from feature properties. Natural Earth uses -99 or compound codes (e.g. CN-TW) for some countries; we fall back to ISO_A2_EH then WB_A2 so they still appear in the list and on the map. Covered by fallback: France (FR), Norway (NO), Taiwan (TW), Kosovo (XK). Northern Cyprus and Somaliland have no standard 2-letter code in this dataset and remain excluded.
+  static String? _isoFromProps(Map<String, dynamic> props) {
+    final primary = (props['ISO_A2'] ?? props['iso_a2'])?.toString().trim().toUpperCase();
+    if (primary != null && primary != '-99' && primary.length == 2) return primary;
+    final fallback = (props['ISO_A2_EH'] ?? props['iso_a2_eh'] ?? props['WB_A2'] ?? props['wb_a2'])?.toString().trim().toUpperCase();
+    if (fallback != null && fallback != '-99' && fallback.length == 2) return fallback;
+    return null;
+  }
+
   /// Fetches GeoJSON (cached after first load) and returns polygons for visited country codes.
   static Future<List<Polygon>> getPolygonsForCountries(Set<String> isoCodes) async {
     if (isoCodes.isEmpty) return [];
-    final codes = isoCodes.map((c) => c.toUpperCase()).toSet();
+    final codes = _normalizeCodes(isoCodes);
 
     String json;
     if (_cachedJson != null) {
@@ -33,8 +57,8 @@ class CountriesGeoJsonService {
 
     for (final f in features) {
       final props = f['properties'] as Map<String, dynamic>? ?? {};
-      final iso = (props['ISO_A2'] ?? props['iso_a2'])?.toString().trim().toUpperCase();
-      if (iso == null || iso == '-99' || iso.isEmpty || !codes.contains(iso)) continue;
+      final iso = _isoFromProps(props);
+      if (iso == null || !codes.contains(iso)) continue;
 
       final geom = f['geometry'] as Map<String, dynamic>?;
       if (geom == null) continue;
@@ -141,10 +165,39 @@ class CountriesGeoJsonService {
     return out;
   }
 
+  /// Returns a list of (ISO_A2 code, display name) from the same GeoJSON used for the map.
+  /// Use this so the edit list and map share one source (no API vs local mismatch).
+  static Future<List<MapEntry<String, String>>> getCountryListFromGeoJson() async {
+    String json;
+    if (_cachedJson != null) {
+      json = _cachedJson!;
+    } else {
+      final resp = await http.get(Uri.parse(_url));
+      if (resp.statusCode != 200) throw Exception('Failed to load countries GeoJSON');
+      json = resp.body;
+      _cachedJson = json;
+    }
+
+    final data = jsonDecode(json) as Map<String, dynamic>;
+    final features = data['features'] as List<dynamic>? ?? [];
+    final result = <MapEntry<String, String>>[];
+
+    for (final f in features) {
+      final props = f['properties'] as Map<String, dynamic>? ?? {};
+      final iso = _isoFromProps(props);
+      if (iso == null) continue;
+      final name = (props['NAME'] ?? props['name'] ?? props['ADMIN'] ?? props['admin'] ?? iso).toString().trim();
+      if (name.isEmpty) continue;
+      result.add(MapEntry(iso, name));
+    }
+    result.sort((a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()));
+    return result;
+  }
+
   /// Returns bounds encompassing all given country codes (from cached GeoJSON). Use for fitting map to selected countries.
   static Future<LatLngBounds?> getBoundsForCountryCodes(Set<String> isoCodes) async {
     if (isoCodes.isEmpty) return null;
-    final codes = isoCodes.map((c) => c.toUpperCase()).toSet();
+    final codes = _normalizeCodes(isoCodes);
 
     String json;
     if (_cachedJson != null) {
@@ -162,8 +215,8 @@ class CountriesGeoJsonService {
 
     for (final f in features) {
       final props = f['properties'] as Map<String, dynamic>? ?? {};
-      final iso = (props['ISO_A2'] ?? props['iso_a2'])?.toString().trim().toUpperCase();
-      if (iso == null || iso == '-99' || iso.isEmpty || !codes.contains(iso)) continue;
+      final iso = _isoFromProps(props);
+      if (iso == null || !codes.contains(iso)) continue;
 
       final geom = f['geometry'] as Map<String, dynamic>?;
       if (geom == null) continue;
