@@ -358,6 +358,7 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
                       (_, i) => TripPhotoCard(
                         itinerary: filteredTrips[i],
                         onRefresh: _load,
+                        canEdit: true,
                       ),
                       childCount: filteredTrips.length,
                       addRepaintBoundaries: true,
