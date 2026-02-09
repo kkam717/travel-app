@@ -108,16 +108,8 @@ class TimelineConnector extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.outline.withValues(alpha: 0.6);
     final halfGap = (_gapHeight - _iconSize) / 2;
-    final centerWidget = transport == TransportType.unknown
-        ? Container(
-            width: _iconSize,
-            height: _iconSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: color, width: 2),
-            ),
-          )
-        : Icon(_iconFor(transport), size: _iconSize, color: color);
+    // Show generic transport icon when unknown so the connecting line between cities is clearly visible.
+    final centerWidget = Icon(_iconFor(transport), size: _iconSize, color: color);
     final content = SizedBox(
       height: _gapHeight,
       width: _connectorWidth,
@@ -432,18 +424,27 @@ const double _gapWhenNoTransport = 24;
 Widget _buildConnectorIfDifferentPlace({
   required List<ItineraryStop> dayILocations,
   required List<ItineraryStop> dayNextLocations,
+  required List<ItineraryStop> dayNextVenues,
   required TransportType transport,
   String? description,
 }) {
   final loc1 = dayILocations.isNotEmpty ? dayILocations.first : null;
   final loc2 = dayNextLocations.isNotEmpty ? dayNextLocations.first : null;
-  if (loc1 == null || loc2 == null) return const SizedBox.shrink();
-  // Same place = same primary location (by name; coords if both have them)
-  final sameName = loc1.name == loc2.name;
-  final sameCoords = loc1.lat != null && loc1.lng != null && loc2.lat != null && loc2.lng != null
-      ? (loc1.lat == loc2.lat && loc1.lng == loc2.lng)
-      : sameName;
-  if (sameName && (loc1.lat == null || loc2.lat == null || sameCoords)) {
+  // No connector when current day has no location (nowhere to connect from).
+  if (loc1 == null) return const SizedBox.shrink();
+  // When next day has no location stop (e.g. only "Kyoto" heading + venues), still show connector
+  // so the transport line between cities is visible.
+  final nextHasContent = loc2 != null || dayNextVenues.isNotEmpty;
+  if (!nextHasContent) return const SizedBox.shrink();
+  bool samePlace = false;
+  if (loc2 != null) {
+    final sameName = loc1.name == loc2.name;
+    final sameCoords = loc1.lat != null && loc1.lng != null && loc2.lat != null && loc2.lng != null
+        ? (loc1.lat == loc2.lat && loc1.lng == loc2.lng)
+        : sameName;
+    samePlace = sameName && (loc1.lat == null || loc2.lat == null || sameCoords);
+  }
+  if (samePlace) {
     // No transport between these cards: add vertical space for visual separation.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -543,6 +544,7 @@ class ItineraryTimeline extends StatelessWidget {
             _buildConnectorIfDifferentPlace(
               dayILocations: visible[v].locations,
               dayNextLocations: visible[v + 1].locations,
+              dayNextVenues: visible[v + 1].venues,
               transport: transportOverrides?[visible[v].originalIndex] ?? TransportType.unknown,
               description: transportDescriptions?[visible[v].originalIndex],
             ),
