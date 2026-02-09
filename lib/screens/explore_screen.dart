@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,7 +7,6 @@ import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
-import '../services/places_service.dart';
 import '../widgets/static_map_image.dart';
 
 const double _kHeroHeight = 300.0;
@@ -116,102 +114,29 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (query.trim().isEmpty) return;
     setState(() => _isSearching = true);
     try {
-      // Try to resolve query as a location first
-      final location = await PlacesService.resolvePlace(query);
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      
-      if (location != null) {
-        // Location search: search both trips and people by location
-        try {
-          final results = await Future.wait([
-            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 20),
-            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 20),
-          ]);
-          var trips = results[0] as List<Itinerary>;
-          final people = results[1] as List<ProfileSearchResult>;
-          
-          // Apply filters to location-based trips
-          if (_filterDaysCount != null || _filterMode != null || (_filterStyles.isNotEmpty)) {
-            trips = trips.where((t) {
-              if (_filterDaysCount != null && t.daysCount != _filterDaysCount) return false;
-              if (_filterMode != null && t.mode != _filterMode) return false;
-              if (_filterStyles.isNotEmpty && !_filterStyles.any((s) => t.styleTags.contains(s.toLowerCase()))) return false;
-              return true;
-            }).toList();
-          }
-          
-          if (trips.isNotEmpty) {
-            final ids = trips.map((i) => i.id).toList();
-            final likeCounts = await SupabaseService.getLikeCounts(ids);
-            trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
-          }
-          if (!mounted) return;
-          setState(() {
-            _searchPeople = people;
-            _searchTrips = trips;
-            _isSearching = false;
-          });
-          Analytics.logEvent('explore_location_search_performed', {
-            'result_trips': trips.length,
-            'result_people': people.length,
-          });
-        } catch (e) {
-          // If location search fails, fall back to text search
-          debugPrint('Explore location search failed, falling back to text search: $e');
-          final results = await Future.wait([
-            SupabaseService.searchProfiles(query, limit: 20),
-            SupabaseService.searchItineraries(
-              query: query,
-              limit: 20,
-              daysCount: _filterDaysCount,
-              mode: _filterMode,
-              styles: _filterStyles.isEmpty ? null : _filterStyles,
-            ),
-          ]);
-          final people = results[0] as List<ProfileSearchResult>;
-          var trips = results[1] as List<Itinerary>;
-          if (trips.isNotEmpty) {
-            final ids = trips.map((i) => i.id).toList();
-            final likeCounts = await SupabaseService.getLikeCounts(ids);
-            trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
-          }
-          if (!mounted) return;
-          setState(() {
-            _searchPeople = people;
-            _searchTrips = trips;
-            _isSearching = false;
-          });
-        }
-      } else {
-        // Text search: search both profiles and trips by text
-        final results = await Future.wait([
-          SupabaseService.searchProfiles(query, limit: 20),
-          SupabaseService.searchItineraries(
-            query: query,
-            limit: 20,
-            daysCount: _filterDaysCount,
-            mode: _filterMode,
-            styles: _filterStyles.isEmpty ? null : _filterStyles,
-          ),
-        ]);
-        final people = results[0] as List<ProfileSearchResult>;
-        var trips = results[1] as List<Itinerary>;
-        if (trips.isNotEmpty) {
-          final ids = trips.map((i) => i.id).toList();
-          final likeCounts = await SupabaseService.getLikeCounts(ids);
-          trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
-        }
-        if (!mounted) return;
-        setState(() {
-          _searchPeople = people;
-          _searchTrips = trips;
-          _isSearching = false;
-        });
-        Analytics.logEvent('explore_text_search_performed', {
-          'result_trips': trips.length,
-          'result_people': people.length,
-        });
+      final results = await Future.wait([
+        SupabaseService.searchProfiles(query, limit: 20),
+        SupabaseService.searchItineraries(
+          query: query,
+          limit: 20,
+          daysCount: _filterDaysCount,
+          mode: _filterMode,
+          styles: _filterStyles.isEmpty ? null : _filterStyles,
+        ),
+      ]);
+      final people = results[0] as List<ProfileSearchResult>;
+      var trips = results[1] as List<Itinerary>;
+      if (trips.isNotEmpty) {
+        final ids = trips.map((i) => i.id).toList();
+        final likeCounts = await SupabaseService.getLikeCounts(ids);
+        trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
       }
+      if (!mounted) return;
+      setState(() {
+        _searchPeople = people;
+        _searchTrips = trips;
+        _isSearching = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSearching = false);
@@ -326,40 +251,37 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ),
       );
     }
-    // Always show both sections, even if empty
+    final hasPeople = _searchPeople.isNotEmpty;
+    final hasTrips = _searchTrips.isNotEmpty;
+    if (!hasPeople && !hasTrips) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(AppTheme.spacingXl),
+          child: Center(
+            child: Text(
+              AppStrings.t(context, 'explore_no_matches'),
+              style: theme.textTheme.bodyLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
     return SliverPadding(
       padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingXl),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
-          // People section - always show
-          _sectionHeader(theme, AppStrings.t(context, 'profiles'), null),
-          const SizedBox(height: 8),
-          if (_searchPeople.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMd),
-              child: Text(
-                AppStrings.t(context, 'no_profiles_found'),
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                textAlign: TextAlign.center,
-              ),
-            )
-          else
+          if (hasPeople) ...[
+            _sectionHeader(theme, AppStrings.t(context, 'profiles'), null),
+            const SizedBox(height: 8),
             ..._searchPeople.map((p) => _PeopleRow(profile: p)),
-          const SizedBox(height: AppTheme.spacingLg),
-          // Trips section - always show
-          _sectionHeader(theme, AppStrings.t(context, 'trips'), null),
-          const SizedBox(height: 8),
-          if (_searchTrips.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingMd),
-              child: Text(
-                AppStrings.t(context, 'no_trips_found'),
-                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                textAlign: TextAlign.center,
-              ),
-            )
-          else
+            const SizedBox(height: AppTheme.spacingLg),
+          ],
+          if (hasTrips) ...[
+            _sectionHeader(theme, AppStrings.t(context, 'trips'), null),
+            const SizedBox(height: 8),
             ..._searchTrips.map((t) => _ExploreTripCard(itinerary: t)),
+          ],
         ]),
       ),
     );
