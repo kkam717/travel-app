@@ -306,7 +306,8 @@ class _ItineraryMapState extends State<ItineraryMap> {
         if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) continue;
         
         final transition = i < transitions.length ? transitions[i] : null;
-        final transportType = (transition?.type ?? 'car').toString().toLowerCase();
+        // Only fetch route when transport is explicitly set to a routable type (no default).
+        final transportType = (transition?.type ?? '').toString().toLowerCase();
         final description = transition?.description?.trim();
         final fromPt = LatLng(from.lat!, from.lng!);
         final toPt = LatLng(to.lat!, to.lng!);
@@ -319,6 +320,7 @@ class _ItineraryMapState extends State<ItineraryMap> {
         } else if (transportType == 'train') {
           future = _fetchTrainRoute(fromPt, toPt, description ?? '', from.name, to.name).then((r) => (i: i, route: r));
         } else {
+          // unknown, boat, or no transport set: no route fetch
           future = Future.value((i: i, route: null));
         }
         futures.add(future);
@@ -1500,11 +1502,12 @@ class _ItineraryMapState extends State<ItineraryMap> {
       }
 
       final mid = _midpointOf(segmentPoints);
-      // Only show transport icon if midpoint is clearly on the line, not at a station
+      // Only show transport icon when transport is explicitly set (not unknown/no transport).
       final distFromStart = _haversineKm(fromPoint, mid);
       final distFromEnd = _haversineKm(mid, toPoint);
       final minDistKm = 0.5;
-      if (distFromStart >= minDistKm && distFromEnd >= minDistKm) {
+      final showTransportIcon = transportType != 'unknown' && transportType.isNotEmpty;
+      if (showTransportIcon && distFromStart >= minDistKm && distFromEnd >= minDistKm) {
         final iconData = _transportIconFor(transportType);
         transportMarkers.add(Marker(
           point: mid,
@@ -1545,6 +1548,10 @@ class _ItineraryMapState extends State<ItineraryMap> {
         return Icons.flight;
       case 'boat':
         return Icons.directions_boat;
+      case 'bus':
+        return Icons.directions_bus;
+      case 'walk':
+        return Icons.directions_walk;
       default:
         return Icons.directions_transit;
     }
