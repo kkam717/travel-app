@@ -279,6 +279,28 @@ class PlacesService {
       return null;
     }
   }
+
+  /// Resolve a query string to a place location (lat/lng).
+  /// First tries Photon search, then falls back to Nominatim geocoding.
+  /// Returns null if the query doesn't resolve to a location.
+  static Future<(double, double)?> resolvePlace(String query) async {
+    if (query.trim().isEmpty) return null;
+    try {
+      // First try Photon search (faster, better for place names)
+      final predictions = await search(query.trim());
+      if (predictions.isNotEmpty) {
+        final first = predictions.first;
+        if (first.lat != null && first.lng != null) {
+          return (first.lat!, first.lng!);
+        }
+      }
+      // Fallback to Nominatim geocoding
+      return await geocodeAddress(query);
+    } catch (e) {
+      debugPrint('PlacesService resolvePlace: $e');
+      return null;
+    }
+  }
 }
 
 class PlacePrediction {
