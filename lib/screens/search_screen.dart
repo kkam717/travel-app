@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -142,43 +143,86 @@ class _SearchScreenState extends State<SearchScreen> {
       if (location != null) {
         // Location search: search both trips and people by location
         _isLocationSearch = true;
-        final results = await Future.wait([
-          SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 50),
-          SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 30),
-          userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
-        ]);
-        final trips = results[0] as List<Itinerary>;
-        final profiles = results[1] as List<ProfileSearchResult>;
-        final followedIds = results[2] as List<String>;
-        
-        if (trips.isNotEmpty && userId != null) {
-          final ids = trips.map((i) => i.id).toList();
-          final likeCounts = await SupabaseService.getLikeCounts(ids);
-          final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
-          final tripsWithLikes = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
-          if (!mounted) return;
-          setState(() {
-            _tripResults = tripsWithLikes;
-            _profileResults = profiles;
-            _followedProfileIds = followedIds.toSet();
-            _placeLiked.clear();
-            _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
-            _isLoading = false;
+        try {
+          final results = await Future.wait([
+            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 50),
+            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 50.0, limit: 30),
+            userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
+          ]);
+          final trips = results[0] as List<Itinerary>;
+          final profiles = results[1] as List<ProfileSearchResult>;
+          final followedIds = results[2] as List<String>;
+          
+          if (trips.isNotEmpty && userId != null) {
+            final ids = trips.map((i) => i.id).toList();
+            final likeCounts = await SupabaseService.getLikeCounts(ids);
+            final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+            final tripsWithLikes = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+            if (!mounted) return;
+            setState(() {
+              _tripResults = tripsWithLikes;
+              _profileResults = profiles;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
+              _isLoading = false;
+            });
+          } else {
+            if (!mounted) return;
+            setState(() {
+              _tripResults = trips;
+              _profileResults = profiles;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _isLoading = false;
+            });
+          }
+          Analytics.logEvent('location_search_performed', {
+            'result_trips': trips.length,
+            'result_people': profiles.length,
           });
-        } else {
-          if (!mounted) return;
-          setState(() {
-            _tripResults = trips;
-            _profileResults = profiles;
-            _followedProfileIds = followedIds.toSet();
-            _placeLiked.clear();
-            _isLoading = false;
+        } catch (e) {
+          // If location search fails, fall back to text search
+          debugPrint('Location search failed, falling back to text search: $e');
+          _isLocationSearch = false;
+          final results = await Future.wait([
+            SupabaseService.searchProfiles(query, limit: 30),
+            SupabaseService.searchItineraries(query: query, limit: 50),
+            userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
+          ]);
+          final profiles = results[0] as List<ProfileSearchResult>;
+          var trips = results[1] as List<Itinerary>;
+          final followedIds = results[2] as List<String>;
+          
+          if (trips.isNotEmpty && userId != null) {
+            final ids = trips.map((i) => i.id).toList();
+            final likeCounts = await SupabaseService.getLikeCounts(ids);
+            final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+            trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+            if (!mounted) return;
+            setState(() {
+              _profileResults = profiles;
+              _tripResults = trips;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
+              _isLoading = false;
+            });
+          } else {
+            if (!mounted) return;
+            setState(() {
+              _profileResults = profiles;
+              _tripResults = trips;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _isLoading = false;
+            });
+          }
+          Analytics.logEvent('text_search_performed', {
+            'result_trips': trips.length,
+            'result_people': profiles.length,
           });
         }
-        Analytics.logEvent('location_search_performed', {
-          'result_trips': trips.length,
-          'result_people': profiles.length,
-        });
       } else {
         // Text search: search both profiles and trips by text
         _isLocationSearch = false;

@@ -194,9 +194,14 @@ class SupabaseService {
         itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
       }
       return itineraries;
+    } on PostgrestException catch (e) {
+      // RPC may not exist (migration not run) - return empty list
+      debugPrint('[searchTripsByLocation] RPC failed: ${e.message}');
+      Analytics.logEvent('location_trip_search_error', {'error': e.toString()});
+      return [];
     } catch (e) {
       Analytics.logEvent('location_trip_search_error', {'error': e.toString()});
-      rethrow;
+      return [];
     }
   }
 
@@ -220,9 +225,14 @@ class SupabaseService {
       return (res as List)
           .map((e) => ProfileSearchResult.fromJson(e as Map<String, dynamic>))
           .toList();
+    } on PostgrestException catch (e) {
+      // RPC may not exist (migration not run) - return empty list
+      debugPrint('[searchPeopleByLocation] RPC failed: ${e.message}');
+      Analytics.logEvent('location_people_search_error', {'error': e.toString()});
+      return [];
     } catch (e) {
       Analytics.logEvent('location_people_search_error', {'error': e.toString()});
-      rethrow;
+      return [];
     }
   }
 
