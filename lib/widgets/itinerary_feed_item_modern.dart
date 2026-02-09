@@ -8,7 +8,7 @@ import '../models/user_city.dart';
 import 'static_map_image.dart';
 
 /// Editorial, content-first feed item. No card container, edge-to-edge hero, no visible action row.
-/// Actions: ⋯ menu, double-tap hero → like, long-press → bottom sheet.
+/// Actions: share (top right), double-tap hero → like, long-press → bottom sheet.
 class ItineraryFeedItemModern extends StatelessWidget {
   final Itinerary itinerary;
   final String description;
@@ -134,8 +134,8 @@ class ItineraryFeedItemModern extends StatelessWidget {
                 ),
                 const Spacer(),
                 IconButton(
-                  icon: const Icon(Icons.more_horiz_rounded),
-                  onPressed: () => _showSheet(context),
+                  icon: const Icon(Icons.share_outlined),
+                  onPressed: () => shareItineraryLink(it.id, title: it.title),
                   style: IconButton.styleFrom(
                     foregroundColor: theme.colorScheme.onSurfaceVariant,
                     minimumSize: const Size(40, 40),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,6 +12,7 @@ import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../services/supabase_service.dart';
+import '../services/places_service.dart';
 import '../data/countries.dart';
 
 const String _recentSearchesKey = 'search_recent_searches';
@@ -23,22 +25,18 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   List<ProfileSearchResult> _profileResults = [];
-  List<Itinerary> _placeResults = [];
+  List<Itinerary> _tripResults = [];
   final Map<String, bool> _placeLiked = {};
   Set<String> _followedProfileIds = {};
   bool _isLoading = false;
   String? _error;
-  int? _filterDays;
-  List<String> _filterStyles = [];
-  String? _filterMode;
-  Timer? _placesSearchDebounce;
-  Timer? _profileSearchDebounce;
+  Timer? _searchDebounce;
   List<String> _recentSearches = [];
+  bool _isLocationSearch = false;
 
   void _focusSearchBar() {
     if (mounted) {
@@ -49,11 +47,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _tabController.addListener(_onTabChanged);
     SearchFocusNotifier.addListener(_focusSearchBar);
     _loadRecentSearches();
-    _search();
   }
 
   Future<void> _loadRecentSearches() async {
@@ -87,23 +82,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
   @override
   void dispose() {
     SearchFocusNotifier.removeListener(_focusSearchBar);
-    _placesSearchDebounce?.cancel();
-    _profileSearchDebounce?.cancel();
-    _tabController.removeListener(_onTabChanged);
-    _tabController.dispose();
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
-  }
-
-  void _debouncedPlacesSearch() {
-    _placesSearchDebounce?.cancel();
-    _placesSearchDebounce = Timer(const Duration(milliseconds: 400), _search);
-  }
-
-  void _onTabChanged() {
-    if (_tabController.indexIsChanging) return;
-    _search();
   }
 
   Future<void> _toggleFollow(String profileId) async {
@@ -147,43 +129,125 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
       if (!mounted) return;
       setState(() {
         _profileResults = [];
-        _placeResults = [];
+        _tripResults = [];
+        _isLocationSearch = false;
         _isLoading = false;
       });
       return;
     }
     try {
-      if (_tabController.index == 0) {
-        final userId = Supabase.instance.client.auth.currentUser?.id;
+      // Try to resolve query as a location first
+      final location = await PlacesService.resolvePlace(query);
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      
+      if (location != null) {
+        // Location search: search both trips and people by location
+        // Use larger radius for country-level searches (1000km covers large countries like Italy, USA, etc.)
+        _isLocationSearch = true;
+        debugPrint('Location resolved: ${location.$1}, ${location.$2} for query: $query');
+        try {
+          final results = await Future.wait([
+            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 50),
+            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 30),
+            userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
+          ]);
+          final trips = results[0] as List<Itinerary>;
+          final profiles = results[1] as List<ProfileSearchResult>;
+          final followedIds = results[2] as List<String>;
+          debugPrint('Location search results: ${trips.length} trips, ${profiles.length} profiles');
+          
+          if (trips.isNotEmpty && userId != null) {
+            final ids = trips.map((i) => i.id).toList();
+            final likeCounts = await SupabaseService.getLikeCounts(ids);
+            final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+            final tripsWithLikes = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+            if (!mounted) return;
+            setState(() {
+              _tripResults = tripsWithLikes;
+              _profileResults = profiles;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
+              _isLoading = false;
+            });
+          } else {
+            if (!mounted) return;
+            setState(() {
+              _tripResults = trips;
+              _profileResults = profiles;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _isLoading = false;
+            });
+          }
+          Analytics.logEvent('location_search_performed', {
+            'result_trips': trips.length,
+            'result_people': profiles.length,
+          });
+        } catch (e) {
+          // If location search fails, fall back to text search
+          debugPrint('Location search failed, falling back to text search: $e');
+          _isLocationSearch = false;
+          final results = await Future.wait([
+            SupabaseService.searchProfiles(query, limit: 30),
+            SupabaseService.searchItineraries(query: query, limit: 50),
+            userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
+          ]);
+          final profiles = results[0] as List<ProfileSearchResult>;
+          var trips = results[1] as List<Itinerary>;
+          final followedIds = results[2] as List<String>;
+          
+          if (trips.isNotEmpty && userId != null) {
+            final ids = trips.map((i) => i.id).toList();
+            final likeCounts = await SupabaseService.getLikeCounts(ids);
+            final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
+            trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+            if (!mounted) return;
+            setState(() {
+              _profileResults = profiles;
+              _tripResults = trips;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
+              _isLoading = false;
+            });
+          } else {
+            if (!mounted) return;
+            setState(() {
+              _profileResults = profiles;
+              _tripResults = trips;
+              _followedProfileIds = followedIds.toSet();
+              _placeLiked.clear();
+              _isLoading = false;
+            });
+          }
+          Analytics.logEvent('text_search_performed', {
+            'result_trips': trips.length,
+            'result_people': profiles.length,
+          });
+        }
+      } else {
+        // Text search: search both profiles and trips by text
+        _isLocationSearch = false;
         final results = await Future.wait([
           SupabaseService.searchProfiles(query, limit: 30),
+          SupabaseService.searchItineraries(query: query, limit: 50),
           userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
         ]);
         final profiles = results[0] as List<ProfileSearchResult>;
-        final followedIds = results[1] as List<String>;
-        if (!mounted) return;
-        setState(() {
-          _profileResults = profiles;
-          _followedProfileIds = followedIds.toSet();
-          _isLoading = false;
-        });
-        Analytics.logEvent('profile_search_performed', {'result_count': profiles.length});
-      } else {
-        var places = await SupabaseService.searchItineraries(
-          query: query,
-          daysCount: _filterDays,
-          styles: _filterStyles.isEmpty ? null : _filterStyles,
-          mode: _filterMode,
-        );
-        final userId = Supabase.instance.client.auth.currentUser?.id;
-        if (places.isNotEmpty && userId != null) {
-          final ids = places.map((i) => i.id).toList();
+        var trips = results[1] as List<Itinerary>;
+        final followedIds = results[2] as List<String>;
+        
+        if (trips.isNotEmpty && userId != null) {
+          final ids = trips.map((i) => i.id).toList();
           final likeCounts = await SupabaseService.getLikeCounts(ids);
           final likedIds = await SupabaseService.getLikedItineraryIds(userId, ids);
-          places = places.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
+          trips = trips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
           if (!mounted) return;
           setState(() {
-            _placeResults = places;
+            _profileResults = profiles;
+            _tripResults = trips;
+            _followedProfileIds = followedIds.toSet();
             _placeLiked.clear();
             _placeLiked.addAll({for (final id in ids) id: likedIds.contains(id)});
             _isLoading = false;
@@ -191,12 +255,17 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         } else {
           if (!mounted) return;
           setState(() {
-            _placeResults = places;
+            _profileResults = profiles;
+            _tripResults = trips;
+            _followedProfileIds = followedIds.toSet();
             _placeLiked.clear();
             _isLoading = false;
           });
         }
-        Analytics.logEvent('place_search_performed', {'result_count': places.length});
+        Analytics.logEvent('text_search_performed', {
+          'result_trips': trips.length,
+          'result_people': profiles.length,
+        });
       }
     } catch (e) {
       if (!mounted) return;
@@ -213,10 +282,10 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     final wasLiked = _placeLiked[itineraryId] ?? false;
     if (!mounted) return;
     setState(() => _placeLiked[itineraryId] = !wasLiked);
-    final idx = _placeResults.indexWhere((i) => i.id == itineraryId);
+    final idx = _tripResults.indexWhere((i) => i.id == itineraryId);
     if (idx >= 0) {
-      final it = _placeResults[idx];
-      _placeResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? -1 : 1));
+      final it = _tripResults[idx];
+      _tripResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? -1 : 1));
     }
     try {
       if (wasLiked) {
@@ -229,8 +298,8 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
         setState(() {
           _placeLiked[itineraryId] = wasLiked;
           if (idx >= 0) {
-            final it = _placeResults[idx];
-            _placeResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? 1 : -1));
+            final it = _tripResults[idx];
+            _tripResults[idx] = it.copyWith(likeCount: (it.likeCount ?? 0) + (wasLiked ? 1 : -1));
           }
         });
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_refresh'))));
@@ -244,20 +313,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     return Scaffold(
       appBar: AppBar(
         title: Text(AppStrings.t(context, 'search')),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(icon: const Icon(Icons.person_outline_rounded), text: AppStrings.t(context, 'profiles')),
-            Tab(icon: const Icon(Icons.place_outlined), text: AppStrings.t(context, 'trips')),
-          ],
-        ),
-        actions: [
-          if (_tabController.index == 1)
-            IconButton(
-              icon: const Icon(Icons.tune_rounded),
-              onPressed: _showFilters,
-            ),
-        ],
       ),
       body: Column(
         children: [
@@ -267,7 +322,7 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
               controller: _searchController,
               focusNode: _searchFocusNode,
               decoration: InputDecoration(
-                hintText: _tabController.index == 0 ? AppStrings.t(context, 'search_by_name') : AppStrings.t(context, 'destination_or_keywords'),
+                hintText: AppStrings.t(context, 'destination_or_keywords'),
                 prefixIcon: const Icon(Icons.search_rounded),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear_rounded),
@@ -282,157 +337,138 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
                 _search();
               },
               onChanged: (_) {
-                if (_tabController.index == 0) {
-                  _profileSearchDebounce?.cancel();
-                  _profileSearchDebounce = Timer(const Duration(milliseconds: 400), _search);
-                } else {
-                  _debouncedPlacesSearch();
-                }
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 400), _search);
               },
             ),
           ),
           Expanded(
-            child: _tabController.index == 0 ? _buildProfilesTab() : _buildPlacesTab(),
+            child: _buildResults(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProfilesTab() {
+  Widget _buildResults() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
       return _buildErrorState();
     }
-    if (_profileResults.isEmpty) {
-      final searchEmpty = _searchController.text.trim().isEmpty;
-      if (searchEmpty && _recentSearches.isNotEmpty) {
-        return _buildRecentSearches();
-      }
+    final searchEmpty = _searchController.text.trim().isEmpty;
+    if (searchEmpty && _recentSearches.isNotEmpty) {
+      return _buildRecentSearches();
+    }
+    if (searchEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.person_search_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+            Icon(Icons.search_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
             const SizedBox(height: AppTheme.spacingLg),
             Text(
-              searchEmpty ? AppStrings.t(context, 'type_to_search_profiles') : AppStrings.t(context, 'no_profiles_found'),
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              AppStrings.t(context, 'destination_or_keywords'),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
           ],
         ),
       );
     }
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-      itemCount: _profileResults.length,
-      itemBuilder: (_, i) {
-        final p = _profileResults[i];
-        return _ProfileCard(
-          profile: p,
-          isFollowing: _followedProfileIds.contains(p.id),
-          isOwnProfile: currentUserId == p.id,
-          onTap: () {
-            _addRecentSearch(p.name?.trim() ?? AppStrings.t(context, 'profile'));
-            context.push('/author/${p.id}');
-          },
-          onFollowTap: null,
-        );
-      },
-    );
-  }
-
-  Widget _buildPlacesTab() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return _buildErrorState();
-    }
-    if (_placeResults.isEmpty) {
-      final searchEmpty = _searchController.text.trim().isEmpty;
-      if (searchEmpty && _recentSearches.isNotEmpty) {
-        return _buildRecentSearches();
-      }
-      if (searchEmpty) {
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
-              const SizedBox(height: AppTheme.spacingLg),
-              Text(
-                AppStrings.t(context, 'type_to_search_trips'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        );
-      }
-      final hasFilters = _filterDays != null || _filterStyles.isNotEmpty || _filterMode != null;
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingXl),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.explore_rounded, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
-              const SizedBox(height: AppTheme.spacingLg),
-              Text(
-                AppStrings.t(context, 'no_trips_found'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppTheme.spacingSm),
-              Text(
-                hasFilters ? 'Try clearing filters or a different search.' : 'Only public itineraries appear.',
-                style: Theme.of(context).textTheme.bodySmall,
-                textAlign: TextAlign.center,
-              ),
-              if (hasFilters) ...[
-                const SizedBox(height: AppTheme.spacingMd),
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _filterDays = null;
-                      _filterStyles = [];
-                      _filterMode = null;
-                    });
-                    _search();
-                  },
-                  icon: const Icon(Icons.clear_all_rounded, size: 18),
-                  label: Text(AppStrings.t(context, 'clear_filters')),
-                ),
-              ],
-            ],
+    
+    return CustomScrollView(
+      slivers: [
+        // People section
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingMd, AppTheme.spacingMd, AppTheme.spacingSm),
+            child: Text(
+              AppStrings.t(context, 'profiles'),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
           ),
         ),
-      );
-    }
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
-      itemCount: _placeResults.length,
-      itemBuilder: (_, i) {
-        final it = _placeResults[i];
-        final isOthersPost = userId != null && it.authorId != userId;
-        return _ItineraryCard(
-          itinerary: it,
-          isLiked: _placeLiked[it.id] ?? false,
-          likeCount: it.likeCount ?? 0,
-          onLike: isOthersPost ? () => _togglePlaceLike(it.id) : null,
-          onTap: () {
-            _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
-            context.push('/itinerary/${it.id}');
-          },
-          onAuthorTap: () => context.push('/author/${it.authorId}'),
-        );
-      },
+        if (_profileResults.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingXl),
+              child: Center(
+                child: Text(
+                  AppStrings.t(context, 'no_profiles_found'),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          )
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final p = _profileResults[index];
+                final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+                return _ProfileCard(
+                  profile: p,
+                  isFollowing: _followedProfileIds.contains(p.id),
+                  isOwnProfile: currentUserId == p.id,
+                  onTap: () {
+                    _addRecentSearch(p.name?.trim() ?? AppStrings.t(context, 'profile'));
+                    context.push('/author/${p.id}');
+                  },
+                  onFollowTap: () => _toggleFollow(p.id),
+                );
+              },
+              childCount: _profileResults.length,
+            ),
+          ),
+        // Trips section
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingSm),
+            child: Text(
+              AppStrings.t(context, 'trips'),
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        if (_tripResults.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingXl),
+              child: Center(
+                child: Text(
+                  AppStrings.t(context, 'no_trips_found'),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          )
+        else
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final it = _tripResults[index];
+                final userId = Supabase.instance.client.auth.currentUser?.id;
+                final isOthersPost = userId != null && it.authorId != userId;
+                return _ItineraryCard(
+                  itinerary: it,
+                  isLiked: _placeLiked[it.id] ?? false,
+                  likeCount: it.likeCount ?? 0,
+                  onLike: isOthersPost ? () => _togglePlaceLike(it.id) : null,
+                  onTap: () {
+                    _addRecentSearch(it.title.trim().isNotEmpty ? it.title.trim() : it.destination);
+                    context.push('/itinerary/${it.id}');
+                  },
+                  onAuthorTap: () => context.push('/author/${it.authorId}'),
+                );
+              },
+              childCount: _tripResults.length,
+            ),
+          ),
+      ],
     );
   }
 
@@ -496,112 +532,6 @@ class _SearchScreenState extends State<SearchScreen> with SingleTickerProviderSt
     );
   }
 
-  void _showFilters() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        int? days = _filterDays;
-        List<String> styles = List.from(_filterStyles);
-        String? mode = _filterMode;
-        return StatefulBuilder(
-          builder: (_, setModal) {
-            return DraggableScrollableSheet(
-              initialChildSize: 0.7,
-              minChildSize: 0.5,
-              maxChildSize: 0.95,
-              builder: (_, scrollController) {
-                return SingleChildScrollView(
-                  controller: scrollController,
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppTheme.spacingLg),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(AppStrings.t(context, 'duration'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: AppTheme.spacingSm),
-                        Wrap(
-                          spacing: 8,
-                          children: [7, 10, 14, 21].map((d) {
-                            final selected = days == d;
-                            return FilterChip(
-                              label: Text('$d ${AppStrings.t(context, 'days')}'),
-                              selected: selected,
-                              onSelected: (_) => setModal(() => days = selected ? null : d),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: AppTheme.spacingLg),
-                        Text(AppStrings.t(context, 'travel_style'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: AppTheme.spacingSm),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: travelStyles.map((s) {
-                            final selected = styles.contains(s);
-                            return FilterChip(
-                              label: Text(s),
-                              selected: selected,
-                              onSelected: (_) => setModal(() {
-                                if (selected) styles.remove(s);
-                                else styles.add(s);
-                              }),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: AppTheme.spacingLg),
-                        Text(AppStrings.t(context, 'mode'), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: AppTheme.spacingSm),
-                        Wrap(
-                          spacing: 8,
-                          children: travelModes.map((m) {
-                            final selected = mode == m;
-                            return ChoiceChip(
-                              label: Text(m),
-                              selected: selected,
-                              onSelected: (_) => setModal(() => mode = selected ? null : m),
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: AppTheme.spacingLg),
-                        Row(
-                          children: [
-                            TextButton(
-                              onPressed: () => setModal(() {
-                                days = null;
-                                styles = [];
-                                mode = null;
-                              }),
-                              child: Text(AppStrings.t(context, 'clear')),
-                            ),
-                            const Spacer(),
-                            FilledButton(
-                              onPressed: () {
-                                setState(() {
-                                  _filterDays = days;
-                                  _filterStyles = styles;
-                                  _filterMode = mode;
-                                });
-                                Navigator.pop(ctx);
-                                _search();
-                              },
-                              child: Text(AppStrings.t(context, 'apply')),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
 }
 
 class _ProfileCard extends StatelessWidget {

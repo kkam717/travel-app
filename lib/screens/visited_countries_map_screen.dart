@@ -11,7 +11,6 @@ import '../core/web_tile_provider.dart';
 import '../data/countries.dart';
 import '../l10n/app_strings.dart';
 import '../services/countries_geojson_service.dart';
-import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 
 /// CRS that disables world wrap (no horizontal looping).
@@ -340,58 +339,55 @@ class _EditCountriesSheetContentState extends State<_EditCountriesSheetContent> 
   late Set<String> _selected;
   final _searchController = TextEditingController();
   String _searchQuery = '';
-  List<PlacePrediction> _searchResults = [];
-  bool _loading = false;
-  Timer? _debounce;
+  List<MapEntry<String, String>> _countryList = [];
+  Map<String, String> _countryNameByCode = {};
+  List<MapEntry<String, String>> _filteredResults = [];
+  bool _loading = true;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     _selected = widget.initialSelected.toSet();
+    _loadCountryList();
+  }
+
+  Future<void> _loadCountryList() async {
+    try {
+      final list = await CountriesGeoJsonService.getCountryListFromGeoJson();
+      if (!mounted) return;
+      setState(() {
+        _countryList = list;
+        _countryNameByCode = Map.fromEntries(list);
+        _loading = false;
+        _filteredResults = _applyFilter(_searchQuery, list);
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        _loading = false;
+        _loadError = e.toString();
+        _countryList = [];
+        _filteredResults = [];
+      });
+    }
+  }
+
+  List<MapEntry<String, String>> _applyFilter(String query, List<MapEntry<String, String>> list) {
+    final q = query.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return list.where((e) => e.value.toLowerCase().contains(q)).toList();
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String v) {
-    setState(() => _searchQuery = v);
-    _debounce?.cancel();
-    if (v.trim().length < 2) {
-      setState(() {
-        _searchResults = [];
-        _loading = false;
-      });
-      return;
-    }
-    _debounce = Timer(const Duration(milliseconds: 400), () async {
-      if (!mounted) return;
-      setState(() => _loading = true);
-      try {
-        final lang = Localizations.localeOf(context).languageCode;
-        final results = await PlacesService.search(
-          v.trim(),
-          placeType: 'country',
-          lang: lang,
-        );
-        if (!mounted) return;
-        final seen = <String>{};
-        final filtered = results
-            .where((p) => p.countryCode != null && p.countryCode!.isNotEmpty && seen.add(p.countryCode!.toUpperCase()))
-            .toList();
-        setState(() {
-          _searchResults = filtered;
-          _loading = false;
-        });
-      } catch (_) {
-        if (mounted) setState(() {
-          _searchResults = [];
-          _loading = false;
-        });
-      }
+    setState(() {
+      _searchQuery = v;
+      _filteredResults = _applyFilter(v, _countryList);
     });
   }
 
@@ -443,36 +439,44 @@ class _EditCountriesSheetContentState extends State<_EditCountriesSheetContent> 
               Wrap(
                 spacing: 6,
                 runSpacing: 6,
-                children: _selected.map((code) => Chip(
-                  label: Text(countries[code] ?? code),
-                  deleteIcon: Icon(Icons.close, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                  onDeleted: () => setState(() => _selected.remove(code)),
-                )).toList(),
+                children: _selected.map((code) {
+                  final name = _countryNameByCode[code] ?? countries[code] ?? code;
+                  return Chip(
+                    label: Text(name),
+                    deleteIcon: Icon(Icons.close, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    onDeleted: () => setState(() => _selected.remove(code)),
+                  );
+                }).toList(),
               ),
             ],
             const SizedBox(height: 12),
             Expanded(
-              child: _searchQuery.trim().length < 2
-                  ? Center(
-                      child: Text(
-                        AppStrings.t(context, 'search_and_add_countries'),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      ),
-                    )
-                  : ListView.builder(
-                      controller: scrollController,
-                      itemCount: _searchResults.length,
-                      itemBuilder: (_, i) {
-                        final p = _searchResults[i];
-                        final code = p.countryCode!;
-                        final added = _selected.contains(code);
-                        return ListTile(
-                          leading: Icon(added ? Icons.check_circle : Icons.add_circle_outline, size: 22, color: added ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
-                          title: Text(p.mainText, style: Theme.of(context).textTheme.bodyMedium),
-                          onTap: added ? null : () => setState(() => _selected.add(code)),
-                        );
-                      },
-                    ),
+              child: _loading
+                  ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
+                  : _loadError != null
+                      ? Center(child: Text(_loadError!, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.error)))
+                      : _searchQuery.trim().length < 2
+                          ? Center(
+                              child: Text(
+                                AppStrings.t(context, 'search_and_add_countries'),
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: scrollController,
+                              itemCount: _filteredResults.length,
+                              itemBuilder: (_, i) {
+                                final entry = _filteredResults[i];
+                                final code = entry.key;
+                                final name = entry.value;
+                                final added = _selected.contains(code);
+                                return ListTile(
+                                  leading: Icon(added ? Icons.check_circle : Icons.add_circle_outline, size: 22, color: added ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
+                                  title: Text(name, style: Theme.of(context).textTheme.bodyMedium),
+                                  onTap: added ? null : () => setState(() => _selected.add(code)),
+                                );
+                              },
+                            ),
             ),
           ],
         ),

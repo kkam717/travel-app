@@ -160,6 +160,86 @@ class SupabaseService {
   }
 
   // --- Itineraries ---
+  /// Search trips with stops near a location (lat/lng within radius in km)
+  static Future<List<Itinerary>> searchTripsByLocation(
+    double lat,
+    double lng, {
+    double radiusKm = 50.0,
+    int limit = 50,
+  }) async {
+    try {
+      final res = await _client.rpc(
+        'search_trips_by_location',
+        params: {
+          'p_lat': lat,
+          'p_lng': lng,
+          'p_radius_km': radiusKm,
+          'p_result_limit': limit,
+        },
+      );
+      final rows = (res as List).map((e) {
+        final m = Map<String, dynamic>.from(e as Map<String, dynamic>);
+        m['profiles'] = {'name': m.remove('author_name')};
+        return m;
+      }).toList();
+      var itineraries = rows.map((e) => Itinerary.fromJson(e)).toList();
+      if (itineraries.isNotEmpty) {
+        final ids = itineraries.map((i) => i.id).toList();
+        final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+        final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+        final stopsByItinerary = <String, List<ItineraryStop>>{};
+        for (final s in stopsList) {
+          stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
+        }
+        itineraries = itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], stopsCount: stopsByItinerary[i.id]?.length ?? 0)).toList();
+      }
+      return itineraries;
+    } on PostgrestException catch (e) {
+      // RPC may not exist (migration not run) - return empty list
+      debugPrint('[searchTripsByLocation] RPC failed: ${e.message}');
+      Analytics.logEvent('location_trip_search_error', {'error': e.toString()});
+      return [];
+    } catch (e) {
+      Analytics.logEvent('location_trip_search_error', {'error': e.toString()});
+      return [];
+    }
+  }
+
+  /// Search profiles who have authored trips with stops near a location
+  static Future<List<ProfileSearchResult>> searchPeopleByLocation(
+    double lat,
+    double lng, {
+    double radiusKm = 50.0,
+    int limit = 30,
+  }) async {
+    try {
+      debugPrint('[searchPeopleByLocation] Searching: lat=$lat, lng=$lng, radius=${radiusKm}km');
+      final res = await _client.rpc(
+        'search_people_by_location',
+        params: {
+          'p_lat': lat,
+          'p_lng': lng,
+          'p_radius_km': radiusKm,
+          'p_result_limit': limit,
+        },
+      );
+      final profiles = (res as List)
+          .map((e) => ProfileSearchResult.fromJson(e as Map<String, dynamic>))
+          .toList();
+      debugPrint('[searchPeopleByLocation] Found ${profiles.length} profiles');
+      return profiles;
+    } on PostgrestException catch (e) {
+      // RPC may not exist (migration not run) - return empty list
+      debugPrint('[searchPeopleByLocation] RPC failed: ${e.message}');
+      Analytics.logEvent('location_people_search_error', {'error': e.toString()});
+      return [];
+    } catch (e) {
+      debugPrint('[searchPeopleByLocation] Error: $e');
+      Analytics.logEvent('location_people_search_error', {'error': e.toString()});
+      return [];
+    }
+  }
+
   static Future<List<Itinerary>> searchItineraries({
     String? query,
     int? daysCount,
@@ -188,13 +268,13 @@ class SupabaseService {
         var itineraries = rows.map((e) => Itinerary.fromJson(e)).toList();
         if (itineraries.isNotEmpty) {
           final ids = itineraries.map((i) => i.id).toList();
-          final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
-          final counts = <String, int>{};
-          for (final row in stopsRes as List) {
-            final itId = (row as Map)['itinerary_id'] as String;
-            counts[itId] = (counts[itId] ?? 0) + 1;
+          final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+          final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+          final stopsByItinerary = <String, List<ItineraryStop>>{};
+          for (final s in stopsList) {
+            stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
           }
-          itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
+          itineraries = itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], stopsCount: stopsByItinerary[i.id]?.length ?? 0)).toList();
         }
         return itineraries;
       } on PostgrestException catch (e) {
@@ -219,13 +299,13 @@ class SupabaseService {
       var itineraries = (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
       if (itineraries.isNotEmpty) {
         final ids = itineraries.map((i) => i.id).toList();
-        final stopsRes = await _client.from('itinerary_stops').select('itinerary_id').inFilter('itinerary_id', ids);
-        final counts = <String, int>{};
-        for (final row in stopsRes as List) {
-          final itId = (row as Map)['itinerary_id'] as String;
-          counts[itId] = (counts[itId] ?? 0) + 1;
+        final stopsListRaw = await _client.from('itinerary_stops').select().inFilter('itinerary_id', ids).order('day').order('position');
+        final stopsList = (stopsListRaw as List).map((e) => ItineraryStop.fromJson(e as Map<String, dynamic>)).toList();
+        final stopsByItinerary = <String, List<ItineraryStop>>{};
+        for (final s in stopsList) {
+          stopsByItinerary.putIfAbsent(s.itineraryId, () => []).add(s);
         }
-        itineraries = itineraries.map((i) => i.copyWith(stopsCount: counts[i.id] ?? 0)).toList();
+        itineraries = itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], stopsCount: stopsByItinerary[i.id]?.length ?? 0)).toList();
       }
       return itineraries;
     } catch (e) {

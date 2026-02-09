@@ -623,7 +623,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         });
       }
     }
-    final transportTransitions = pairs.length >= 2
+    // Only save transport when user has explicitly set at least one segment (no inferred default).
+    final transportTransitions = pairs.length >= 2 && _transportOverrides.isNotEmpty
         ? inferTransportTransitions(
             pairs,
             (i) => _cities[i].lat,
@@ -657,8 +658,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           updateData['duration_month'] = _durationMonth;
           updateData['duration_season'] = _durationSeason;
         }
-        if (pairs.length >= 2) {
-          updateData['transport_transitions'] = transportTransitions!.map((t) => t.toJson()).toList();
+        if (transportTransitions != null && transportTransitions.isNotEmpty) {
+          updateData['transport_transitions'] = transportTransitions.map((t) => t.toJson()).toList();
         }
         updateData['style_tags'] = _selectedStyleTags.map((s) => s.toLowerCase()).toList();
         updateData['cost_per_person'] = _costPerPersonEnabled ? _costPerPerson : null;
@@ -1151,7 +1152,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       showWorldWhenEmpty: true,
       countryCodes: _selectedCountries.isEmpty ? null : _selectedCountries,
       mapController: _tripBuilderMapController,
-      transportTransitions: _transportTransitionsForMap.isNotEmpty ? _transportTransitionsForMap : null,
+      transportTransitions: _transportOverrides.isNotEmpty ? _transportTransitionsForMap : null,
     );
   }
 
@@ -1413,7 +1414,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     stops: _stopsForMap,
                     destination: _selectedCountries.isNotEmpty ? _selectedCountries.map((c) => countries[c]).join(', ') : _cities.map((c) => c.name).join(', '),
                     height: 220,
-                    transportTransitions: _transportTransitionsForMap.isNotEmpty ? _transportTransitionsForMap : null,
+                    transportTransitions: _transportOverrides.isNotEmpty ? _transportTransitionsForMap : null,
                   )
                 : Container(
                     color: theme.colorScheme.surfaceContainerHighest,
