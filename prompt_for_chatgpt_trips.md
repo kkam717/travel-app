@@ -1,6 +1,6 @@
-# ChatGPT Prompt: Generate 4 Public Test Trips with All Features
+# ChatGPT Prompt: Generate 4 Public Test Trips Per Profile (24 Total)
 
-You are a SQL expert helping to create test data for a travel itinerary app. Generate SQL INSERT statements for 4 diverse public itineraries that showcase all the different features of the app.
+You are a SQL expert helping to create test data for a travel itinerary app. Generate SQL INSERT statements for **4 diverse public itineraries per test profile** (24 trips total) that showcase all the different features of the app.
 
 ## Database Schema
 
@@ -58,21 +58,23 @@ itinerary_stops (
 
 ## Requirements
 
-Create **4 diverse public itineraries** that showcase:
+Create **4 diverse public itineraries for EACH of the 6 test profiles** (24 trips total) that showcase:
 
-1. **Different travel modes**: Include at least one 'budget', one 'standard', and one 'luxury' trip
-2. **Different style_tags combinations**: Use various combinations of: Culture, Food, Nightlife, Adventure, Nature, Relax
-3. **Different duration formats**:
-   - At least one trip with `use_dates = true` (has start_date and end_date)
-   - At least one trip with `use_dates = false` (has duration_year, duration_month, or duration_season)
-   - At least one trip with neither (just days_count)
-4. **Transport transitions**: At least one trip with `transport_transitions` JSONB array (for multi-city trips)
-5. **Cost per person**: At least one trip with `cost_per_person` set
+**For each profile, create 4 trips that together showcase:**
+
+1. **Different travel modes**: Distribute trips across profiles so you have a good mix of 'budget', 'standard', and 'luxury' across all 24 trips
+2. **Different style_tags combinations**: Use various combinations of: Culture, Food, Nightlife, Adventure, Nature, Relax. Match each profile's travel_styles where appropriate.
+3. **Different duration formats** (across all 24 trips):
+   - Some trips with `use_dates = true` (has start_date and end_date)
+   - Some trips with `use_dates = false` (has duration_year, duration_month, or duration_season)
+   - Some trips with neither (just days_count)
+4. **Transport transitions**: Include `transport_transitions` JSONB array in multi-city trips
+5. **Cost per person**: Include `cost_per_person` in some trips (especially luxury ones)
 6. **Varied stop types**: Mix of 'location' stops (cities) and 'venue' stops (restaurants, hotels, experiences)
 7. **All stops must have lat/lng**: Every stop needs coordinates for location-based search to work
-8. **Realistic destinations**: Use real cities and places with accurate coordinates
-9. **Different day counts**: Vary from 3-10 days
-10. **Rating field**: Include at least one venue stop with a `rating` (1-5)
+8. **Realistic destinations**: Use real cities and places with accurate coordinates. Match destinations to each profile's visited_countries where possible.
+9. **Different day counts**: Vary from 3-10 days across all trips
+10. **Rating field**: Include venue stops with `rating` (1-5) in some trips
 
 ## Example Format
 
@@ -137,11 +139,14 @@ VALUES
 ```
 
 Generate complete SQL with:
-1. 4 INSERT statements for `itineraries` table (use fixed UUIDs: `cccc0000-0000-0000-0000-000000000001` through `0004`)
-2. 4 corresponding INSERT statements for `itinerary_stops` (5-10 stops per trip, each with lat/lng)
+1. **24 INSERT statements for `itineraries` table** (4 per profile):
+   - Use fixed UUIDs: `cccc0000-0000-0000-0000-000000000001` through `000024`
+   - Distribute across all 6 profiles (4 trips each)
+2. **24 corresponding INSERT statements for `itinerary_stops`** (5-10 stops per trip, each with lat/lng)
 3. Use `gen_random_uuid()` for stop IDs only
 4. Reference the fixed itinerary IDs in stops
-5. Include comments explaining which features each trip demonstrates
+5. Include comments explaining which features each trip demonstrates and which profile it belongs to
+6. **Organize by profile** - group the 4 trips for each profile together with clear comments
 
 ## Important Notes
 
