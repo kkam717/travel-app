@@ -1,6 +1,6 @@
 # Travel App
 
-<!-- Updated via agent test -->
+<!-- Testing feature branch workflow -->
 
 A Flutter mobile application for travel planning and itinerary sharing. Built for **iOS** and **Android**.
 
