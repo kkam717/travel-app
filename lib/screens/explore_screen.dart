@@ -140,7 +140,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             filteredTrips = trips.where((t) {
               if (_filterDaysCount != null && t.daysCount != _filterDaysCount) return false;
               if (_filterMode != null && t.mode != _filterMode) return false;
-              if (_filterStyles.isNotEmpty && !_filterStyles.contains(t.style)) return false;
+              if (_filterStyles.isNotEmpty && !t.styleTags.any((tag) => _filterStyles.contains(tag))) return false;
               return true;
             }).toList();
           }
@@ -152,12 +152,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
             filteredTrips = filteredTrips.map((i) => i.copyWith(likeCount: likeCounts[i.id])).toList();
           }
           
-          // Update follow status for people
-          final peopleWithFollowStatus = people.map((p) => p.copyWith(isFollowing: followedIds.contains(p.id))).toList();
-          
           if (!mounted) return;
           setState(() {
-            _searchPeople = peopleWithFollowStatus;
+            _searchPeople = people;
             _searchTrips = filteredTrips;
             _isSearching = false;
           });
