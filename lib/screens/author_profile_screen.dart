@@ -6,6 +6,7 @@ import '../data/countries.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
 import '../models/user_city.dart';
+import '../core/rate_limiter.dart';
 import '../services/supabase_service.dart';
 import '../l10n/app_strings.dart';
 import '../widgets/profile_hero_banner.dart';
@@ -141,6 +142,11 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         await SupabaseService.followUser(userId, widget.authorId);
       } else {
         await SupabaseService.unfollowUser(userId, widget.authorId);
+      }
+    } on RateLimitExceededException catch (_) {
+      if (mounted) {
+        setState(() => _isFollowing = !_isFollowing);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'rate_limit_try_again'))));
       }
     } catch (e) {
       if (mounted) {

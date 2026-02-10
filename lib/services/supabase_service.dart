@@ -5,6 +5,8 @@ import '../models/profile.dart';
 import '../models/itinerary.dart';
 import '../models/user_city.dart';
 import '../core/analytics.dart';
+import '../core/rate_limiter.dart';
+import '../core/input_validation.dart';
 
 class SupabaseService {
   static SupabaseClient get _client => Supabase.instance.client;
@@ -18,34 +20,38 @@ class SupabaseService {
       if (res == null) return null;
       return Profile.fromJson(res as Map<String, dynamic>);
     } catch (e) {
-      Analytics.logEvent('profile_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('profile_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<List<ProfileSearchResult>> searchProfiles(String? query, {int limit = 30}) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.searchProfiles, maxPerMinute: RateLimitActions.defaultSearchPerMinute);
+      final q = validateSearchQuery(query);
       final res = await _client.rpc(
         'search_profiles_with_stats',
-        params: {'search_query': query ?? '', 'result_limit': limit},
+        params: {'search_query': q, 'result_limit': limit.clamp(1, 50)},
       );
       return (res as List)
           .map((e) => ProfileSearchResult.fromJson(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      Analytics.logEvent('profile_search_error', {'error': e.toString()});
+      Analytics.logEvent('profile_search_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<void> updateProfile(String userId, Map<String, dynamic> data) async {
     try {
-      data['updated_at'] = DateTime.now().toIso8601String();
-      data['id'] = userId;
-      await _client.from('profiles').upsert(data, onConflict: 'id');
+      RateLimiter.instance.checkLimit(RateLimitActions.updateProfile, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
+      final sanitized = validateProfileUpdate(Map<String, dynamic>.from(data));
+      sanitized['updated_at'] = DateTime.now().toIso8601String();
+      sanitized['id'] = userId;
+      await _client.from('profiles').upsert(sanitized, onConflict: 'id');
 
       // Sync name to Supabase Auth user metadata (display name in dashboard)
-      final name = data['name'] as String?;
+      final name = sanitized['name'] as String?;
       if (name != null &&
           name.isNotEmpty &&
           _client.auth.currentUser?.id == userId) {
@@ -54,7 +60,7 @@ class SupabaseService {
         );
       }
     } catch (e) {
-      Analytics.logEvent('profile_update_error', {'error': e.toString()});
+      Analytics.logEvent('profile_update_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -65,23 +71,25 @@ class SupabaseService {
       final res = await _client.from('user_past_cities').select().eq('user_id', userId).order('position');
       return (res as List).map((e) => UserPastCity.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      Analytics.logEvent('past_cities_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('past_cities_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
 
   static Future<UserPastCity?> addPastCity(String userId, String cityName) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.addPastCity, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
+      final name = validateCityName(cityName);
       final existing = await _client.from('user_past_cities').select().eq('user_id', userId);
       final position = (existing as List).length;
       final res = await _client.from('user_past_cities').insert({
         'user_id': userId,
-        'city_name': cityName.trim(),
+        'city_name': name,
         'position': position,
       }).select().single();
       return UserPastCity.fromJson(res as Map<String, dynamic>);
     } catch (e) {
-      Analytics.logEvent('past_city_add_error', {'error': e.toString()});
+      Analytics.logEvent('past_city_add_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -90,7 +98,7 @@ class SupabaseService {
     try {
       await _client.from('user_past_cities').delete().eq('id', id);
     } catch (e) {
-      Analytics.logEvent('past_city_remove_error', {'error': e.toString()});
+      Analytics.logEvent('past_city_remove_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -101,7 +109,7 @@ class SupabaseService {
       final res = await _client.from('user_top_spots').select().eq('user_id', userId).eq('city_name', cityName).order('category').order('position');
       return (res as List).map((e) => UserTopSpot.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      Analytics.logEvent('top_spots_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('top_spots_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
@@ -112,12 +120,13 @@ class SupabaseService {
       final res = await _client.from('user_top_spots').select().eq('user_id', userId).order('city_name').order('category').order('position');
       return (res as List).map((e) => UserTopSpot.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      Analytics.logEvent('top_spots_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('top_spots_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
 
   static Future<UserTopSpot?> addTopSpot(UserTopSpot spot) async {
+    RateLimiter.instance.checkLimit(RateLimitActions.addTopSpot, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
     try {
       final existing = await _client.from('user_top_spots').select().eq('user_id', spot.userId).eq('city_name', spot.cityName).eq('category', spot.category);
       if ((existing as List).length >= 5) {
@@ -135,7 +144,7 @@ class SupabaseService {
       }).select().single();
       return UserTopSpot.fromJson(res as Map<String, dynamic>);
     } catch (e) {
-      Analytics.logEvent('top_spot_add_error', {'error': e.toString()});
+      Analytics.logEvent('top_spot_add_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -145,7 +154,7 @@ class SupabaseService {
       data['updated_at'] = DateTime.now().toIso8601String();
       await _client.from('user_top_spots').update(data).eq('id', id);
     } catch (e) {
-      Analytics.logEvent('top_spot_update_error', {'error': e.toString()});
+      Analytics.logEvent('top_spot_update_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -154,7 +163,7 @@ class SupabaseService {
     try {
       await _client.from('user_top_spots').delete().eq('id', id);
     } catch (e) {
-      Analytics.logEvent('top_spot_remove_error', {'error': e.toString()});
+      Analytics.logEvent('top_spot_remove_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -197,10 +206,10 @@ class SupabaseService {
     } on PostgrestException catch (e) {
       // RPC may not exist (migration not run) - return empty list
       debugPrint('[searchTripsByLocation] RPC failed: ${e.message}');
-      Analytics.logEvent('location_trip_search_error', {'error': e.toString()});
+      Analytics.logEvent('location_trip_search_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     } catch (e) {
-      Analytics.logEvent('location_trip_search_error', {'error': e.toString()});
+      Analytics.logEvent('location_trip_search_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
@@ -231,11 +240,11 @@ class SupabaseService {
     } on PostgrestException catch (e) {
       // RPC may not exist (migration not run) - return empty list
       debugPrint('[searchPeopleByLocation] RPC failed: ${e.message}');
-      Analytics.logEvent('location_people_search_error', {'error': e.toString()});
+      Analytics.logEvent('location_people_search_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     } catch (e) {
       debugPrint('[searchPeopleByLocation] Error: $e');
-      Analytics.logEvent('location_people_search_error', {'error': e.toString()});
+      Analytics.logEvent('location_people_search_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
@@ -309,7 +318,7 @@ class SupabaseService {
       }
       return itineraries;
     } catch (e) {
-      Analytics.logEvent('itinerary_search_error', {'error': e.toString()});
+      Analytics.logEvent('itinerary_search_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -327,7 +336,7 @@ class SupabaseService {
 
       return it.copyWith(stops: stops);
     } catch (e) {
-      Analytics.logEvent('itinerary_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('itinerary_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -352,12 +361,15 @@ class SupabaseService {
     int? costPerPerson,
   }) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.createItinerary, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
+      validateItineraryCreate(title: title, destination: destination, daysCount: daysCount, mode: mode, visibility: visibility, stopsData: stopsData);
+      final tags = styleTags.map((s) => s.toString().trim().toLowerCase()).where((s) => s.isNotEmpty).take(maxStyleTags).toList();
       final insertData = <String, dynamic>{
         'author_id': authorId,
-        'title': title,
-        'destination': destination,
+        'title': sanitizeString(title, maxLen: maxTitleLength, required: true),
+        'destination': sanitizeString(destination, maxLen: maxDestinationLength, required: true),
         'days_count': daysCount,
-        'style_tags': styleTags.map((s) => s.toLowerCase()).toList(),
+        'style_tags': tags,
         'mode': mode.toLowerCase(),
         'visibility': visibility,
         'forked_from_itinerary_id': forkedFromId,
@@ -375,29 +387,28 @@ class SupabaseService {
 
       final it = Itinerary.fromJson(res as Map<String, dynamic>);
       for (var i = 0; i < stopsData.length; i++) {
-        final stop = Map<String, dynamic>.from(stopsData[i]);
+        final raw = Map<String, dynamic>.from(stopsData[i]);
+        raw['position'] = raw['position'] ?? i;
+        final stop = validateItineraryStop(raw);
         stop['itinerary_id'] = it.id;
         stop['position'] = stop['position'] ?? i;
-        // place_id in schema is UUID (internal places); google_place_id stores Google Place IDs
-        final pid = stop['place_id'];
-        if (pid == null || pid is! String || !RegExp(r'^[0-9a-f-]{36}$', caseSensitive: false).hasMatch(pid)) {
-          stop.remove('place_id');
-        }
         await _client.from('itinerary_stops').insert(stop);
       }
       return (await getItinerary(it.id, checkAccess: false)) ?? it;
     } catch (e) {
-      Analytics.logEvent('itinerary_create_error', {'error': e.toString()});
+      Analytics.logEvent('itinerary_create_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<void> updateItinerary(String id, Map<String, dynamic> data) async {
     try {
-      data['updated_at'] = DateTime.now().toIso8601String();
-      await _client.from('itineraries').update(data).eq('id', id);
+      RateLimiter.instance.checkLimit(RateLimitActions.updateItinerary, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
+      final sanitized = validateItineraryUpdate(Map<String, dynamic>.from(data));
+      sanitized['updated_at'] = DateTime.now().toIso8601String();
+      await _client.from('itineraries').update(sanitized).eq('id', id);
     } catch (e) {
-      Analytics.logEvent('itinerary_update_error', {'error': e.toString()});
+      Analytics.logEvent('itinerary_update_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -408,27 +419,26 @@ class SupabaseService {
       await _client.from('itinerary_stops').delete().eq('itinerary_id', id);
       await _client.from('itineraries').delete().eq('id', id);
     } catch (e) {
-      Analytics.logEvent('itinerary_delete_error', {'error': e.toString()});
+      Analytics.logEvent('itinerary_delete_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<void> updateItineraryStops(String itineraryId, List<Map<String, dynamic>> stopsData) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.updateItinerary, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
+      if (stopsData.length > maxItineraryStops) throw ValidationException('Too many stops');
       await _client.from('itinerary_stops').delete().eq('itinerary_id', itineraryId);
       for (var i = 0; i < stopsData.length; i++) {
-        final stop = Map<String, dynamic>.from(stopsData[i]);
+        final raw = Map<String, dynamic>.from(stopsData[i]);
+        raw['position'] = i;
+        final stop = validateItineraryStop(raw);
         stop['itinerary_id'] = itineraryId;
         stop['position'] = i;
-        // place_id in schema is UUID (internal places); google_place_id stores Google Place IDs
-        final pid = stop['place_id'];
-        if (pid == null || pid is! String || !RegExp(r'^[0-9a-f-]{36}$', caseSensitive: false).hasMatch(pid)) {
-          stop.remove('place_id');
-        }
         await _client.from('itinerary_stops').insert(stop);
       }
     } catch (e) {
-      Analytics.logEvent('itinerary_stops_update_error', {'error': e.toString()});
+      Analytics.logEvent('itinerary_stops_update_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -436,18 +446,24 @@ class SupabaseService {
   // --- Bookmarks ---
   static Future<void> addBookmark(String userId, String itineraryId) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.bookmark, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
       await _client.from('bookmarks').insert({'user_id': userId, 'itinerary_id': itineraryId});
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return; // unique_violation: already bookmarked, idempotent success
+      Analytics.logEvent('bookmark_add_error', {'error': Analytics.redactForLog(e.toString())});
+      rethrow;
     } catch (e) {
-      Analytics.logEvent('bookmark_add_error', {'error': e.toString()});
+      Analytics.logEvent('bookmark_add_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<void> removeBookmark(String userId, String itineraryId) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.bookmark, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
       await _client.from('bookmarks').delete().eq('user_id', userId).eq('itinerary_id', itineraryId);
     } catch (e) {
-      Analytics.logEvent('bookmark_remove_error', {'error': e.toString()});
+      Analytics.logEvent('bookmark_remove_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -497,18 +513,24 @@ class SupabaseService {
   // --- Likes (other people's posts only) ---
   static Future<void> addLike(String userId, String itineraryId) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.like, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
       await _client.from('itinerary_likes').insert({'user_id': userId, 'itinerary_id': itineraryId});
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') return; // unique_violation: already liked, idempotent success
+      Analytics.logEvent('like_add_error', {'error': Analytics.redactForLog(e.toString())});
+      rethrow;
     } catch (e) {
-      Analytics.logEvent('like_add_error', {'error': e.toString()});
+      Analytics.logEvent('like_add_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<void> removeLike(String userId, String itineraryId) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.like, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
       await _client.from('itinerary_likes').delete().eq('user_id', userId).eq('itinerary_id', itineraryId);
     } catch (e) {
-      Analytics.logEvent('like_remove_error', {'error': e.toString()});
+      Analytics.logEvent('like_remove_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -568,7 +590,7 @@ class SupabaseService {
       final byId = {for (final i in itList) i.id: i};
       return ids.map((id) => byId[id]).whereType<Itinerary>().toList();
     } catch (e) {
-      Analytics.logEvent('bookmarks_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('bookmarks_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -599,7 +621,7 @@ class SupabaseService {
           .order('updated_at', ascending: false);
       return (res as List).map((e) => Itinerary.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      Analytics.logEvent('planning_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('planning_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -636,7 +658,7 @@ class SupabaseService {
       }
       return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [])).toList();
     } catch (e) {
-      Analytics.logEvent('user_itineraries_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('user_itineraries_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -645,23 +667,25 @@ class SupabaseService {
   static Future<void> followUser(String followerId, String followingId) async {
     if (followerId == followingId) return;
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.follow, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
       await _client.from('follows').insert({'follower_id': followerId, 'following_id': followingId});
     } on PostgrestException catch (e) {
       // 23505 = unique_violation - already following, treat as success
       if (e.code == '23505') return;
-      Analytics.logEvent('follow_error', {'error': e.toString()});
+      Analytics.logEvent('follow_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     } catch (e) {
-      Analytics.logEvent('follow_error', {'error': e.toString()});
+      Analytics.logEvent('follow_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
 
   static Future<void> unfollowUser(String followerId, String followingId) async {
     try {
+      RateLimiter.instance.checkLimit(RateLimitActions.follow, maxPerMinute: RateLimitActions.defaultMutationPerMinute);
       await _client.from('follows').delete().eq('follower_id', followerId).eq('following_id', followingId);
     } catch (e) {
-      Analytics.logEvent('unfollow_error', {'error': e.toString()});
+      Analytics.logEvent('unfollow_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -680,7 +704,7 @@ class SupabaseService {
       final res = await _client.from('follows').select('following_id').eq('follower_id', userId);
       return (res as List).map((e) => (e as Map)['following_id'] as String).toList();
     } catch (e) {
-      Analytics.logEvent('follows_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('follows_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
@@ -732,7 +756,7 @@ class SupabaseService {
       final profilesRes = await _client.from('profiles').select().inFilter('id', followerIds);
       return (profilesRes as List).map((e) => Profile.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      Analytics.logEvent('followers_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('followers_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
@@ -746,7 +770,7 @@ class SupabaseService {
       final profilesRes = await _client.from('profiles').select().inFilter('id', followingIds);
       return (profilesRes as List).map((e) => Profile.fromJson(e as Map<String, dynamic>)).toList();
     } catch (e) {
-      Analytics.logEvent('following_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('following_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       return [];
     }
   }
@@ -824,7 +848,7 @@ class SupabaseService {
       }
       return itineraries.map((i) => i.copyWith(stops: stopsByItinerary[i.id] ?? [], bookmarkCount: bookmarkCounts[i.id], likeCount: likeCounts[i.id])).toList();
     } catch (e) {
-      Analytics.logEvent('feed_fetch_error', {'error': e.toString()});
+      Analytics.logEvent('feed_fetch_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }
@@ -874,13 +898,23 @@ class SupabaseService {
   }
 
   // --- Storage ---
+  /// Max avatar file size (5MB). Enforced client-side; consider bucket limits in Supabase dashboard.
+  static const int maxAvatarSizeBytes = 5 * 1024 * 1024;
+  /// Allowed avatar extensions (storage + filename sanitization).
+  static const Set<String> allowedAvatarExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp'};
+
   static Future<String> uploadAvatar(String userId, Uint8List bytes, String extension) async {
     try {
-      final path = '$userId/avatar.$extension';
+      if (bytes.length > maxAvatarSizeBytes) {
+        throw ValidationException('Avatar must be under ${maxAvatarSizeBytes ~/ (1024 * 1024)}MB');
+      }
+      final ext = extension.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+      final safeExt = allowedAvatarExtensions.contains(ext) ? ext : 'jpg';
+      final path = '$userId/avatar.$safeExt';
       await _client.storage.from('avatars').uploadBinary(path, bytes, fileOptions: const FileOptions(upsert: true));
       return _client.storage.from('avatars').getPublicUrl(path);
     } catch (e) {
-      Analytics.logEvent('avatar_upload_error', {'error': e.toString()});
+      Analytics.logEvent('avatar_upload_error', {'error': Analytics.redactForLog(e.toString())});
       rethrow;
     }
   }

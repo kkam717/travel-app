@@ -18,6 +18,7 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     try {
+      // OWASP: Load credentials from environment only; never hardcode. Use anon key for client; never service_role.
       await dotenv.load(fileName: '.env').catchError((_) {});
       final url = dotenv.env['SUPABASE_URL'] ?? '';
       final anonKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';

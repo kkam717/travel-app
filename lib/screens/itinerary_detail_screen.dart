@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/analytics.dart';
+import '../core/rate_limiter.dart';
+import '../core/input_validation.dart';
 import '../core/app_link.dart';
 import '../core/locale_notifier.dart';
 import '../l10n/app_strings.dart';
@@ -101,6 +103,11 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       } else {
         await SupabaseService.unfollowUser(userId, it.authorId);
       }
+    } on RateLimitExceededException catch (_) {
+      if (mounted) {
+        setState(() => _isFollowing = !_isFollowing);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'rate_limit_try_again'))));
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isFollowing = !_isFollowing);
@@ -121,6 +128,11 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         await SupabaseService.removeBookmark(userId, widget.itineraryId);
       }
       Analytics.logEvent('bookmark_toggled', {'itinerary_id': widget.itineraryId, 'bookmarked': _isBookmarked});
+    } on RateLimitExceededException catch (_) {
+      if (mounted) {
+        setState(() => _isBookmarked = !_isBookmarked);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'rate_limit_try_again'))));
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isBookmarked = !_isBookmarked);
@@ -144,6 +156,14 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         await SupabaseService.addLike(userId, widget.itineraryId);
       } else {
         await SupabaseService.removeLike(userId, widget.itineraryId);
+      }
+    } on RateLimitExceededException catch (_) {
+      if (mounted) {
+        setState(() {
+          _isLiked = wasLiked;
+          _likeCount = (_likeCount + (wasLiked ? 1 : -1)).clamp(0, 0x7fffffff);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'rate_limit_try_again'))));
       }
     } catch (e) {
       if (mounted) {
@@ -310,6 +330,10 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
       );
       Analytics.logEvent('itinerary_forked', {'from': it.id, 'to': forked.id});
       if (mounted) context.go('/itinerary/${forked.id}/edit', extra: {'deleteOnDiscard': true});
+    } on RateLimitExceededException catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'rate_limit_try_again'))));
+    } on ValidationException catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_fork_itinerary'))));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_fork_itinerary'))));
     } finally {
