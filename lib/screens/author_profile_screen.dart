@@ -276,6 +276,7 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                     _AuthorFollowersFollowingRow(
                       followersCount: _followersCount,
                       followingCount: _followingCount,
+                      youFollowEachOther: !_isOwnProfile && _isMutualFriend,
                       onFollowersTap: () => context.push('/profile/followers?userId=${widget.authorId}'),
                       onFollowingTap: () => context.push('/profile/following?userId=${widget.authorId}'),
                     ),
@@ -328,12 +329,14 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
 class _AuthorFollowersFollowingRow extends StatelessWidget {
   final int followersCount;
   final int followingCount;
+  final bool youFollowEachOther;
   final VoidCallback onFollowersTap;
   final VoidCallback onFollowingTap;
 
   const _AuthorFollowersFollowingRow({
     required this.followersCount,
     required this.followingCount,
+    this.youFollowEachOther = false,
     required this.onFollowersTap,
     required this.onFollowingTap,
   });
@@ -342,25 +345,38 @@ class _AuthorFollowersFollowingRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w400);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        InkWell(
-          onTap: onFollowersTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-            child: Text('$followersCount ${AppStrings.t(context, 'followers')}', style: style),
-          ),
+        Row(
+          children: [
+            InkWell(
+              onTap: onFollowersTap,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                child: Text('$followersCount ${AppStrings.t(context, 'followers')}', style: style),
+              ),
+            ),
+            Text(' · ', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            InkWell(
+              onTap: onFollowingTap,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                child: Text('$followingCount ${AppStrings.t(context, 'following')}', style: style),
+              ),
+            ),
+          ],
         ),
-        Text(' · ', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-        InkWell(
-          onTap: onFollowingTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-            child: Text('$followingCount ${AppStrings.t(context, 'following')}', style: style),
+        if (youFollowEachOther) ...[
+          const SizedBox(height: 4),
+          Text(
+            AppStrings.t(context, 'you_follow_each_other'),
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w500),
           ),
-        ),
+        ],
       ],
     );
   }
