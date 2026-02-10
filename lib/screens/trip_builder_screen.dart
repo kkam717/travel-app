@@ -422,7 +422,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       for (var i = 0; i < _cities.length; i++) {
         _cities[i].dayCount = _allocations[i];
       }
-      // Keep full pool; next build will show next 2 not yet in _cities
+      // Keep full pool; next build will show next 6 not yet in _cities
     });
   }
 
@@ -1523,7 +1523,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     final existingNames = _cities.map((c) => c.name).toSet();
     final toShow = _classicPicksSuggestions
         .where((p) => !existingNames.contains(p.mainText))
-        .take(2)
+        .take(6)
         .toList();
     if (toShow.isEmpty && !alwaysShowSection) return const SizedBox.shrink();
     return Padding(

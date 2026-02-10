@@ -38,6 +38,12 @@ class CountriesGeoJsonService {
 
   /// Fetches GeoJSON (cached after first load) and returns polygons for visited country codes.
   static Future<List<Polygon>> getPolygonsForCountries(Set<String> isoCodes) async {
+    final withCodes = await getPolygonsWithCountryCodes(isoCodes);
+    return withCodes.map((e) => e.$2).toList();
+  }
+
+  /// Same as [getPolygonsForCountries] but returns (countryCode, polygon) pairs for tap hit-testing.
+  static Future<List<(String, Polygon)>> getPolygonsWithCountryCodes(Set<String> isoCodes) async {
     if (isoCodes.isEmpty) return [];
     final codes = _normalizeCodes(isoCodes);
 
@@ -53,7 +59,7 @@ class CountriesGeoJsonService {
 
     final data = jsonDecode(json) as Map<String, dynamic>;
     final features = data['features'] as List<dynamic>? ?? [];
-    final result = <Polygon>[];
+    final result = <(String, Polygon)>[];
 
     for (final f in features) {
       final props = f['properties'] as Map<String, dynamic>? ?? {};
@@ -68,16 +74,34 @@ class CountriesGeoJsonService {
 
       if (type == 'Polygon' && coords is List) {
         final rings = _parsePolygonCoords(coords);
-        if (rings.isNotEmpty) result.add(_makePolygon(rings));
+        if (rings.isNotEmpty) result.add((iso, _makePolygon(rings)));
       } else if (type == 'MultiPolygon' && coords is List) {
         for (final poly in coords) {
           if (poly is! List) continue;
           final rings = _parsePolygonCoords(poly);
-          if (rings.isNotEmpty) result.add(_makePolygon(rings));
+          if (rings.isNotEmpty) result.add((iso, _makePolygon(rings)));
         }
       }
     }
     return result;
+  }
+
+  /// Ray-casting: true if [point] is inside the polygon defined by [ring] (exterior, no holes).
+  static bool pointInPolygon(LatLng point, List<LatLng> ring) {
+    if (ring.length < 3) return false;
+    final lat = point.latitude;
+    final lng = point.longitude;
+    int crossings = 0;
+    final n = ring.length;
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+      final vi = ring[i];
+      final vj = ring[j];
+      if ((vi.latitude > lat) == (vj.latitude > lat)) continue;
+      final t = (lat - vj.latitude) / (vi.latitude - vj.latitude);
+      final x = vj.longitude + t * (vi.longitude - vj.longitude);
+      if (lng < x) crossings++;
+    }
+    return crossings.isOdd;
   }
 
   static Polygon _makePolygon(List<List<LatLng>> rings) {
