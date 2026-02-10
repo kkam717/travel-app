@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../core/app_link.dart';
 import '../core/saved_cache.dart';
 import '../models/itinerary.dart';
 import '../l10n/app_strings.dart';
@@ -647,6 +648,7 @@ class _PlanningTab extends StatelessWidget {
           itinerary: it,
           onTap: () => context.push('/itinerary/${it.id}').then((_) => onRefresh()),
           onContinue: () => context.push('/itinerary/${it.id}/edit').then((_) => onRefresh()),
+          onRefresh: onRefresh,
         );
       },
     );
@@ -673,11 +675,13 @@ class _SavedPlanningCard extends StatelessWidget {
   final Itinerary itinerary;
   final VoidCallback onTap;
   final VoidCallback onContinue;
+  final VoidCallback onRefresh;
 
   const _SavedPlanningCard({
     required this.itinerary,
     required this.onTap,
     required this.onContinue,
+    required this.onRefresh,
   });
 
   @override
@@ -750,6 +754,77 @@ class _SavedPlanningCard extends StatelessWidget {
                           ),
                         ],
                       ),
+                    ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_horiz_rounded, color: theme.colorScheme.onSurfaceVariant),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      position: PopupMenuPosition.over,
+                      onSelected: (value) async {
+                        HapticFeedback.lightImpact();
+                        if (value == 'share') {
+                          shareItineraryLink(it.id, title: it.title);
+                        } else if (value == 'edit') {
+                          context.push('/itinerary/${it.id}/edit').then((_) => onRefresh());
+                        } else if (value == 'delete') {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text(AppStrings.t(ctx, 'delete_trip')),
+                              content: Text(AppStrings.t(ctx, 'delete_trip_confirm')),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: Text(AppStrings.t(ctx, 'cancel')),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+                                  child: Text(AppStrings.t(ctx, 'delete_trip')),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true && context.mounted) {
+                            try {
+                              await SupabaseService.deleteItinerary(it.id);
+                              if (context.mounted) onRefresh();
+                            } catch (_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(AppStrings.t(context, 'could_not_load_itinerary'))),
+                                );
+                              }
+                            }
+                          }
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'share',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.share_outlined),
+                            title: Text(AppStrings.t(ctx, 'share_link')),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.edit_outlined),
+                            title: Text(AppStrings.t(ctx, 'edit_trip')),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                            title: Text(AppStrings.t(ctx, 'delete_trip'), style: TextStyle(color: theme.colorScheme.error)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

@@ -10,7 +10,30 @@ const Map<String, String> supportedLocales = {
   'fr': 'Français',
   'de': 'Deutsch',
   'it': 'Italiano',
+  'zh': '中文',
+  'ja': '日本語',
+  'pt': 'Português',
+  'el': 'Ελληνικά',
+  'tr': 'Türkçe',
+  'ar': 'العربية',
+  'fa': 'فارسی',
 };
+
+/// Order for displaying languages in the selector: English first, then alphabetical by English name.
+const List<String> supportedLocalesOrder = [
+  'en',  // English first (default / international)
+  'ar',  // Arabic
+  'zh',  // Chinese
+  'fa',  // Farsi
+  'fr',  // French
+  'de',  // German
+  'el',  // Greek
+  'it',  // Italian
+  'ja',  // Japanese
+  'pt',  // Portuguese
+  'es',  // Spanish
+  'tr',  // Turkish
+];
 
 const String defaultLocaleCode = 'en';
 

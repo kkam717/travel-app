@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
+import '../core/rate_limiter.dart';
+import '../core/input_validation.dart';
 import '../l10n/app_strings.dart';
 
 class EmailAuthScreen extends StatefulWidget {
@@ -37,11 +39,17 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
     });
 
     try {
+      validateEmail(_emailController.text);
+      validatePassword(_passwordController.text, isSignUp: _isSignUp);
+      final action = _isSignUp ? RateLimitActions.authSignUp : RateLimitActions.authSignIn;
+      RateLimiter.instance.checkLimit(action, maxPerMinute: RateLimitActions.defaultAuthPerMinute);
+
       if (_isSignUp) {
+        final name = sanitizeString(_nameController.text, maxLen: maxNameLength);
         await Supabase.instance.client.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text,
-          data: {'name': _nameController.text.trim()},
+          data: {'name': name},
         );
         Analytics.logEvent('auth_signup_success');
         if (mounted) {
@@ -58,6 +66,16 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
         Analytics.logEvent('auth_signin_success');
         if (mounted) context.go('/explore');
       }
+    } on RateLimitExceededException catch (_) {
+      setState(() {
+        _errorMessage = AppStrings.t(context, 'rate_limit_try_again');
+        _isLoading = false;
+      });
+    } on ValidationException catch (e) {
+      setState(() {
+        _errorMessage = e.message;
+        _isLoading = false;
+      });
     } on AuthException catch (e) {
       setState(() {
         _errorMessage = e.message;

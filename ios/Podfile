@@ -39,6 +39,17 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # Fix Pods deployment target warnings: Xcode supports 12.0–18.x
+      deployment = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_s
+      if deployment.empty? || deployment.to_f < 12.0
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+      end
+      # Generate dSYMs for Release so archive includes them (e.g. objective_c.framework)
+      if config.name == 'Release'
+        config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf-with-dsym'
+      end
+    end
   end
 
   # Generate GoogleMapsKeys.xcconfig from .env so Maps SDK gets a valid API key

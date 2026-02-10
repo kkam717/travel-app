@@ -10,6 +10,7 @@ import '../core/profile_cache.dart';
 import '../core/web_tile_provider.dart';
 import '../data/countries.dart';
 import '../l10n/app_strings.dart';
+import '../models/itinerary.dart';
 import '../services/countries_geojson_service.dart';
 import '../services/supabase_service.dart';
 
@@ -33,6 +34,7 @@ class VisitedCountriesMapScreen extends StatefulWidget {
 class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   List<String> _selectedCodes = [];
   List<Polygon> _polygons = [];
+  List<(String, Polygon)> _polygonsWithCodes = [];
   List<Polyline> _countryBorders = [];
   bool _loading = true;
   String? _error;
@@ -49,17 +51,18 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     try {
       final bordersFuture = CountriesGeoJsonService.getAllCountryBorderPolylines();
       final polygonsFuture = _selectedCodes.isEmpty
-          ? Future.value(<Polygon>[])
-          : CountriesGeoJsonService.getPolygonsForCountries(_selectedCodes.toSet());
+          ? Future.value(<(String, Polygon)>[])
+          : CountriesGeoJsonService.getPolygonsWithCountryCodes(_selectedCodes.toSet());
 
       final results = await Future.wait([bordersFuture, polygonsFuture]);
       final borders = results[0] as List<Polyline>;
-      final polygons = results[1] as List<Polygon>;
+      final withCodes = results[1] as List<(String, Polygon)>;
 
       if (mounted) {
         setState(() {
           _countryBorders = borders;
-          _polygons = polygons;
+          _polygonsWithCodes = withCodes;
+          _polygons = withCodes.map((e) => e.$2).toList();
           _loading = false;
           _error = null;
         });
@@ -68,12 +71,61 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
       if (mounted) {
         setState(() {
           _countryBorders = [];
+          _polygonsWithCodes = [];
           _polygons = [];
           _loading = false;
           _error = e.toString();
         });
       }
     }
+  }
+
+  void _onMapTap(LatLng point) {
+    String? tappedCode;
+    for (final entry in _polygonsWithCodes) {
+      final code = entry.$1;
+      final polygon = entry.$2;
+      if (CountriesGeoJsonService.pointInPolygon(point, polygon.points)) {
+        tappedCode = code;
+        break;
+      }
+    }
+    if (tappedCode == null) return;
+    _showItinerariesForCountry(tappedCode);
+  }
+
+  Future<void> _showItinerariesForCountry(String countryCode) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    final countryName = countries[countryCode] ?? countryCode;
+    List<Itinerary> all;
+    try {
+      all = await SupabaseService.getUserItineraries(userId, publicOnly: false);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.t(context, 'could_not_load_map') ?? 'Could not load')),
+      );
+      return;
+    }
+    final forCountry = all.where((it) {
+      final dest = (it.destination).trim().toLowerCase();
+      final name = countryName.toLowerCase();
+      if (dest == name) return true;
+      return dest.split(',').map((s) => s.trim()).any((s) => s == name || s.contains(name) || name.contains(s));
+    }).toList();
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => _CountryItinerariesSheet(
+        countryName: countryName,
+        itineraries: forCountry,
+        onTapItinerary: (it) {
+          Navigator.pop(ctx);
+          context.push('/itinerary/${it.id}');
+        },
+      ),
+    );
   }
 
   Future<void> _showEditCountries() async {
@@ -247,6 +299,7 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
             initialRotation: 0,
             crs: const Epsg3857NoWrap(),
             cameraConstraint: const CameraConstraint.containLatitude(),
+            onTap: (_, point) => _onMapTap(point),
             onMapReady: () {
               try { _mapController.rotate(0); } catch (_) {}
               if (_polygons.isNotEmpty) _fitWorld();
@@ -315,6 +368,67 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Bottom sheet listing saved itineraries for a country; each row opens the itinerary.
+class _CountryItinerariesSheet extends StatelessWidget {
+  final String countryName;
+  final List<Itinerary> itineraries;
+  final void Function(Itinerary it) onTapItinerary;
+
+  const _CountryItinerariesSheet({
+    required this.countryName,
+    required this.itineraries,
+    required this.onTapItinerary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppTheme.spacingMd,
+        AppTheme.spacingMd,
+        AppTheme.spacingMd,
+        MediaQuery.viewPaddingOf(context).bottom + AppTheme.spacingMd,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Itineraries in $countryName',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          if (itineraries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Text(
+                'No saved itineraries for this country.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            )
+          else
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView.builder(
+                itemCount: itineraries.length,
+                itemBuilder: (_, i) {
+                  final it = itineraries[i];
+                  return ListTile(
+                    title: Text(it.title),
+                    subtitle: Text('${it.destination} · ${it.daysCount} days'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onTapItinerary(it),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

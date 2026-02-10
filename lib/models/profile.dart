@@ -4,6 +4,8 @@ class ProfileSearchResult {
   final String? photoUrl;
   final int tripsCount;
   final int followersCount;
+  /// When from location search: "Country - City1 • City2 • City3" for that place.
+  final String? placesSummary;
 
   const ProfileSearchResult({
     required this.id,
@@ -11,6 +13,7 @@ class ProfileSearchResult {
     this.photoUrl,
     this.tripsCount = 0,
     this.followersCount = 0,
+    this.placesSummary,
   });
 
   factory ProfileSearchResult.fromJson(Map<String, dynamic> json) {
@@ -20,6 +23,7 @@ class ProfileSearchResult {
       photoUrl: json['photo_url'] as String?,
       tripsCount: (json['trips_count'] as num?)?.toInt() ?? 0,
       followersCount: (json['followers_count'] as num?)?.toInt() ?? 0,
+      placesSummary: json['places_summary'] as String?,
     );
   }
 }

@@ -136,26 +136,29 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
     try {
-      // Try to resolve query as a location first
-      final location = await PlacesService.resolvePlace(query);
+      // Try to resolve query as a location first (and get country code when place is a country)
+      final resolved = await PlacesService.resolvePlaceWithCountry(query);
       final userId = Supabase.instance.client.auth.currentUser?.id;
-      
-      if (location != null) {
-        // Location search: search both trips and people by location
-        // Use larger radius for country-level searches (1000km covers large countries like Italy, USA, etc.)
+
+      if (resolved != null) {
+        final lat = resolved.$1;
+        final lng = resolved.$2;
+        final countryCode = resolved.$3;
+        // When searching a country (e.g. "Italy"), use a tighter radius so we don't include neighboring countries (e.g. Vienna ~550km from Rome).
+        final radiusKm = (countryCode != null && countryCode.isNotEmpty) ? 500.0 : 1000.0;
         _isLocationSearch = true;
-        debugPrint('Location resolved: ${location.$1}, ${location.$2} for query: $query');
+        debugPrint('Location resolved: $lat, $lng for query: $query (country: $countryCode, radius: ${radiusKm}km)');
         try {
           final results = await Future.wait([
-            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 50),
-            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 30),
+            SupabaseService.searchTripsByLocation(lat, lng, radiusKm: radiusKm, limit: 50),
+            SupabaseService.searchPeopleByLocation(lat, lng, radiusKm: radiusKm, limit: 30),
             userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
           ]);
           final trips = results[0] as List<Itinerary>;
           final profiles = results[1] as List<ProfileSearchResult>;
           final followedIds = results[2] as List<String>;
           debugPrint('Location search results: ${trips.length} trips, ${profiles.length} profiles');
-          
+
           if (trips.isNotEmpty && userId != null) {
             final ids = trips.map((i) => i.id).toList();
             final likeCounts = await SupabaseService.getLikeCounts(ids);
@@ -413,6 +416,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   profile: p,
                   isFollowing: _followedProfileIds.contains(p.id),
                   isOwnProfile: currentUserId == p.id,
+                  showPlacesSummary: _isLocationSearch,
                   onTap: () {
                     _addRecentSearch(p.name?.trim() ?? AppStrings.t(context, 'profile'));
                     context.push('/author/${p.id}');
@@ -541,6 +545,7 @@ class _ProfileCard extends StatelessWidget {
   final ProfileSearchResult profile;
   final bool isFollowing;
   final bool isOwnProfile;
+  final bool showPlacesSummary;
   final VoidCallback onTap;
   final VoidCallback? onFollowTap;
 
@@ -548,12 +553,16 @@ class _ProfileCard extends StatelessWidget {
     required this.profile,
     required this.isFollowing,
     required this.isOwnProfile,
+    this.showPlacesSummary = false,
     required this.onTap,
     this.onFollowTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasPlacesLine = showPlacesSummary &&
+        profile.placesSummary != null &&
+        profile.placesSummary!.trim().isNotEmpty;
     return Card(
       margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
       child: InkWell(
@@ -581,24 +590,34 @@ class _ProfileCard extends StatelessWidget {
                       maxLines: 1,
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 4),
-                        Text('${profile.tripsCount} ${AppStrings.t(context, 'trips')}', style: Theme.of(context).textTheme.bodySmall),
-                        const SizedBox(width: 12),
-                        Icon(Icons.people_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            '${profile.followersCount} ${AppStrings.t(context, 'followers')}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                    if (hasPlacesLine)
+                      Text(
+                        profile.placesSummary!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                      ],
-                    ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      )
+                    else
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.map_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Text('${profile.tripsCount} ${AppStrings.t(context, 'trips')}', style: Theme.of(context).textTheme.bodySmall),
+                          const SizedBox(width: 12),
+                          Icon(Icons.people_rounded, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              '${profile.followersCount} ${AppStrings.t(context, 'followers')}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
               ),

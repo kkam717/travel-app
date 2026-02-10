@@ -109,7 +109,9 @@ GoRouter createRouter() {
         path: '/itinerary/:id/edit',
         builder: (_, state) {
           final id = state.pathParameters['id']!;
-          return TripBuilderScreen(itineraryId: id);
+          final extra = state.extra as Map<String, dynamic>?;
+          final deleteOnDiscard = extra?['deleteOnDiscard'] == true;
+          return TripBuilderScreen(itineraryId: id, deleteOnDiscard: deleteOnDiscard);
         },
       ),
       GoRoute(
