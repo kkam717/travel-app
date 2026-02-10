@@ -16,7 +16,7 @@ These files contain secrets and **must not** be committed:
 
 - `AndroidManifest.xml` – uses `${GOOGLE_MAPS_API_KEY}` from `local.properties`
 - `Info.plist` – uses `$(GOOGLE_MAPS_API_KEY)` from xcconfig
-- No API keys in Dart code – keys loaded from `.env` at runtime
+- No API keys in Dart code – keys loaded from `.env` at runtime (see API key handling below)
 
 ### Verify Before Pushing
 
@@ -33,6 +33,32 @@ git log -p --all -S "AIza" -- "*.xml" "*.plist" "*.swift" "*.kt" "*.dart"
 1. **Rotate all keys immediately** in Supabase and Google Cloud Console
 2. Remove the keys from git history (e.g. `git filter-branch` or BFG Repo-Cleaner)
 3. Force-push (only if no one else has pulled)
+
+---
+
+## API Key Handling (OWASP-aligned)
+
+- **No hardcoded keys:** All API keys (Supabase, Geoapify, GeoNames, LibreTranslate, etc.) are read from environment variables via `flutter_dotenv` (`.env`), never from source code.
+- **Client-side:** Only the Supabase **anon** key is used in the app; the **service_role** key must never be included in client builds or `.env` used for app distribution.
+- **Rotation:** Rotate keys if they are ever exposed or suspected compromised; update `.env` and redeploy. Document rotation in your runbook.
+- **Exposure:** Ensure `.env` is in `.gitignore` and never committed; CI/build pipelines should inject secrets, not commit them.
+
+---
+
+## Rate Limiting
+
+- **Client-side:** `lib/core/rate_limiter.dart` enforces per-action limits (e.g. auth, mutations, search) to reduce abuse and give users clear 429-style feedback (`rate_limit_try_again`).
+- **Backend:** Supabase/PostgREST do not enforce per-endpoint rate limits by default. For production, consider Supabase Edge Functions or a reverse proxy (e.g. Kong, nginx) to add IP/user-based rate limiting on public endpoints.
+
+---
+
+## Input Validation and Sanitization
+
+- **Schema-based:** `lib/core/input_validation.dart` defines allowed fields and types for profile updates, itineraries, stops, search, and auth. Unexpected fields are rejected (OWASP: allowlist).
+- **Checks:** Type checks, length limits (`maxTitleLength`, `maxSearchQueryLength`, etc.), and sanitization (`sanitizeString`, `sanitizeUrl`) are applied before sending data to Supabase.
+- **User-facing errors:** Invalid input throws `ValidationException`; callers should catch it and show a clear message (e.g. validation error or generic failure).
+
+---
 
 ## Supabase Anon Key
 

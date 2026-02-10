@@ -77,22 +77,23 @@ class SettingsScreen extends StatelessWidget {
             },
           ),
           const Divider(height: 32),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Text(AppStrings.t(context, 'language'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          ),
           ListenableBuilder(
             listenable: LocaleNotifier.instance,
             builder: (context, _) {
               final current = LocaleNotifier.instance.localeCode;
-              return Column(
-                children: supportedLocales.entries.map((e) {
+              final currentLabel = supportedLocales[current] ?? current;
+              return ExpansionTile(
+                initiallyExpanded: false,
+                leading: const Icon(Icons.language_outlined),
+                title: Text(AppStrings.t(context, 'language'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: Text(currentLabel, style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                children: supportedLocalesOrder.map((code) {
+                  final label = supportedLocales[code]!;
                   return RadioListTile<String>(
-                    title: Text(e.value),
-                    secondary: const Icon(Icons.language_outlined),
-                    value: e.key,
+                    title: Text(label),
+                    value: code,
                     groupValue: current,
-                    onChanged: (_) => LocaleNotifier.instance.setLocaleCode(e.key),
+                    onChanged: (_) => LocaleNotifier.instance.setLocaleCode(code),
                   );
                 }).toList(),
               );

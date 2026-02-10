@@ -45,6 +45,10 @@ post_install do |installer|
       if deployment.empty? || deployment.to_f < 12.0
         config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
       end
+      # Generate dSYMs for Release so archive includes them (e.g. objective_c.framework)
+      if config.name == 'Release'
+        config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf-with-dsym'
+      end
     end
   end
 

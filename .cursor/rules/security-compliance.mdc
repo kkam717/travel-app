@@ -1,0 +1,42 @@
+---
+description: Security measures to maintain: rate limiting, input validation, API key handling
+alwaysApply: true
+---
+
+# Security Compliance
+
+When adding or changing features, keep these in place and extend them as needed.
+
+## 1. Rate limiting
+
+- **Client:** Use `lib/core/rate_limiter.dart` for any new action that calls Supabase (auth, mutations, search, follow, bookmark, like, itinerary CRUD, profile updates). Call `RateLimiter.check(action)` before the call; catch `RateLimitExceededException` and show `AppStrings.t(context, 'rate_limit_try_again')` (or equivalent) in the UI.
+- **New actions:** Add a `RateLimitActions` value and a sensible default in `RateLimiter._defaults` (e.g. 10/min for auth, 30/min for mutations, 60/min for search).
+- **Backend:** Prefer server-side rate limiting (Supabase Edge Functions or reverse proxy) for production; client limits are a UX and abuse-mitigation layer.
+
+## 2. Input validation and sanitization
+
+- **Schema-based:** Use `lib/core/input_validation.dart`. For new user-supplied data (profiles, itineraries, search, auth), validate with the existing validators or add new ones that: allowlist fields, check types, enforce length limits, and sanitize strings/URLs. Reject unexpected fields; throw `ValidationException` on invalid input.
+- **Before Supabase:** Always pass validated/sanitized payloads (e.g. `validateProfileUpdate`, `validateItineraryCreate`, `validateItineraryStop`, `validateSearchQuery`, `validateEmail`, `validatePassword`). Do not send raw request bodies to the backend.
+- **UI:** Catch `ValidationException` where appropriate and show a clear validation or generic error message.
+
+## 3. API keys and secrets
+
+- **No hardcoded keys:** Do not add API keys or secrets in source code. Load them from environment variables (e.g. `dotenv.env['KEY']`) and document new keys in `.env.example` with a short comment.
+- **Client-safe only:** Use only keys safe for client exposure (e.g. Supabase **anon** key). Never use **service_role** or other server-only secrets in the app.
+- **Docs:** See `SECURITY.md` for rotation, gitignore, and OWASP-aligned practices.
+
+## 4. Security invariants (RLS, storage, logging)
+
+- **New Supabase tables:** Must have RLS enabled and explicit policies. Never leave a table without RLS or with broad `USING (true)` for writes. Use `auth.uid()` for ownership; never trust client-sent user_id/author_id for permission.
+- **Public reads:** Must be explicit and minimal (e.g. `visibility = 'public'`). Do not add broad SELECT-for-all policies on sensitive data.
+- **Counts:** Do not store like_count/bookmark_count (or similar) on tables that the client can UPDATE. Use RPCs or triggers.
+- **Storage:** New buckets must be private by default. If a bucket is public read, restrict write/update/delete to the owning user (path = user id). Enforce file size and type at upload (see `SupabaseService.uploadAvatar`).
+- **No service_role in client:** Never add the Supabase service_role key to Flutter or web client code.
+- **Logging:** When logging errors or analytics, use `Analytics.redactForLog(...)` for any string that might contain tokens, emails, or PII. Ensure crash reporting does not capture secrets.
+
+## Reference
+
+- Rate limiter: `lib/core/rate_limiter.dart`
+- Validators: `lib/core/input_validation.dart`
+- Policy: `SECURITY.md`
+- Hardening report and invariants: `README_SECURITY.md`

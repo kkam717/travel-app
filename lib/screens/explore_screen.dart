@@ -116,17 +116,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (query.trim().isEmpty) return;
     setState(() => _isSearching = true);
     try {
-      final location = await PlacesService.resolvePlace(query);
+      final resolved = await PlacesService.resolvePlaceWithCountry(query);
       final userId = Supabase.instance.client.auth.currentUser?.id;
 
-      if (location != null) {
-        // Location search: search both trips and people by location
-        // Use larger radius for country-level searches (1000km covers large countries like Italy, USA, etc.)
-        debugPrint('Location resolved: ${location.$1}, ${location.$2} for query: $query');
+      if (resolved != null) {
+        final lat = resolved.$1;
+        final lng = resolved.$2;
+        final countryCode = resolved.$3;
+        // When searching a country (e.g. "Italy"), use a tighter radius so trips only include that place (not e.g. Vienna).
+        final radiusKm = (countryCode != null && countryCode.isNotEmpty) ? 500.0 : 1000.0;
+        debugPrint('Location resolved: $lat, $lng for query: $query (country: $countryCode, radius: ${radiusKm}km)');
         try {
           final results = await Future.wait([
-            SupabaseService.searchTripsByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 50),
-            SupabaseService.searchPeopleByLocation(location.$1, location.$2, radiusKm: 1000.0, limit: 30),
+            SupabaseService.searchTripsByLocation(lat, lng, radiusKm: radiusKm, limit: 50),
+            SupabaseService.searchPeopleByLocation(lat, lng, radiusKm: radiusKm, limit: 30),
             userId != null ? SupabaseService.getFollowedIds(userId) : Future.value(<String>[]),
           ]);
           final trips = results[0] as List<Itinerary>;
@@ -841,8 +844,12 @@ class _PeopleRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     Text(
-                      '${profile.tripsCount} ${AppStrings.t(context, 'trips')}',
+                      (profile.placesSummary != null && profile.placesSummary!.trim().isNotEmpty)
+                          ? profile.placesSummary!
+                          : '${profile.tripsCount} ${AppStrings.t(context, 'trips')}',
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

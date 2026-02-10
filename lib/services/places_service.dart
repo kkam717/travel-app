@@ -284,20 +284,27 @@ class PlacesService {
   /// First tries Photon search, then falls back to Nominatim geocoding.
   /// Returns null if the query doesn't resolve to a location.
   static Future<(double, double)?> resolvePlace(String query) async {
+    final result = await resolvePlaceWithCountry(query);
+    return result != null ? (result.$1, result.$2) : null;
+  }
+
+  /// Resolve a query to (lat, lng) and optional ISO country code when the place is a country.
+  /// Use the country code to restrict trip search to that country (e.g. avoid showing Vienna when searching "Italy").
+  static Future<(double, double, String?)?> resolvePlaceWithCountry(String query) async {
     if (query.trim().isEmpty) return null;
     try {
-      // First try Photon search (faster, better for place names)
       final predictions = await search(query.trim());
       if (predictions.isNotEmpty) {
         final first = predictions.first;
         if (first.lat != null && first.lng != null) {
-          return (first.lat!, first.lng!);
+          return (first.lat!, first.lng!, first.countryCode);
         }
       }
-      // Fallback to Nominatim geocoding
-      return await geocodeAddress(query);
+      final fallback = await geocodeAddress(query);
+      if (fallback != null) return (fallback.$1, fallback.$2, null);
+      return null;
     } catch (e) {
-      debugPrint('PlacesService resolvePlace: $e');
+      debugPrint('PlacesService resolvePlaceWithCountry: $e');
       return null;
     }
   }
