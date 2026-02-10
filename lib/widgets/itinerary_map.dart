@@ -1264,11 +1264,13 @@ class _ItineraryMapState extends State<ItineraryMap> {
     final pointAbove = LatLng(stop.lat! + _labelOffsetLat, stop.lng!);
     final color = _colorForVenueCategory(stop.category);
     final onOpenInMaps = widget.onVenueOpenInMaps;
+    final rating = stop.rating;
+    final hasRating = rating != null && rating >= 1 && rating <= 5;
     return [
       Marker(
         point: pointAbove,
         width: 130,
-        height: 44,
+        height: hasRating ? 58 : 44,
         alignment: Alignment.bottomCenter,
         child: GestureDetector(
           onTap: () {
@@ -1288,25 +1290,43 @@ class _ItineraryMapState extends State<ItineraryMap> {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Flexible(
-                  child: Text(
-                    stop.name,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        stop.name,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
+                    if (onOpenInMaps != null) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.open_in_new, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    ],
+                  ],
                 ),
-                if (onOpenInMaps != null) ...[
-                  const SizedBox(width: 4),
-                  Icon(Icons.open_in_new, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                if (hasRating) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (i) => Icon(
+                      i < rating! ? Icons.star_rounded : Icons.star_border_rounded,
+                      size: 14,
+                      color: Colors.amber,
+                    )),
+                  ),
                 ],
               ],
             ),
