@@ -1266,18 +1266,22 @@ class _ItineraryMapState extends State<ItineraryMap> {
     final onOpenInMaps = widget.onVenueOpenInMaps;
     final rating = stop.rating;
     final hasRating = rating != null && rating >= 1 && rating <= 5;
+    // Reserve enough height so the rating row is never clipped.
+    final markerHeight = hasRating ? 72.0 : 50.0;
     return [
       Marker(
         point: pointAbove,
         width: 130,
-        height: hasRating ? 58 : 44,
+        height: markerHeight,
         alignment: Alignment.bottomCenter,
         child: GestureDetector(
           onTap: () {
             if (onOpenInMaps != null) onOpenInMaps(stop);
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            width: 130,
+            height: markerHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(8),
@@ -1310,10 +1314,6 @@ class _ItineraryMapState extends State<ItineraryMap> {
                         textAlign: TextAlign.center,
                       ),
                     ),
-                    if (onOpenInMaps != null) ...[
-                      const SizedBox(width: 4),
-                      Icon(Icons.open_in_new, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    ],
                   ],
                 ),
                 if (hasRating) ...[

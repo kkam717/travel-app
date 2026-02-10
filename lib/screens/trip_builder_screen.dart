@@ -57,8 +57,9 @@ class _VenueEntry {
 
 class TripBuilderScreen extends StatefulWidget {
   final String? itineraryId;
+  final bool deleteOnDiscard;
 
-  const TripBuilderScreen({super.key, this.itineraryId});
+  const TripBuilderScreen({super.key, this.itineraryId, this.deleteOnDiscard = false});
 
   @override
   State<TripBuilderScreen> createState() => _TripBuilderScreenState();
@@ -836,6 +837,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                           ),
                         );
                         if (leave == true && mounted) {
+                          if (widget.deleteOnDiscard && widget.itineraryId != null) {
+                            await SupabaseService.deleteItinerary(widget.itineraryId!);
+                          }
                           if (context.canPop()) context.pop();
                           else context.go('/home');
                         }
@@ -1111,6 +1115,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                       ),
                     );
                     if (leave == true && mounted) {
+                      if (widget.deleteOnDiscard && widget.itineraryId != null) {
+                        await SupabaseService.deleteItinerary(widget.itineraryId!);
+                      }
                       if (context.canPop()) {
                         context.pop();
                       } else {

@@ -309,7 +309,7 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         transportTransitions: it.transportTransitions,
       );
       Analytics.logEvent('itinerary_forked', {'from': it.id, 'to': forked.id});
-      if (mounted) context.go('/itinerary/${forked.id}');
+      if (mounted) context.go('/itinerary/${forked.id}/edit', extra: {'deleteOnDiscard': true});
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_fork_itinerary'))));
     } finally {
@@ -405,6 +405,19 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                 onPressed: () => shareItineraryLink(widget.itineraryId, title: it.title),
               ),
             ),
+            if (Supabase.instance.client.auth.currentUser?.id != it.authorId)
+              Container(
+                margin: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: _forkItinerary,
+                  tooltip: AppStrings.t(context, 'save_to_planning'),
+                ),
+              ),
             Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -525,16 +538,6 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                                     const SizedBox(width: 4),
                                     Text('$_likeCount ${AppStrings.t(context, 'likes')}', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                                   ],
-                                  const SizedBox(width: AppTheme.spacingMd),
-                                  FilledButton.tonal(
-                                    onPressed: _forkItinerary,
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: Text(AppStrings.t(context, 'save_to_planning')),
-                                  ),
                                 ],
                               ),
                             ],
