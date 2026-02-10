@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.travelApp</string>
+	<string>com.kiankamshad.travelmobile.app</string>
 	<key>PROJECT_ID</key>
 	<string>waylo-2f69e</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:394592541409:ios:03f0c22ca39e32fc15b5a0</string>
+	<string>1:394592541409:ios:a2a561687c5b82be15b5a0</string>
 </dict>
 </plist>
