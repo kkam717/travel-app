@@ -90,6 +90,30 @@ IconData _iconForVenueCategory(String? category) {
   }
 }
 
+/// Same colours as map venue flags (ItineraryMap) so icons match flags.
+Color _colorForVenueCategory(String? category) {
+  if (category == null || category.isEmpty) return Colors.orange;
+  switch (category.toLowerCase()) {
+    case 'restaurant':
+      return Colors.amber.shade700;
+    case 'hotel':
+      return Colors.blue.shade700;
+    case 'bar':
+    case 'drinks':
+      return Colors.deepPurple.shade700;
+    case 'guide':
+    case 'experience':
+      return Colors.teal.shade700;
+    case 'coffee':
+    case 'cafe':
+      return Colors.brown.shade700;
+    case 'museum':
+      return Colors.indigo.shade700;
+    default:
+      return Colors.orange;
+  }
+}
+
 /// Vertical dotted connector between location cards with transport icon.
 /// Renders in the gap between cards - does not affect card layout.
 /// If [description] is provided and non-empty, tapping shows it in a dialog.
@@ -332,11 +356,12 @@ class LocationCard extends StatelessWidget {
                           final hasCategory = s.category != null && s.category != 'location';
                           final rating = s.rating;
                           final hasRating = rating != null && rating >= 1 && rating <= 5;
+                          final venueColor = _colorForVenueCategory(s.category);
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
                             leading: CircleAvatar(
-                              backgroundColor: theme.colorScheme.primaryContainer,
-                              child: Icon(_iconForVenueCategory(s.category), size: 22, color: theme.colorScheme.onPrimaryContainer),
+                              backgroundColor: venueColor,
+                              child: Icon(_iconForVenueCategory(s.category), size: 22, color: Colors.white),
                             ),
                             title: Text(s.name, style: theme.textTheme.titleSmall),
                             subtitle: (hasCategory || hasRating)
