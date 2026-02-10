@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../core/app_link.dart';
 import '../l10n/app_strings.dart';
 import '../models/itinerary.dart';
+import '../services/supabase_service.dart';
 import 'static_map_image.dart';
 
 /// 2026-style trip card for profile: date + menu, title, subtitle, chips, highlights, hero.
@@ -77,13 +78,77 @@ class TripCardModern extends StatelessWidget {
                         ),
                       ),
                     const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.more_horiz_rounded),
-                      onPressed: () => _showMenu(context),
-                      style: IconButton.styleFrom(
-                        minimumSize: const Size(40, 40),
-                        foregroundColor: theme.colorScheme.onSurfaceVariant,
-                      ),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_horiz_rounded, color: theme.colorScheme.onSurfaceVariant),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      position: PopupMenuPosition.over,
+                      onSelected: (value) async {
+                        if (value == 'share') {
+                          HapticFeedback.lightImpact();
+                          shareItineraryLink(it.id, title: it.title);
+                        } else if (value == 'edit') {
+                          HapticFeedback.lightImpact();
+                          context.push('/itinerary/${it.id}/edit').then((_) => onRefresh?.call());
+                        } else if (value == 'delete') {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text(AppStrings.t(ctx, 'delete_trip')),
+                              content: Text(AppStrings.t(ctx, 'delete_trip_confirm')),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: Text(AppStrings.t(ctx, 'cancel')),
+                                ),
+                                FilledButton(
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  style: FilledButton.styleFrom(backgroundColor: theme.colorScheme.error),
+                                  child: Text(AppStrings.t(ctx, 'delete_trip')),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true && context.mounted) {
+                            try {
+                              await SupabaseService.deleteItinerary(it.id);
+                              if (context.mounted) onRefresh?.call();
+                            } catch (_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(AppStrings.t(context, 'could_not_load_itinerary'))),
+                                );
+                              }
+                            }
+                          }
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'share',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.share_outlined),
+                            title: Text(AppStrings.t(ctx, 'share_link')),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(Icons.edit_outlined),
+                            title: Text(AppStrings.t(ctx, 'edit_trip')),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                            title: Text(AppStrings.t(ctx, 'delete_trip'), style: TextStyle(color: theme.colorScheme.error)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -245,41 +310,4 @@ class TripCardModern extends StatelessWidget {
     );
   }
 
-  void _showMenu(BuildContext context) {
-    HapticFeedback.lightImpact();
-    final it = itinerary;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => SafeArea(
-        child: Container(
-          decoration: BoxDecoration(
-            color: Theme.of(ctx).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.share_outlined),
-                title: Text(AppStrings.t(ctx, 'share_link')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  shareItineraryLink(it.id, title: it.title);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.edit_outlined),
-                title: Text(AppStrings.t(ctx, 'edit_trip')),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.push('/itinerary/${it.id}/edit').then((_) => onRefresh?.call());
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -402,6 +402,17 @@ class SupabaseService {
     }
   }
 
+  /// Deletes an itinerary (and its stops via DB cascade if configured). Caller must ensure user owns the itinerary.
+  static Future<void> deleteItinerary(String id) async {
+    try {
+      await _client.from('itinerary_stops').delete().eq('itinerary_id', id);
+      await _client.from('itineraries').delete().eq('id', id);
+    } catch (e) {
+      Analytics.logEvent('itinerary_delete_error', {'error': e.toString()});
+      rethrow;
+    }
+  }
+
   static Future<void> updateItineraryStops(String itineraryId, List<Map<String, dynamic>> stopsData) async {
     try {
       await _client.from('itinerary_stops').delete().eq('itinerary_id', itineraryId);
