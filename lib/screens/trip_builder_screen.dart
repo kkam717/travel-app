@@ -508,6 +508,70 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     });
   }
 
+  void _swapAdjacentCities(int i) {
+    if (i < 0 || i + 1 >= _cities.length) return;
+    setState(() {
+      final c = _cities[i];
+      _cities[i] = _cities[i + 1];
+      _cities[i + 1] = c;
+      final a = _allocations[i];
+      _allocations[i] = _allocations[i + 1];
+      _allocations[i + 1] = a;
+      _swapVenueKeysBetweenCityIndices(i, i + 1);
+    });
+  }
+
+  void _swapVenueKeysBetweenCityIndices(int i, int j) {
+    final newMap = <String, List<_VenueEntry>>{};
+    for (final e in _venuesByCityDay.entries) {
+      final (ci, day) = _cityDayKeyToIndices(e.key);
+      if (ci < 0) continue;
+      String newKey;
+      if (ci == i) newKey = '${j}_$day';
+      else if (ci == j) newKey = '${i}_$day';
+      else newKey = e.key;
+      newMap[newKey] = e.value;
+    }
+    _venuesByCityDay
+      ..clear()
+      ..addAll(newMap);
+  }
+
+  void _moveCity(int fromIndex, int toIndex) {
+    if (fromIndex == toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= _cities.length) return;
+    setState(() {
+      final city = _cities.removeAt(fromIndex);
+      final allocation = _allocations.removeAt(fromIndex);
+      final insertAt = toIndex.clamp(0, _cities.length);
+      _cities.insert(insertAt, city);
+      _allocations.insert(insertAt, allocation);
+      _allocations = allocateDaysAcrossCities(_daysCount, _cities.length);
+      for (var i = 0; i < _cities.length; i++) {
+        _cities[i].dayCount = _allocations[i];
+      }
+      _transportOverrides.clear();
+      final originalCount = _cities.length;
+      final oldToNew = <int, int>{};
+      oldToNew[fromIndex] = insertAt;
+      for (var i = 0; i < fromIndex; i++) {
+        oldToNew[i] = insertAt <= i ? i + 1 : i;
+      }
+      for (var i = fromIndex + 1; i < originalCount; i++) {
+        oldToNew[i] = insertAt <= i - 1 ? i : i - 1;
+      }
+      final newMap = <String, List<_VenueEntry>>{};
+      for (final e in _venuesByCityDay.entries) {
+        final (ci, day) = _cityDayKeyToIndices(e.key);
+        if (ci < 0) continue;
+        final newCi = oldToNew[ci];
+        if (newCi != null) newMap['${newCi}_$day'] = e.value;
+      }
+      _venuesByCityDay
+        ..clear()
+        ..addAll(newMap);
+    });
+  }
+
   void _addVenue(int cityIndex, int day, String category, String name, double? lat, double? lng, String? url, [int? rating]) {
     setState(() {
       final key = '${cityIndex}_$day';
@@ -1599,7 +1663,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
-  Widget _buildRouteStrip(ThemeData theme) {
+  Widget _buildRouteStrip(ThemeData theme, {VoidCallback? onRouteChanged}) {
     if (_cities.isEmpty) return const SizedBox.shrink();
     final n = _cities.length;
     return Column(
@@ -1617,16 +1681,52 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 final override = _transportOverrides[segIdx];
                 return _TransportChip(
                   type: override?.type ?? TransportType.unknown,
-                  onTap: () => _showTransportSheet(segIdx),
+                  onTap: () => _showTransportSheet(segIdx, onRouteChanged: onRouteChanged),
                 );
               }
               final ci = index ~/ 2;
               final city = _cities[ci];
               final dayCount = ci < _allocations.length ? _allocations[ci] : 1;
-              return _CityChip(
+              final chip = _CityChip(
                 name: city.name.isEmpty ? '?' : city.name,
                 dayCount: dayCount,
-                onTap: () => _showCityMenuSheet(ci),
+                onTap: () => _showCityMenuSheet(ci, onRouteChanged: onRouteChanged),
+              );
+              return DragTarget<int>(
+                onAcceptWithDetails: (details) {
+                  final from = details.data;
+                  if (from != ci) {
+                    _moveCity(from, ci);
+                    onRouteChanged?.call();
+                  }
+                },
+                builder: (context, candidateData, rejectedData) {
+                  return Draggable<int>(
+                    data: ci,
+                    feedback: Material(
+                      elevation: 4,
+                                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(city.name.isEmpty ? '?' : (city.name.length > 12 ? '${city.name.substring(0, 12)}…' : city.name), style: theme.textTheme.labelLarge),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
+                                              child: Text('$dayCount', style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                    childWhenDragging: Opacity(opacity: 0.4, child: chip),
+                    child: chip,
+                  );
+                },
               );
             },
           ),
@@ -1644,31 +1744,41 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
       children: [
         Text(AppStrings.t(context, 'add_details_title'), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: AppTheme.spacingSm),
-        ...List.generate(_cities.length, (ci) {
-          final city = _cities[ci];
-          final count = ci < _allocations.length ? _allocations[ci] : 1;
-          final dayEnd = dayStart + count - 1;
-          final dayRange = count == 1 ? '${AppStrings.t(context, 'day')} $dayStart' : '${AppStrings.t(context, 'days')} $dayStart–$dayEnd';
-          final firstDay = dayStart;
-          dayStart += count;
-          return _DestinationSection(
-            title: '${city.name} • $dayRange',
-            cityIndex: ci,
-            firstDay: firstDay,
-            lastDay: dayEnd,
-            venuesByDay: _venuesByCityDay,
-            onAddHotel: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'hotel'),
-            onAddRestaurant: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'restaurant'),
-            onAddExperience: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'guide'),
-            onAddDrinks: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'bar'),
-            onAddCoffee: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'coffee'),
-            onRemoveVenue: _removeVenue,
-            onRemoveVenueGroup: _removeVenueGroup,
-            onMoveDay: _moveVenueDay,
-            context: context,
-            theme: theme,
-          );
-        }),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: true,
+          onReorder: (oldIndex, newIndex) {
+            _moveCity(oldIndex, newIndex);
+          },
+          itemCount: _cities.length,
+          itemBuilder: (context, ci) {
+            final city = _cities[ci];
+            final count = ci < _allocations.length ? _allocations[ci] : 1;
+            final dayEnd = dayStart + count - 1;
+            final dayRange = count == 1 ? '${AppStrings.t(context, 'day')} $dayStart' : '${AppStrings.t(context, 'days')} $dayStart–$dayEnd';
+            final firstDay = dayStart;
+            dayStart += count;
+            return _DestinationSection(
+              key: ValueKey('dest_$ci'),
+              title: '${city.name} • $dayRange',
+              cityIndex: ci,
+              firstDay: firstDay,
+              lastDay: dayEnd,
+              venuesByDay: _venuesByCityDay,
+              onAddHotel: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'hotel'),
+              onAddRestaurant: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'restaurant'),
+              onAddExperience: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'guide'),
+              onAddDrinks: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'bar'),
+              onAddCoffee: () => _showAddVenueSheet(ci, firstDay, dayEnd, 'coffee'),
+              onRemoveVenue: _removeVenue,
+              onRemoveVenueGroup: _removeVenueGroup,
+              onMoveDay: _moveVenueDay,
+              context: context,
+              theme: theme,
+            );
+          },
+        ),
       ],
     );
   }
@@ -2035,35 +2145,59 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, MediaQuery.viewPaddingOf(ctx).bottom + AppTheme.spacingLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(AppStrings.t(context, 'add_destination'), style: Theme.of(ctx).textTheme.titleMedium),
-              const SizedBox(height: 12),
-              PlacesField(
-                hint: AppStrings.t(context, 'search_city_or_location'),
-                countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
-                lang: Localizations.localeOf(ctx).languageCode,
-                onSelected: (n, la, ln, u, countryCode) {
-                  if (n.isNotEmpty) _addCity(n, la, ln, u, countryCode);
-                  Navigator.pop(ctx);
-                },
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, MediaQuery.viewPaddingOf(ctx).bottom + AppTheme.spacingLg),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(AppStrings.t(context, 'add_destination'), style: Theme.of(ctx).textTheme.titleMedium),
+                    const SizedBox(height: 12),
+                    if (_cities.isNotEmpty) ...[
+                      _buildRouteStrip(theme, onRouteChanged: () => setModalState(() {})),
+                      const SizedBox(height: 16),
+                    ],
+                    PlacesField(
+                      hint: AppStrings.t(context, 'search_city_or_location'),
+                      countryCodes: _selectedCountries.isNotEmpty ? _selectedCountries : null,
+                      lang: Localizations.localeOf(ctx).languageCode,
+                      onSelected: (n, la, ln, u, countryCode) {
+                        if (n.isNotEmpty) {
+                          _addCity(n, la, ln, u, countryCode);
+                          setState(() {});
+                          setModalState(() {});
+                        }
+                      },
+                    ),
+                    _buildClassicPicksRow(theme, onPickSelected: () {
+                      setModalState(() {});
+                    }, alwaysShowSection: true),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text(AppStrings.t(context, 'done')),
+                    ),
+                  ],
+                ),
               ),
-              _buildClassicPicksRow(theme, onPickSelected: () => Navigator.pop(ctx), alwaysShowSection: true),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Future<void> _showCityMenuSheet(int cityIndex) async {
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
+  Future<void> _showCityMenuSheet(int cityIndex, {VoidCallback? onRouteChanged}) {
+    if (!mounted) return Future<void>.value();
+    void onAction() {
+      setState(() {});
+      onRouteChanged?.call();
+    }
+    return showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Padding(
@@ -2077,6 +2211,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 title: Text('+1 ${AppStrings.t(context, 'day')}'),
                 onTap: () {
                   _setCityDayCount(cityIndex, (_allocations[cityIndex] + 1).clamp(1, _daysCount));
+                  onAction();
                   Navigator.pop(ctx);
                 },
               ),
@@ -2085,15 +2220,45 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                 title: Text('-1 ${AppStrings.t(context, 'day')}'),
                 onTap: () {
                   _setCityDayCount(cityIndex, (_allocations[cityIndex] - 1).clamp(1, _daysCount));
+                  onAction();
                   Navigator.pop(ctx);
                 },
               ),
-              ListTile(leading: const Icon(Icons.balance), title: const Text('Auto-balance'), onTap: () { _autoBalanceCities(); Navigator.pop(ctx); }),
+              ListTile(
+                leading: const Icon(Icons.balance),
+                title: const Text('Auto-balance'),
+                onTap: () {
+                  _autoBalanceCities();
+                  onAction();
+                  Navigator.pop(ctx);
+                },
+              ),
+              if (cityIndex > 0)
+                ListTile(
+                  leading: const Icon(Icons.arrow_upward),
+                  title: Text(AppStrings.t(context, 'move_earlier')),
+                  onTap: () {
+                    _swapAdjacentCities(cityIndex - 1);
+                    onAction();
+                    Navigator.pop(ctx);
+                  },
+                ),
+              if (cityIndex < _cities.length - 1)
+                ListTile(
+                  leading: const Icon(Icons.arrow_downward),
+                  title: Text(AppStrings.t(context, 'move_later')),
+                  onTap: () {
+                    _swapAdjacentCities(cityIndex);
+                    onAction();
+                    Navigator.pop(ctx);
+                  },
+                ),
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
                 title: Text(AppStrings.t(context, 'remove'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
                 onTap: () {
                   _removeCity(cityIndex);
+                  onAction();
                   Navigator.pop(ctx);
                 },
               ),
@@ -2104,12 +2269,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     );
   }
 
-  Future<void> _showTransportSheet(int segmentIndex) async {
+  Future<void> _showTransportSheet(int segmentIndex, {VoidCallback? onRouteChanged}) {
     final override = _transportOverrides[segmentIndex];
     TransportType type = override?.type ?? TransportType.unknown;
     final descController = TextEditingController(text: override?.description ?? '');
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
+    if (!mounted) return Future<void>.value();
+    return showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => SafeArea(
@@ -2147,6 +2312,8 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     FilledButton(
                       onPressed: () {
                         _setTransport(segmentIndex, type, descController.text.trim());
+                        setState(() {});
+                        onRouteChanged?.call();
                         Navigator.pop(ctx);
                       },
                       child: Text(AppStrings.t(context, 'done')),
@@ -2467,6 +2634,7 @@ class _DestinationSection extends StatelessWidget {
   final ThemeData theme;
 
   const _DestinationSection({
+    super.key,
     required this.title,
     required this.cityIndex,
     required this.firstDay,
