@@ -19,7 +19,7 @@ import '../l10n/app_strings.dart';
 import '../services/translation_service.dart' show translate, isContentInDifferentLanguage;
 import '../widgets/static_map_image.dart';
 import '../widgets/itinerary_feed_card_2026.dart';
-import '../widgets/itinerary_feed_item_modern.dart';
+import '../widgets/itinerary_feed_card_modern.dart';
 
 /// When true, use the editorial modern feed item (no card, edge-to-edge hero, no visible actions).
 const bool useFeedItemModern = true;
@@ -468,8 +468,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           children: [
                             TabBar(
                               controller: _tabController,
-                              labelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                              unselectedLabelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              labelStyle: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                              unselectedLabelStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w500,
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
@@ -480,7 +480,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                                   color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                                 ),
                               ),
-                              labelPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                              labelPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
                               tabs: [
                                 Tab(text: AppStrings.t(context, 'for_you')),
                                 Tab(text: AppStrings.t(context, 'following')),
@@ -863,6 +863,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 }
 
 /// Scroll-driven header: animates with scroll via collapseT in [0, 1].
+/// "trace" word left-aligned, subtitle below; right-side Notifications + Map/Explore buttons.
 class _DiscoverHeader extends StatelessWidget {
   final double collapseT;
 
@@ -877,53 +878,67 @@ class _DiscoverHeader extends StatelessWidget {
     final t = collapseT.clamp(0.0, 1.0);
 
     final height = _kHeaderExpandedHeight + t * (_kHeaderCollapsedHeight - _kHeaderExpandedHeight);
-    final titleSize = 32.0 - t * 12.0;
     final subtitleOpacity = (1.0 - t).clamp(0.0, 1.0);
+    // Title size: ~28–32 dp expanded, ~22 dp collapsed for smooth scale
+    final titleSize = 28.0 + (1.0 - t) * 4.0;
 
     return Container(
       height: height,
       width: double.infinity,
       decoration: BoxDecoration(color: surface),
       clipBehavior: Clip.hardEdge,
-      alignment: Alignment.bottomLeft,
       padding: EdgeInsets.only(
         left: AppTheme.spacingLg,
         right: AppTheme.spacingLg,
         bottom: 8 + t * 4,
         top: 12 * (1 - t),
       ),
-      child: FittedBox(
-        alignment: Alignment.bottomLeft,
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              AppStrings.t(context, 'discover'),
-              style: theme.textTheme.headlineLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                letterSpacing: -0.5,
-                fontSize: titleSize,
-                color: onSurface,
-              ),
-            ),
-            if (subtitleOpacity > 0.01) ...[
-              SizedBox(height: 6 * (1 - t)),
-              Opacity(
-                opacity: subtitleOpacity,
-                child: Text(
-                  AppStrings.t(context, 'trips_from_people_with_taste'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: onSurfaceVariant,
-                    fontWeight: FontWeight.w400,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Align(
+                  alignment: Alignment.bottomLeft,
+                  child: FittedBox(
+                    alignment: Alignment.bottomLeft,
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'trace',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: -0.5,
+                            fontSize: titleSize,
+                            color: onSurface,
+                          ),
+                        ),
+                        if (subtitleOpacity > 0.01) ...[
+                          SizedBox(height: 6 * (1 - t)),
+                          Opacity(
+                            opacity: subtitleOpacity,
+                            child: Text(
+                              AppStrings.t(context, 'trips_from_people_with_taste'),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: onSurfaceVariant,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ],
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -982,8 +997,8 @@ class _SwipeableFeedCard extends StatelessWidget {
       },
       child: useFeedItemModern
           ? Padding(
-              padding: const EdgeInsets.only(bottom: AppTheme.spacingXl),
-              child: ItineraryFeedItemModern(
+              padding: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+              child: ItineraryFeedCardModern(
                 itinerary: itinerary,
                 description: description,
                 locations: locations,
@@ -1241,11 +1256,6 @@ class _FeedCardState extends State<_FeedCard> {
                           IconButton(
                             icon: Icon(Icons.share_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
                             onPressed: () => shareItineraryLink(it.id, title: it.title),
-                            style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
-                          ),
-                          IconButton(
-                            icon: Icon(widget.isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded, color: widget.isBookmarked ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant),
-                            onPressed: widget.onBookmark,
                             style: IconButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 40)),
                           ),
                         ],

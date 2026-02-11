@@ -375,12 +375,6 @@ class ItineraryFeedCard2026 extends StatelessWidget {
                           icon: Icons.share_outlined,
                           onTap: () => shareItineraryLink(it.id, title: it.title),
                         ),
-                        const SizedBox(width: 8),
-                        _ActionChip(
-                          icon: isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
-                          active: isBookmarked,
-                          onTap: onBookmark,
-                        ),
                       ],
                     ),
                   ),

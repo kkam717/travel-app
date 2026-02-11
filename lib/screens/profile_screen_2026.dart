@@ -274,7 +274,7 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
                 onAvatarTap: _uploadPhoto,
                 onMapControlTap: () {},
                 onMapTap: (Rect? sourceRect) async {
-                  await Navigator.of(context).push(ExpandMapRoute(
+                  await Navigator.of(context, rootNavigator: true).push(ExpandMapRoute(
                     codes: visitedCountries,
                     canEdit: true,
                     sourceRect: sourceRect,
