@@ -252,8 +252,12 @@ class PlacesService {
   static Future<String?> geocodeToCountryCode(String address) async {
     if (address.trim().isEmpty) return null;
     try {
-      final url = Uri.parse('$_nominatimBase/search')
-          .replace(queryParameters: {'q': address.trim(), 'format': 'json', 'limit': '1'});
+      final url = Uri.parse('$_nominatimBase/search').replace(queryParameters: {
+        'q': address.trim(),
+        'format': 'json',
+        'limit': '1',
+        'addressdetails': '1',
+      });
       final res = await http.get(url, headers: {'User-Agent': _userAgent});
       if (res.statusCode != 200) return null;
       final list = jsonDecode(res.body) as List<dynamic>?;

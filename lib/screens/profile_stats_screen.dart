@@ -10,6 +10,7 @@ import '../models/user_city.dart';
 import '../services/places_service.dart';
 import '../services/supabase_service.dart';
 import '../l10n/app_strings.dart';
+import '../widgets/location_with_flag.dart';
 import '../widgets/places_field.dart';
 
 /// Shows home town, lived before cities, and travel styles.
@@ -534,11 +535,7 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              Icons.location_on_rounded,
-              size: 28,
-              color: hasCity ? cs.primary : cs.onSurfaceVariant,
-            ),
+            LocationFlagIcon(city: hasCity ? city : null, fontSize: 28),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

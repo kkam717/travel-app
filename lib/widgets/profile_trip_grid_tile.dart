@@ -205,11 +205,18 @@ class ProfileTripGridTile extends StatelessWidget {
   }
 }
 
-/// Empty state as a grid tile: "No trips yet" + "Create trip" button. Same card dimensions as [ProfileTripGridTile].
+/// Empty state as a grid tile: "No trips yet" + optional "Create trip" button. Same card dimensions as [ProfileTripGridTile].
+/// Set [showCreateButton] to false when showing another user's profile (no add-trip button).
 class ProfileTripEmptyTile extends StatelessWidget {
-  final VoidCallback onCreateTap;
+  final VoidCallback? onCreateTap;
+  /// When false, only the empty message is shown (e.g. on another user's profile). Default true.
+  final bool showCreateButton;
 
-  const ProfileTripEmptyTile({super.key, required this.onCreateTap});
+  const ProfileTripEmptyTile({
+    super.key,
+    this.onCreateTap,
+    this.showCreateButton = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -255,7 +262,9 @@ class ProfileTripEmptyTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      AppStrings.t(context, 'create_first_trip_to_start'),
+                      showCreateButton
+                          ? AppStrings.t(context, 'create_first_trip_to_start')
+                          : AppStrings.t(context, 'no_trips_yet_other'),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -263,47 +272,51 @@ class ProfileTripEmptyTile extends StatelessWidget {
                       maxLines: 2,
                     ),
                     const Spacer(),
-                    SizedBox(
-                      width: double.infinity,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.colorScheme.shadow.withValues(alpha: 0.06),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          borderRadius: BorderRadius.circular(20),
-                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
-                          child: InkWell(
-                            onTap: onCreateTap,
+                    if (showCreateButton && onCreateTap != null)
+                      SizedBox(
+                        width: double.infinity,
+                        child: Container(
+                          decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(20),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.add, size: 20, color: theme.colorScheme.onSurface),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    AppStrings.t(context, 'create_trip'),
-                                    style: theme.textTheme.labelLarge?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.colorScheme.onSurface,
-                                    ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.shadow.withValues(alpha: 0.06),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            borderRadius: BorderRadius.circular(20),
+                            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
+                            child: InkWell(
+                              onTap: onCreateTap,
+                              borderRadius: BorderRadius.circular(20),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add, size: 20, color: theme.colorScheme.onSurface),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        AppStrings.t(context, 'create_trip'),
+                                        style: theme.textTheme.labelLarge?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

@@ -12,6 +12,7 @@ import '../l10n/app_strings.dart';
 import '../widgets/profile_hero_map.dart';
 import '../widgets/profile_insight_card.dart';
 import '../widgets/country_filter_chips.dart';
+import '../widgets/location_with_flag.dart';
 import '../widgets/profile_trip_grid_tile.dart';
 import 'expand_map_route.dart';
 
@@ -327,7 +328,10 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
                   (context, i) {
                     if (filteredTrips.isEmpty) {
                       return i == 0
-                          ? ProfileTripEmptyTile(onCreateTap: () => context.push('/create').then((_) => _load()))
+                          ? ProfileTripEmptyTile(
+                              showCreateButton: _isOwnProfile,
+                              onCreateTap: _isOwnProfile ? () => context.push('/create').then((_) => _load()) : null,
+                            )
                           : const SizedBox.shrink();
                     }
                     return ProfileTripGridTile(
@@ -398,7 +402,7 @@ class _AuthorIdentityRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.location_on_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                  LocationFlagIcon(city: currentCity, fontSize: 18),
                   const SizedBox(width: 6),
                   Text(
                     currentCity!,

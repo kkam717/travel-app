@@ -13,6 +13,7 @@ import '../data/countries.dart';
 import '../widgets/profile_hero_map.dart';
 import '../widgets/profile_insight_card.dart';
 import '../widgets/country_filter_chips.dart';
+import '../widgets/location_with_flag.dart';
 import '../widgets/profile_trip_grid_tile.dart';
 import '../services/supabase_service.dart';
 import '../l10n/app_strings.dart';
@@ -401,7 +402,7 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
                   (context, i) {
                     if (filteredTrips.isEmpty) {
                       return i == 0
-                          ? ProfileTripEmptyTile(onCreateTap: () => context.push('/create').then((_) => _load()))
+                          ? ProfileTripEmptyTile(showCreateButton: true, onCreateTap: () => context.push('/create').then((_) => _load()))
                           : const SizedBox.shrink();
                     }
                     return ProfileTripGridTile(
@@ -579,11 +580,7 @@ class _ProfileIdentityRow extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                LocationFlagIcon(city: currentCity?.trim().isNotEmpty == true ? currentCity : null, fontSize: 18),
                 const SizedBox(width: 6),
                 Text(
                   currentCity?.trim().isNotEmpty == true

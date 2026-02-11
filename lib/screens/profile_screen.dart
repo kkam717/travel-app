@@ -11,6 +11,7 @@ import '../models/itinerary.dart';
 import '../models/user_city.dart';
 import '../data/countries.dart';
 import '../widgets/itinerary_feed_card.dart';
+import '../widgets/location_with_flag.dart';
 import '../services/supabase_service.dart';
 import '../services/translation_service.dart' show translate;
 import '../core/locale_notifier.dart';
@@ -332,7 +333,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Row(
                               children: [
-                                Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.primary),
+                                LocationFlagIcon(city: currentCity, fontSize: 22),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -355,7 +356,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: Row(
                               children: [
-                                Icon(Icons.location_city, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 22),
                                 const SizedBox(width: 8),
                                 Text(
                                   AppStrings.t(context, 'not_set'),

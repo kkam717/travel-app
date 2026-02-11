@@ -828,20 +828,23 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                         final leave = await showDialog<bool>(
                           context: context,
                           builder: (ctx) => AlertDialog(
-                            title: Text(AppStrings.t(context, 'discard_changes')),
-                            content: Text(AppStrings.t(context, 'unsaved_data_confirm')),
+                            title: Text(AppStrings.t(ctx, 'discard_changes')),
+                            content: Text(AppStrings.t(ctx, 'unsaved_data_confirm')),
                             actions: [
-                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.t(context, 'cancel'))),
-                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.t(context, 'discard'))),
+                              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(AppStrings.t(ctx, 'cancel'))),
+                              FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(AppStrings.t(ctx, 'discard'))),
                             ],
                           ),
                         );
-                        if (leave == true && mounted) {
+                        if (!mounted) return;
+                        if (leave == true) {
                           if (widget.deleteOnDiscard && widget.itineraryId != null) {
                             await SupabaseService.deleteItinerary(widget.itineraryId!);
                           }
-                          if (context.canPop()) context.pop();
-                          else context.go('/home');
+                          if (mounted) {
+                            if (context.canPop()) context.pop();
+                            else context.go('/home');
+                          }
                         }
                       },
                     ),
