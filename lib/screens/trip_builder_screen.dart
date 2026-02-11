@@ -13,6 +13,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/constants.dart';
 import '../core/analytics.dart';
+import '../core/input_validation.dart';
+import '../core/rate_limiter.dart';
 import '../core/trip_builder_helpers.dart' show allocateDaysAcrossCities, autoBalanceDays, buildChronologicalPairsFromAllocations, CityDayPair, inferTransportTransitions;
 import '../data/countries.dart' show countries, destinationToCountryCodes, travelStyles;
 import '../l10n/app_strings.dart';
@@ -586,6 +588,14 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     }
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    if (_titleController.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppStrings.t(context, 'add_title_to_save_trip'))),
+        );
+      }
+      return;
+    }
     final destination = _selectedCountries.isEmpty && _cities.isNotEmpty
         ? _inferCountriesFromCities()
         : _selectedCountries.map((c) => countries[c] ?? c).join(', ');
@@ -692,7 +702,13 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
         if (mounted) context.go('/itinerary/${it.id}');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_save'))));
+      if (!mounted) return;
+      final message = e is RateLimitExceededException
+          ? AppStrings.t(context, 'rate_limit_try_again')
+          : e is ValidationException
+              ? AppStrings.t(context, 'check_trip_details')
+              : AppStrings.t(context, 'could_not_save');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

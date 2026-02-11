@@ -4,6 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/theme.dart';
 import '../core/analytics.dart';
 import '../core/constants.dart';
+import '../core/input_validation.dart';
+import '../core/rate_limiter.dart';
 import '../data/countries.dart' show countries, destinationToCountryCodes, travelModes;
 import '../l10n/app_strings.dart';
 import '../services/supabase_service.dart';
@@ -304,6 +306,14 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
   Future<void> _save() async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return;
+    if (_titleController.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppStrings.t(context, 'add_title_to_save_trip'))),
+        );
+      }
+      return;
+    }
 
     final destination = _selectedCountries.map((c) => countries[c] ?? c).join(', ');
     final stopsData = <Map<String, dynamic>>[];
@@ -410,7 +420,12 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(AppStrings.t(context, 'could_not_save'))));
+        final message = e is RateLimitExceededException
+            ? AppStrings.t(context, 'rate_limit_try_again')
+            : e is ValidationException
+                ? AppStrings.t(context, 'check_trip_details')
+                : AppStrings.t(context, 'could_not_save');
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
