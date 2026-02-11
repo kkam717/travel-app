@@ -22,6 +22,8 @@ class ItineraryFeedCardModern extends StatelessWidget {
   final VoidCallback onAuthorTap;
   final List<UserTopSpot>? authorLivedHereSpots;
   final bool isAuthorFriend;
+  /// When false, long-press does nothing (e.g. on home feed).
+  final bool enableLongPress;
 
   static const double _cardRadius = 22;
   static const double _mediaRadius = 16;
@@ -45,6 +47,7 @@ class ItineraryFeedCardModern extends StatelessWidget {
     required this.onAuthorTap,
     this.authorLivedHereSpots,
     this.isAuthorFriend = false,
+    this.enableLongPress = true,
   });
 
   static String _categoryLabel(BuildContext context, String cat) {
@@ -100,7 +103,7 @@ class ItineraryFeedCardModern extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          onLongPress: () => _showSheet(context),
+          onLongPress: enableLongPress ? () => _showSheet(context) : null,
           child: Padding(
             padding: _cardPadding,
             child: Column(

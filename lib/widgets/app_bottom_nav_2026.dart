@@ -1,120 +1,292 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../core/profile_refresh_notifier.dart';
-import '../l10n/app_strings.dart';
 
-/// 2026 concept: rounded glass bar above bottom edge, minimal outlined icons,
-/// prominent centered floating Create pill. Same routes and tab behavior.
+/// 2026 concept: dark pill bar with rounded ends; selected tab is a pill (primary
+/// colour + icon only) that animates between tabs; unselected tabs are icon-only;
+/// vertical separator and circular Create button on the far right.
 class AppBottomNav2026 extends StatelessWidget {
   const AppBottomNav2026({super.key});
 
-  static const double _barHeight = 64;
-  static const double _barRadius = 28;
-  static const double _barTopPadding = 12;
-  static const double _barHorizontalMargin = 16;
-  static const double _createPillWidth = 104;
-  static const double _createPillHeight = 60;
-  static const double _createPillRadius = 22;
-  static const double _createOverlap = 8;
-  static const double _iconSize = 24;
-  static const double _labelFontSize = 11;
+  static const double _barHeight = 44;
+  static const double _barRadius = 22;
+  static const double _barTopPadding = 8;
+  static const double _barHorizontalMargin = 12;
+  static const double _createButtonSize = 36;
+  static const double _iconSize = 20;
+  static const double _selectedPillRadius = 14;
+  static const double _pillHeight = 28;
+  static const double _pillWidth = 40;
+
+  /// Dark gray bar background (matches reference design).
+  static const Color _barBackground = Color(0xFF2B2F38);
+
+  static int _pathToIndex(String path) {
+    switch (path) {
+      case '/home':
+        return 0;
+      case '/explore':
+        return 1;
+      case '/saved':
+        return 2;
+      case '/profile':
+        return 3;
+      default:
+        return 0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final safeBottom = MediaQuery.paddingOf(context).bottom;
+    const barBottomPadding = 6.0;
 
-    const barBottomPadding = 8.0;
+    final items = [
+      (path: '/home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
+      (path: '/explore', icon: Icons.explore_outlined, activeIcon: Icons.explore_rounded),
+      (path: '/saved', icon: Icons.bookmark_outline_rounded, activeIcon: Icons.bookmark_rounded),
+      (path: '/profile', icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded),
+    ];
+
     return Padding(
       padding: EdgeInsets.only(bottom: safeBottom + barBottomPadding),
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.bottomCenter,
-        children: [
-          // Floating glass bubble (tabs inside)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: _barHorizontalMargin),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(_barRadius),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                child: Container(
-                  height: _barHeight + _barTopPadding,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(_barRadius),
-                    color: colorScheme.surface.withValues(alpha: 0.85),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 20,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: _barTopPadding / 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        _NavItem2026(
-                          icon: Icons.home_outlined,
-                          activeIcon: Icons.home_rounded,
-                          label: AppStrings.t(context, 'home'),
-                          path: '/home',
-                        ),
-                        _NavItem2026(
-                          icon: Icons.explore_outlined,
-                          activeIcon: Icons.explore_rounded,
-                          label: AppStrings.t(context, 'explore'),
-                          path: '/explore',
-                        ),
-                        const SizedBox(width: _createPillWidth),
-                        _NavItem2026(
-                          icon: Icons.bookmark_outline_rounded,
-                          activeIcon: Icons.bookmark_rounded,
-                          label: AppStrings.t(context, 'saved'),
-                          path: '/saved',
-                        ),
-                        _NavItem2026(
-                          icon: Icons.person_outline_rounded,
-                          activeIcon: Icons.person_rounded,
-                          label: AppStrings.t(context, 'profile'),
-                          path: '/profile',
-                        ),
-                      ],
-                    ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _barHorizontalMargin),
+        child: Container(
+          height: _barHeight + _barTopPadding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(_barRadius),
+            color: _barBackground,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              vertical: _barTopPadding / 2,
+              horizontal: 8,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: _SlidingPillNav(
+                    items: items,
+                    selectionColor: colorScheme.primary,
                   ),
                 ),
-              ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 1,
+                  height: 18,
+                  color: Colors.white.withValues(alpha: 0.25),
+                ),
+                const SizedBox(width: 8),
+                _CreateCircleButton(
+                  size: _createButtonSize,
+                  onPressed: () => context.go('/create'),
+                ),
+              ],
             ),
           ),
-          // Centered floating Create pill (overlaps bubble)
-          Positioned(
-            bottom: _barHeight + _barTopPadding - _createPillHeight + _createOverlap,
-            child: _CreatePillButton(
-              onPressed: () => context.go('/create'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _CreatePillButton extends StatefulWidget {
-  final VoidCallback onPressed;
+class _SlidingPillNav extends StatefulWidget {
+  final List<({String path, IconData icon, IconData activeIcon})> items;
+  final Color selectionColor;
 
-  const _CreatePillButton({required this.onPressed});
+  const _SlidingPillNav({
+    required this.items,
+    required this.selectionColor,
+  });
 
   @override
-  State<_CreatePillButton> createState() => _CreatePillButtonState();
+  State<_SlidingPillNav> createState() => _SlidingPillNavState();
 }
 
-class _CreatePillButtonState extends State<_CreatePillButton> with SingleTickerProviderStateMixin {
+class _SlidingPillNavState extends State<_SlidingPillNav>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  int _currentIndex = 0;
+  int _previousIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 280),
+      vsync: this,
+    );
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onRouteChanged(int newIndex) {
+    if (newIndex == _currentIndex) return;
+    final wasIdle = _controller.status != AnimationStatus.forward && _controller.value == 0;
+    if (wasIdle && _previousIndex == _currentIndex) {
+      setState(() {
+        _previousIndex = newIndex;
+        _currentIndex = newIndex;
+      });
+      return;
+    }
+    setState(() {
+      _previousIndex = _currentIndex;
+      _currentIndex = newIndex;
+    });
+    _controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final location = GoRouterState.of(context).matchedLocation;
+    final index = AppBottomNav2026._pathToIndex(location);
+
+    if (index != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onRouteChanged(index);
+      });
+    }
+
+    final current = widget.items[_currentIndex];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cellWidth = constraints.maxWidth / widget.items.length;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.centerLeft,
+          children: [
+            Row(
+              children: [
+                for (int i = 0; i < widget.items.length; i++) ...[
+                  Expanded(
+                    child: _NavSlot(
+                      icon: widget.items[i].icon,
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        context.go(widget.items[i].path);
+                        if (widget.items[i].path == '/profile') {
+                          WidgetsBinding.instance.addPostFrameCallback(
+                            (_) => ProfileRefreshNotifier.notify(),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            AnimatedBuilder(
+              animation: _animation,
+              builder: (context, child) {
+                final animatedIndex = _previousIndex + (_currentIndex - _previousIndex) * _animation.value;
+                final pillLeft = (animatedIndex + 0.5) * cellWidth - AppBottomNav2026._pillWidth / 2;
+                return Positioned(
+                  left: pillLeft.clamp(0.0, constraints.maxWidth - AppBottomNav2026._pillWidth),
+                  top: (constraints.maxHeight - AppBottomNav2026._pillHeight) / 2,
+                  child: _SelectedPillContent(
+                    icon: current.activeIcon,
+                    selectionColor: widget.selectionColor,
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _NavSlot extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _NavSlot({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkResponse(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppBottomNav2026._selectedPillRadius),
+      child: Center(
+        child: Icon(
+          icon,
+          size: AppBottomNav2026._iconSize,
+          color: Colors.white.withValues(alpha: 0.9),
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectedPillContent extends StatelessWidget {
+  final IconData icon;
+  final Color selectionColor;
+
+  const _SelectedPillContent({
+    required this.icon,
+    required this.selectionColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: AppBottomNav2026._pillWidth,
+      height: AppBottomNav2026._pillHeight,
+      decoration: BoxDecoration(
+        color: selectionColor,
+        borderRadius: BorderRadius.circular(AppBottomNav2026._selectedPillRadius),
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        icon,
+        size: AppBottomNav2026._iconSize,
+        color: Colors.white,
+      ),
+    );
+  }
+}
+
+class _CreateCircleButton extends StatefulWidget {
+  final double size;
+  final VoidCallback onPressed;
+
+  const _CreateCircleButton({
+    required this.size,
+    required this.onPressed,
+  });
+
+  @override
+  State<_CreateCircleButton> createState() => _CreateCircleButtonState();
+}
+
+class _CreateCircleButtonState extends State<_CreateCircleButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scale;
 
@@ -125,7 +297,7 @@ class _CreatePillButtonState extends State<_CreatePillButton> with SingleTickerP
       duration: const Duration(milliseconds: 100),
       vsync: this,
     );
-    _scale = Tween<double>(begin: 1, end: 0.94).animate(
+    _scale = Tween<double>(begin: 1, end: 0.92).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
   }
@@ -136,23 +308,12 @@ class _CreatePillButtonState extends State<_CreatePillButton> with SingleTickerP
     super.dispose();
   }
 
-  void _handleTapDown(TapDownDetails _) => _controller.forward();
-  void _handleTapUp(TapUpDetails _) => _controller.reverse();
-  void _handleTapCancel() => _controller.reverse();
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
-    final shadowColor = isDark
-        ? Colors.white.withValues(alpha: 0.2)
-        : Colors.black.withValues(alpha: 0.18);
-
     return GestureDetector(
-      onTapDown: _handleTapDown,
-      onTapUp: _handleTapUp,
-      onTapCancel: _handleTapCancel,
+      onTapDown: (_) => _controller.forward(),
+      onTapUp: (_) => _controller.reverse(),
+      onTapCancel: _controller.reverse,
       onTap: () {
         HapticFeedback.selectionClick();
         widget.onPressed();
@@ -160,100 +321,23 @@ class _CreatePillButtonState extends State<_CreatePillButton> with SingleTickerP
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          width: AppBottomNav2026._createPillWidth,
-          height: AppBottomNav2026._createPillHeight,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppBottomNav2026._createPillRadius),
-            color: colorScheme.primary,
+          width: widget.size,
+          height: widget.size,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: colorScheme.primary.withValues(alpha: isDark ? 0.25 : 0.4),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: Colors.black26,
+                blurRadius: 6,
+                offset: Offset(0, 1),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.add_rounded, size: 26, color: colorScheme.onPrimary),
-              const SizedBox(height: 2),
-              Text(
-                'Create',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onPrimary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NavItem2026 extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final String path;
-
-  const _NavItem2026({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.path,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).matchedLocation;
-    final isSelected = location == path;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final color = isSelected ? colorScheme.primary : colorScheme.onSurfaceVariant;
-    final iconToShow = isSelected ? activeIcon : icon;
-
-    return Expanded(
-      child: InkResponse(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          context.go(path);
-          if (path == '/profile') {
-            WidgetsBinding.instance.addPostFrameCallback((_) => ProfileRefreshNotifier.notify());
-          }
-        },
-        borderRadius: BorderRadius.circular(14),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(iconToShow, size: AppBottomNav2026._iconSize, color: color),
-                const SizedBox(height: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppBottomNav2026._labelFontSize,
-                    color: color,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+          child: Icon(
+            Icons.add_rounded,
+            size: 22,
+            color: Colors.black87,
           ),
         ),
       ),

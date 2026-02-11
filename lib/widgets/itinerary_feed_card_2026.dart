@@ -23,6 +23,8 @@ class ItineraryFeedCard2026 extends StatelessWidget {
   /// Spot-level recommendations (bars/restaurants etc) from author's lived city matching this itinerary's destination. Section only shown when non-null and non-empty.
   final List<UserTopSpot>? authorLivedHereSpots;
   final bool isAuthorFriend;
+  /// When false, long-press does nothing (e.g. on home feed).
+  final bool enableLongPress;
 
   static const double _cardRadius = 0; // Sharp edges (no rounded corners on static map)
   static const double _heroHeight = 220;
@@ -41,6 +43,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
     required this.onAuthorTap,
     this.authorLivedHereSpots,
     this.isAuthorFriend = false,
+    this.enableLongPress = true,
   });
 
   static String _categoryLabel(BuildContext context, String cat) {
@@ -97,7 +100,7 @@ class ItineraryFeedCard2026 extends StatelessWidget {
             borderRadius: BorderRadius.circular(_cardRadius),
             child: InkWell(
               onTap: onTap,
-              onLongPress: () => _showCardSheet(context),
+              onLongPress: enableLongPress ? () => _showCardSheet(context) : null,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,

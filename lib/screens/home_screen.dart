@@ -1011,6 +1011,7 @@ class _SwipeableFeedCard extends StatelessWidget {
                 onAuthorTap: onAuthorTap,
                 authorLivedHereSpots: authorLivedHereSpots,
                 isAuthorFriend: isAuthorFriend,
+                enableLongPress: false,
               ),
             )
           : _EdgeAwareSwipeCard(
@@ -1051,6 +1052,7 @@ class _SwipeableFeedCard extends StatelessWidget {
                         onAuthorTap: onAuthorTap,
                         authorLivedHereSpots: authorLivedHereSpots,
                         isAuthorFriend: isAuthorFriend,
+                        enableLongPress: false,
                       )
                     : _FeedCard(
                         itinerary: itinerary,

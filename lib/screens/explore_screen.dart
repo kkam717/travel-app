@@ -11,10 +11,10 @@ import '../services/supabase_service.dart';
 import '../services/places_service.dart';
 import '../widgets/static_map_image.dart';
 
-const double _kHeroHeight = 300.0;
-const double _kHeroBottomRadius = 28.0;
+const double _kHeroHeight = 160.0;
+const double _kHeroBottomRadius = 0.0;
 
-/// Explore page: editorial discovery with hero banner, people, and trending trips.
+/// Explore page: editorial discovery with people and trending trips.
 /// Replaces Search as the discovery entry point.
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
@@ -453,106 +453,33 @@ class _ExploreHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return SizedBox(
-      height: _kHeroHeight + topPadding,
+    return Container(
       width: double.infinity,
-      child: Stack(
-        children: [
-          // Banner image
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(_kHeroBottomRadius),
-                bottomRight: Radius.circular(_kHeroBottomRadius),
-              ),
-              child: Image.asset(
-                'assets/images/profile_banner_hero.png',
-                fit: BoxFit.cover,
-                alignment: const Alignment(0, 1),
-              ),
-            ),
-          ),
-          // Gradient overlay for text
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(_kHeroBottomRadius),
-                  bottomRight: Radius.circular(_kHeroBottomRadius),
-                ),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.4),
-                    Colors.black.withValues(alpha: 0.2),
-                    Colors.black.withValues(alpha: 0.15),
-                  ],
-                  stops: const [0.0, 0.5, 0.85],
+      color: theme.colorScheme.surface,
+      child: SizedBox(
+        height: _kHeroHeight + topPadding,
+        width: double.infinity,
+        child: Stack(
+          children: [
+            // Title only (no banner, no caption)
+            Positioned(
+              top: topPadding + 24,
+              left: AppTheme.spacingLg,
+              right: AppTheme.spacingLg,
+              child: Text(
+                AppStrings.t(context, 'explore'),
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
             ),
-          ),
-          // Bottom fade: blend banner into page background (like profile)
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(_kHeroBottomRadius),
-                  bottomRight: Radius.circular(_kHeroBottomRadius),
-                ),
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.transparent,
-                    theme.colorScheme.surface.withValues(alpha: 0.3),
-                    theme.colorScheme.surface,
-                  ],
-                  stops: const [0.0, 0.45, 0.75, 1.0],
-                ),
-              ),
-            ),
-          ),
-          // Title and subtitle
-          Positioned(
-            top: topPadding + 24,
-            left: AppTheme.spacingLg,
-            right: AppTheme.spacingLg,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppStrings.t(context, 'explore'),
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                    shadows: [
-                      Shadow(color: Colors.black.withValues(alpha: 0.5), offset: const Offset(0, 1), blurRadius: 6),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  AppStrings.t(context, 'explore_subtitle'),
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    fontWeight: FontWeight.w400,
-                    shadows: [
-                      Shadow(color: Colors.black.withValues(alpha: 0.4), offset: const Offset(0, 1), blurRadius: 4),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Search bar at same level as profile page name (just above stat tiles)
-          Positioned(
-            left: AppTheme.spacingLg,
-            right: AppTheme.spacingLg,
-            bottom: 56,
-            child: Material(
+            // Search bar
+            Positioned(
+              left: AppTheme.spacingLg,
+              right: AppTheme.spacingLg,
+              bottom: 24,
+              child: Material(
               color: theme.colorScheme.surface.withValues(alpha: 0.95),
               borderRadius: BorderRadius.circular(999),
               elevation: 0,
@@ -573,6 +500,7 @@ class _ExploreHero extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
   }
