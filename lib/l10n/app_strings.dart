@@ -323,6 +323,8 @@ class AppStrings {
       'top_spot_drink': 'Drink',
       'top_spot_date': 'Date',
       'top_spot_chill': 'Chill',
+      'top_5_per_category_hint': 'Add your top 5 for each: Eat, Drink, Date, Chill.',
+      'tap_city_for_top_5_hint': 'Tap your current city or a past city to add your top 5 for each category.',
       'explore': 'Explore',
       'explore_subtitle': 'Trips and people worth following',
       'explore_search_placeholder': 'Search people, trips, or places',
@@ -672,6 +674,8 @@ class AppStrings {
       'top_spot_drink': 'Beber',
       'top_spot_date': 'Cita',
       'top_spot_chill': 'Relajarse',
+      'top_5_per_category_hint': 'Añade hasta 5 por categoría: Comer, Beber, Cita, Relajarse.',
+      'tap_city_for_top_5_hint': 'Toca tu ciudad actual o una pasada para añadir tus 5 favoritos de cada categoría.',
     },
     'fr': {
       'settings': 'Paramètres',
@@ -1006,6 +1010,8 @@ class AppStrings {
       'top_spot_drink': 'Boire',
       'top_spot_date': 'Rendez-vous',
       'top_spot_chill': 'Détente',
+      'top_5_per_category_hint': 'Ajoute tes 5 préférés pour chaque : Manger, Boire, Rendez-vous, Détente.',
+      'tap_city_for_top_5_hint': 'Appuie sur ta ville actuelle ou une ville passée pour ajouter tes 5 favoris par catégorie.',
     },
     'de': {
       'settings': 'Einstellungen',
@@ -1340,6 +1346,8 @@ class AppStrings {
       'top_spot_drink': 'Trinken',
       'top_spot_date': 'Date',
       'top_spot_chill': 'Chillen',
+      'top_5_per_category_hint': 'Füge bis zu 5 pro Kategorie hinzu: Essen, Trinken, Date, Chillen.',
+      'tap_city_for_top_5_hint': 'Tippe auf deine aktuelle Stadt oder eine frühere, um deine Top 5 pro Kategorie hinzuzufügen.',
     },
     'it': {
       'settings': 'Impostazioni',
@@ -1674,6 +1682,8 @@ class AppStrings {
       'top_spot_drink': 'Bere',
       'top_spot_date': 'Appuntamento',
       'top_spot_chill': 'Relax',
+      'top_5_per_category_hint': 'Aggiungi i tuoi 5 preferiti per ogni categoria: Mangiare, Bere, Appuntamento, Relax.',
+      'tap_city_for_top_5_hint': 'Tocca la città attuale o una passata per aggiungere i tuoi 5 preferiti per categoria.',
     },
     'zh': {
       'settings': '设置',

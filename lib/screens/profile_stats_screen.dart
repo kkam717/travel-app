@@ -582,6 +582,14 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
             color: cs.onSurface,
           ),
         ),
+        if (_isOwnProfile)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              AppStrings.t(context, 'tap_city_for_top_5_hint'),
+              style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ),
         const SizedBox(height: 14),
         if (_pastCities.isEmpty && _isOwnProfile)
           InkWell(

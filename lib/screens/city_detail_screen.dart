@@ -151,6 +151,13 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                         '${AppStrings.t(context, 'top_spots_in')} ${widget.cityName}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
                       ),
+                      const SizedBox(height: 4),
+                      Text(
+                        AppStrings.t(context, 'top_5_per_category_hint'),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                       const SizedBox(height: AppTheme.spacingLg),
                       ...['eat', 'drink', 'date', 'chill'].map((cat) {
                         final list = _spotsByCategory[cat] ?? [];
