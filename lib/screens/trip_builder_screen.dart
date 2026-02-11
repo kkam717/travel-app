@@ -967,7 +967,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                           expand: false,
                           initialChildSize: 0.45,
                           minChildSize: 0.35,
-                          maxChildSize: 0.95,
+                          maxChildSize: 0.88,
                           builder: (context, scrollController) {
                       return LayoutBuilder(
                         builder: (context, constraints) {
@@ -1701,7 +1701,7 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                   }
                 },
                 builder: (context, candidateData, rejectedData) {
-                  return Draggable<int>(
+                  return LongPressDraggable<int>(
                     data: ci,
                     feedback: Material(
                       elevation: 4,
@@ -1738,7 +1738,6 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
   Widget _buildDetailsTimeline(ThemeData theme) {
     final pairs = _chronologicalPairs;
     if (pairs.isEmpty) return const SizedBox.shrink();
-    var dayStart = 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1755,10 +1754,9 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
           itemBuilder: (context, ci) {
             final city = _cities[ci];
             final count = ci < _allocations.length ? _allocations[ci] : 1;
-            final dayEnd = dayStart + count - 1;
-            final dayRange = count == 1 ? '${AppStrings.t(context, 'day')} $dayStart' : '${AppStrings.t(context, 'days')} $dayStart–$dayEnd';
-            final firstDay = dayStart;
-            dayStart += count;
+            final firstDay = 1 + _allocations.take(ci).fold<int>(0, (a, b) => a + b);
+            final dayEnd = firstDay + count - 1;
+            final dayRange = count == 1 ? '${AppStrings.t(context, 'day')} $firstDay' : '${AppStrings.t(context, 'days')} $firstDay–$dayEnd';
             return _DestinationSection(
               key: ValueKey('dest_$ci'),
               title: '${city.name} • $dayRange',
@@ -2200,69 +2198,71 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     return showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppTheme.spacingLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: Text('+1 ${AppStrings.t(context, 'day')}'),
-                onTap: () {
-                  _setCityDayCount(cityIndex, (_allocations[cityIndex] + 1).clamp(1, _daysCount));
-                  onAction();
-                  Navigator.pop(ctx);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.remove),
-                title: Text('-1 ${AppStrings.t(context, 'day')}'),
-                onTap: () {
-                  _setCityDayCount(cityIndex, (_allocations[cityIndex] - 1).clamp(1, _daysCount));
-                  onAction();
-                  Navigator.pop(ctx);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.balance),
-                title: const Text('Auto-balance'),
-                onTap: () {
-                  _autoBalanceCities();
-                  onAction();
-                  Navigator.pop(ctx);
-                },
-              ),
-              if (cityIndex > 0)
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(AppTheme.spacingLg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 ListTile(
-                  leading: const Icon(Icons.arrow_upward),
-                  title: Text(AppStrings.t(context, 'move_earlier')),
+                  leading: const Icon(Icons.add),
+                  title: Text('+1 ${AppStrings.t(context, 'day')}'),
                   onTap: () {
-                    _swapAdjacentCities(cityIndex - 1);
+                    _setCityDayCount(cityIndex, (_allocations[cityIndex] + 1).clamp(1, _daysCount));
                     onAction();
                     Navigator.pop(ctx);
                   },
                 ),
-              if (cityIndex < _cities.length - 1)
                 ListTile(
-                  leading: const Icon(Icons.arrow_downward),
-                  title: Text(AppStrings.t(context, 'move_later')),
+                  leading: const Icon(Icons.remove),
+                  title: Text('-1 ${AppStrings.t(context, 'day')}'),
                   onTap: () {
-                    _swapAdjacentCities(cityIndex);
+                    _setCityDayCount(cityIndex, (_allocations[cityIndex] - 1).clamp(1, _daysCount));
                     onAction();
                     Navigator.pop(ctx);
                   },
                 ),
-              ListTile(
-                leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
-                title: Text(AppStrings.t(context, 'remove'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
-                onTap: () {
-                  _removeCity(cityIndex);
-                  onAction();
-                  Navigator.pop(ctx);
-                },
-              ),
-            ],
+                ListTile(
+                  leading: const Icon(Icons.balance),
+                  title: const Text('Auto-balance'),
+                  onTap: () {
+                    _autoBalanceCities();
+                    onAction();
+                    Navigator.pop(ctx);
+                  },
+                ),
+                if (cityIndex > 0)
+                  ListTile(
+                    leading: const Icon(Icons.arrow_upward),
+                    title: Text(AppStrings.t(context, 'move_earlier')),
+                    onTap: () {
+                      _swapAdjacentCities(cityIndex - 1);
+                      onAction();
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                if (cityIndex < _cities.length - 1)
+                  ListTile(
+                    leading: const Icon(Icons.arrow_downward),
+                    title: Text(AppStrings.t(context, 'move_later')),
+                    onTap: () {
+                      _swapAdjacentCities(cityIndex);
+                      onAction();
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline, color: Theme.of(ctx).colorScheme.error),
+                  title: Text(AppStrings.t(context, 'remove'), style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+                  onTap: () {
+                    _removeCity(cityIndex);
+                    onAction();
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2276,54 +2276,80 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
     if (!mounted) return Future<void>.value();
     return showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingLg),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(AppStrings.t(context, 'add_transport_title'), style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    ...TransportType.values.where((t) => t != TransportType.unknown).map((t) => FilterChip(
-                      label: Text(t.name),
-                      selected: type == t,
-                      onSelected: (_) => setModalState(() => type = t),
-                    )),
-                    FilterChip(label: Text(AppStrings.t(context, 'skip')), selected: type == TransportType.unknown, onSelected: (_) => setModalState(() => type = TransportType.unknown)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: descController,
-                  decoration: InputDecoration(labelText: AppStrings.t(context, 'description_optional'), hintText: AppStrings.t(context, 'transport_hint')),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    TextButton(onPressed: () => setModalState(() => type = TransportType.unknown), child: const Text('Reset to auto')),
-                    const Spacer(),
-                    FilledButton(
-                      onPressed: () {
-                        _setTransport(segmentIndex, type, descController.text.trim());
-                        setState(() {});
-                        onRouteChanged?.call();
-                        Navigator.pop(ctx);
-                      },
-                      child: Text(AppStrings.t(context, 'done')),
+        builder: (ctx, setModalState) {
+          final theme = Theme.of(ctx);
+          final viewInsets = MediaQuery.viewInsetsOf(ctx);
+          final viewPadding = MediaQuery.viewPaddingOf(ctx);
+          final screenHeight = MediaQuery.sizeOf(ctx).height;
+          final bottomInset = viewInsets.bottom > 0 ? viewInsets.bottom : viewPadding.bottom;
+          final spaceAboveKeyboard = screenHeight - bottomInset;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            height: spaceAboveKeyboard,
+            alignment: Alignment.bottomCenter,
+            child: Material(
+              color: theme.colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              clipBehavior: Clip.antiAlias,
+                child: SafeArea(
+                  top: false,
+                  bottom: false,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTheme.spacingLg),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(AppStrings.t(context, 'add_transport_title'), style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ...TransportType.values.where((t) => t != TransportType.unknown).map((t) => FilterChip(
+                              label: Text(t.name),
+                              selected: type == t,
+                              onSelected: (_) => setModalState(() => type = t),
+                            )),
+                            FilterChip(label: Text(AppStrings.t(context, 'skip')), selected: type == TransportType.unknown, onSelected: (_) => setModalState(() => type = TransportType.unknown)),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: descController,
+                          decoration: InputDecoration(labelText: AppStrings.t(context, 'description_optional'), hintText: AppStrings.t(context, 'transport_hint')),
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            TextButton(onPressed: () => setModalState(() => type = TransportType.unknown), child: const Text('Reset to auto')),
+                            const Spacer(),
+                            FilledButton(
+                              onPressed: () {
+                                _setTransport(segmentIndex, type, descController.text.trim());
+                                setState(() {});
+                                onRouteChanged?.call();
+                                Navigator.pop(ctx);
+                              },
+                              child: Text(AppStrings.t(context, 'done')),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
