@@ -24,6 +24,9 @@ class ProfileHeroBanner extends StatelessWidget {
   final VoidCallback? onQrTap;
   final VoidCallback? onSettingsTap;
   final VoidCallback? onEditProfileTap;
+  /// When set, the Edit profile pill becomes a popup menu; options open from the button.
+  final List<PopupMenuEntry<String>>? editProfileMenuItems;
+  final void Function(String?)? onEditProfileMenuSelected;
   final VoidCallback? onAvatarTap;
   final VoidCallback? onCityTap;
   final bool isUploadingPhoto;
@@ -47,6 +50,8 @@ class ProfileHeroBanner extends StatelessWidget {
     this.onQrTap,
     this.onSettingsTap,
     this.onEditProfileTap,
+    this.editProfileMenuItems,
+    this.onEditProfileMenuSelected,
     this.onAvatarTap,
     this.onCityTap,
     this.isUploadingPhoto = false,
@@ -248,6 +253,36 @@ class ProfileHeroBanner extends StatelessWidget {
                     const SizedBox(width: 8),
                     if (actionPill != null)
                       actionPill!
+                    else if (editProfileMenuItems != null && onEditProfileMenuSelected != null)
+                      PopupMenuButton<String>(
+                        offset: const Offset(0, 40),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                        onSelected: onEditProfileMenuSelected,
+                        itemBuilder: (_) => editProfileMenuItems!,
+                        child: Material(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(999),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit_outlined, size: 16, color: Colors.white),
+                                const SizedBox(width: 6),
+                                Text(
+                                  editProfileLabel,
+                                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      )
                     else
                       Material(
                         color: Colors.white.withValues(alpha: 0.25),

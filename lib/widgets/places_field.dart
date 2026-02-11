@@ -10,6 +10,8 @@ class PlacesField extends StatefulWidget {
   final String? placeType;
   final List<String>? countryCodes;
   final (double, double)? locationLatLng;
+  /// Optional bbox "left,bottom,right,top" to restrict suggestions to a region (e.g. city).
+  final String? bbox;
   /// UI language code for autofill suggestions (e.g. from Localizations.localeOf(context).languageCode).
   final String? lang;
 
@@ -20,6 +22,7 @@ class PlacesField extends StatefulWidget {
     this.placeType,
     this.countryCodes,
     this.locationLatLng,
+    this.bbox,
     this.lang,
   });
 
@@ -56,6 +59,7 @@ class _PlacesFieldState extends State<PlacesField> {
           countryCodes: widget.countryCodes,
           placeType: widget.placeType,
           locationLatLng: widget.locationLatLng,
+          bbox: widget.bbox,
           lang: widget.lang,
         );
         if (mounted) {

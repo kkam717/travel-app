@@ -53,11 +53,14 @@ class PlacesService {
   }
 
   /// Search places (cities, venues) via Photon. Returns results with lat/lng - no separate details call.
+  /// [bbox] optional "left,bottom,right,top" (lon,lat,lon,lat) to restrict results to a region (e.g. city).
   static Future<List<PlacePrediction>> search(
     String input, {
     List<String>? countryCodes,
     String? placeType,
     (double, double)? locationLatLng,
+    /// Optional bbox "left,bottom,right,top" (WGS84). When set, restricts results to this area (e.g. city).
+    String? bbox,
     String? lang,
   }) async {
     if (input.trim().length < 2) return [];
@@ -70,10 +73,10 @@ class PlacesService {
       if (lang != null && lang.isNotEmpty) {
         params['lang'] = lang;
       }
-      String? bboxStr;
-      if (countryCodes != null && countryCodes.isNotEmpty) {
-        bboxStr = _bboxForCountries(countryCodes);
-        params['bbox'] = bboxStr;
+      if (bbox != null && bbox.isNotEmpty) {
+        params['bbox'] = bbox;
+      } else if (countryCodes != null && countryCodes.isNotEmpty) {
+        params['bbox'] = _bboxForCountries(countryCodes);
       }
       if (locationLatLng != null) {
         params['lat'] = locationLatLng.$1.toString();
@@ -151,6 +154,15 @@ class PlacesService {
     'CZ': '12.1,48.6,18.9,51.0',
     'CA': '-141.0,41.7,-52.6,83.1',
   };
+
+  /// Bbox around a point (e.g. city center). [radiusDeg] ~0.08 ≈ 9 km. Returns "left,bottom,right,top" (lon,lat,lon,lat).
+  static String bboxAroundPoint(double lat, double lng, {double radiusDeg = 0.08}) {
+    final left = (lng - radiusDeg).clamp(-180.0, 180.0);
+    final right = (lng + radiusDeg).clamp(-180.0, 180.0);
+    final bottom = (lat - radiusDeg).clamp(-90.0, 90.0);
+    final top = (lat + radiusDeg).clamp(-90.0, 90.0);
+    return '$left,$bottom,$right,$top';
+  }
 
   /// Returns a single bbox that encompasses all selected countries so results are within those countries.
   static String _bboxForCountries(List<String> codes) {

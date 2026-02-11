@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../core/theme.dart';
 import '../l10n/app_strings.dart';
 
 /// Editorial insight card for profile KPIs: soft rounded container, icon + value + label.
@@ -59,26 +58,27 @@ class _ProfileInsightCardState extends State<ProfileInsightCard>
     super.dispose();
   }
 
-  // Compact layout so cards don't compete with profile header
-  static const double _iconSize = 18;
-  static const double _textFontSize = 13;
-  static const double _textHeight = 1.2;
+  // Soft UI: generous padding, 18–24 radius, subtle shadow, no harsh dividers
+  static const double _iconSize = 20;
+  static const double _textFontSize = 14;
+  static const double _textHeight = 1.25;
   static const double _gapAfterIcon = 4;
   static const double _gapBeforeLabel = 2;
-  static const double _paddingH = 10;
-  static const double _paddingV = 8;
-  static const double _radius = 14;
-  static const double _shadowBlur = 4;
-  static const double _shadowOpacity = 0.03;
-  static const double _chevronSize = 16;
+  static const double _paddingH = 14;
+  static const double _paddingV = 12;
+  static const double _radius = 20;
+  static const double _shadowBlur = 8;
+  static const double _shadowOpacity = 0.06;
+  static const double _shadowOffsetY = 2;
+  static const double _chevronSize = 18;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final labelColor = widget.foregroundColor.withValues(alpha: 0.85);
-
+    // Match screenshot: consistent dark gray text, medium weight
     final textStyle = theme.textTheme.titleSmall?.copyWith(
-      fontWeight: FontWeight.w600,
+      fontWeight: FontWeight.w500,
       fontSize: _textFontSize,
       color: widget.foregroundColor,
       height: _textHeight,
@@ -113,6 +113,10 @@ class _ProfileInsightCardState extends State<ProfileInsightCard>
 
     final List<Widget> columnChildren;
     if (widget.primarySameLineAsIcon) {
+      // One line: icon + "primaryText label" (e.g. "33 Countries", "14 Places Lived")
+      final lineText = widget.label.isNotEmpty
+          ? '${widget.primaryText} ${widget.label}'
+          : widget.primaryText;
       columnChildren = [
         Row(
           mainAxisSize: MainAxisSize.min,
@@ -120,22 +124,13 @@ class _ProfileInsightCardState extends State<ProfileInsightCard>
             Icon(widget.icon, size: _iconSize, color: widget.foregroundColor),
             const SizedBox(width: 6),
             Text(
-              widget.primaryText,
+              lineText,
               style: textStyle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
-        if (widget.label.isNotEmpty) ...[
-          const SizedBox(height: _gapBeforeLabel),
-          Text(
-            widget.label,
-            style: labelStyle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       ];
     } else {
       columnChildren = [
@@ -161,6 +156,7 @@ class _ProfileInsightCardState extends State<ProfileInsightCard>
       children: columnChildren,
     );
 
+    // No border per screenshot; distinction from background color and shadow only
     final card = Container(
       padding: const EdgeInsets.symmetric(horizontal: _paddingH, vertical: _paddingV),
       decoration: BoxDecoration(
@@ -170,12 +166,12 @@ class _ProfileInsightCardState extends State<ProfileInsightCard>
           BoxShadow(
             color: Colors.black.withValues(alpha: _shadowOpacity),
             blurRadius: _shadowBlur,
-            offset: const Offset(0, 1),
+            offset: Offset(0, _shadowOffsetY),
           ),
         ],
       ),
       alignment: Alignment.centerLeft,
-      child: SizedBox(width: double.infinity, child: content),
+      child: content,
     );
 
     if (widget.onTap != null) {
@@ -195,91 +191,53 @@ class _ProfileInsightCardState extends State<ProfileInsightCard>
   }
 }
 
-/// Three horizontally aligned insight cards: Countries, Places, Base/Location.
-/// Editorial style; equal height, flexible width; no dividers.
+/// One-line insight row: "X Countries · Y Places Lived". No current location (shown in identity row above).
 class ProfileInsightCardsRow extends StatelessWidget {
   final int countriesCount;
   final int placesCount;
-  final String? currentCity;
   final VoidCallback? onCountriesTap;
   final VoidCallback? onPlacesTap;
-  final VoidCallback? onBaseTap;
 
   const ProfileInsightCardsRow({
     super.key,
     required this.countriesCount,
     required this.placesCount,
-    this.currentCity,
     this.onCountriesTap,
     this.onPlacesTap,
-    this.onBaseTap,
   });
-
-  static const double _minWidthForFlexRow = 320;
-  static const double _minCardWidth = 96;
-  static const double _cardGap = 8;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tealTint = cs.primary.withValues(alpha: 0.22);
-    final tealFg = cs.primary.withValues(alpha: 0.95);
-    final warmTint = const Color(0xFFE07856).withValues(alpha: 0.2);
-    final warmFg = const Color(0xFFB4532A);
-    final locationTint = const Color(0xFFD97706).withValues(alpha: 0.2);
-    final locationFg = const Color(0xFF92400E);
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurface,
+      fontWeight: FontWeight.w500,
+    );
 
-    final cityLabel = currentCity?.trim().isNotEmpty == true
-        ? currentCity!
-        : AppStrings.t(context, 'home');
+    final countriesText = '$countriesCount ${AppStrings.t(context, 'countries')}';
+    final placesText = '$placesCount ${AppStrings.t(context, 'places_lived')}';
 
-    final cards = [
-      ProfileInsightCard(
-        icon: Icons.public_rounded,
-        primaryText: '$countriesCount',
-        label: AppStrings.t(context, 'countries'),
-        backgroundColor: tealTint,
-        foregroundColor: tealFg,
-        primarySameLineAsIcon: true,
-        onTap: onCountriesTap,
-      ),
-      ProfileInsightCard(
-        icon: Icons.location_city_rounded,
-        primaryText: AppStrings.t(context, 'travel_profile'),
-        label: '',
-        backgroundColor: warmTint,
-        foregroundColor: warmFg,
-        onTap: onPlacesTap,
-      ),
-      ProfileInsightCard(
-        icon: Icons.location_on_rounded,
-        primaryText: cityLabel,
-        label: '',
-        backgroundColor: locationTint,
-        foregroundColor: locationFg,
-        onTap: onBaseTap,
-      ),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useFlex = constraints.maxWidth >= _minWidthForFlexRow;
-        final row = IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: useFlex ? MainAxisSize.max : MainAxisSize.min,
-            children: [
-              useFlex ? Expanded(child: cards[0]) : SizedBox(width: _minCardWidth, child: cards[0]),
-              const SizedBox(width: _cardGap),
-              useFlex ? Expanded(child: cards[1]) : SizedBox(width: _minCardWidth, child: cards[1]),
-              const SizedBox(width: _cardGap),
-              useFlex ? Expanded(child: cards[2]) : SizedBox(width: _minCardWidth, child: cards[2]),
-            ],
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: onCountriesTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Text(countriesText, style: style),
           ),
-        );
-        if (useFlex) return row;
-        return SingleChildScrollView(scrollDirection: Axis.horizontal, child: row);
-      },
+        ),
+        Text(' · ', style: style),
+        InkWell(
+          onTap: onPlacesTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Text(placesText, style: style),
+          ),
+        ),
+      ],
     );
   }
 }

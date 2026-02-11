@@ -325,7 +325,13 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
               drawInSingleWorld: true,
             ),
             PolygonLayer(
-              polygons: _polygons,
+              polygons: _polygons.map((p) => Polygon(
+                points: p.points,
+                holePointsList: p.holePointsList,
+                color: theme.colorScheme.primary.withValues(alpha: 0.35),
+                borderColor: theme.colorScheme.primary.withValues(alpha: 0.6),
+                borderStrokeWidth: 1,
+              )).toList(),
               drawInSingleWorld: true,
               simplificationTolerance: 0,
             ),

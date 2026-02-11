@@ -492,10 +492,15 @@ class _SpotEditorSheetState extends State<_SpotEditorSheet> {
                 builder: (context, snapshot) {
                   final coords = snapshot.hasData ? snapshot.data![0] as (double, double)? : null;
                   final countryCode = snapshot.hasData ? snapshot.data![1] as String? : null;
+                  final bbox = coords != null
+                      ? PlacesService.bboxAroundPoint(coords.$1, coords.$2, radiusDeg: 0.08)
+                      : null;
                   return PlacesField(
                     hint: '${AppStrings.t(context, 'search_place_in')} ${widget.cityName}…',
                     locationLatLng: coords,
                     countryCodes: countryCode != null && countryCode.isNotEmpty ? [countryCode] : null,
+                    bbox: bbox,
+                    placeType: _category,
                     onSelected: (name, _, __, locationUrl, ___) {
                       setState(() {
                         _placeName = name;

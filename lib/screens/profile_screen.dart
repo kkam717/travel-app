@@ -218,7 +218,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         title: Text(p.name ?? AppStrings.t(context, 'profile')),
         actions: [
-          IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _showEditProfileSheet(p)),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.edit_outlined),
+            onSelected: (value) async {
+              if (value == 'name') {
+                await _showNameEditor(p.name ?? '', (name) => _updateProfile(name: name));
+              } else if (value == 'travel_stats') {
+                final hasCity = p.currentCity?.trim().isNotEmpty == true;
+                final hasPast = _pastCities.isNotEmpty;
+                final hasStyles = (p.travelStyles).isNotEmpty;
+                String? open;
+                if (!hasCity) open = 'current_city';
+                else if (!hasPast) open = 'past_cities';
+                else if (!hasStyles) open = 'travel_styles';
+                await context.push(open != null ? '/profile/stats?open=$open' : '/profile/stats');
+              }
+              if (mounted) _load();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<String>(
+                value: 'name',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.person_outline, size: 20),
+                    const SizedBox(width: 12),
+                    Text(AppStrings.t(context, 'name')),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'travel_stats',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.location_city_outlined, size: 20),
+                    const SizedBox(width: 12),
+                    Text(AppStrings.t(context, 'travel_stats')),
+                  ],
+                ),
+              ),
+            ],
+          ),
           IconButton(icon: const Icon(Icons.settings_outlined), onPressed: () => context.push('/profile/settings')),
         ],
       ),
@@ -469,53 +510,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final toShow = venues.isNotEmpty ? venues : it.stops.where((s) => s.isLocation).toList();
     if (toShow.isEmpty) return it.destination;
     return toShow.take(2).map((s) => s.name).join(' • ');
-  }
-
-  Future<void> _showEditProfileSheet(Profile p) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.35,
-        expand: false,
-        builder: (_, scrollController) => ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.all(AppTheme.spacingLg),
-          children: [
-            Text(AppStrings.t(context, 'edit_profile'), style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: AppTheme.spacingLg),
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: Text(AppStrings.t(context, 'name')),
-              subtitle: Text(p.name?.isNotEmpty == true ? p.name! : AppStrings.t(context, 'not_set')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await _showNameEditor(p.name ?? '', (name) => _updateProfile(name: name));
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.location_city_outlined),
-              title: Text(AppStrings.t(context, 'travel_stats')),
-              subtitle: Text(AppStrings.t(context, 'home_town_lived_before')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () async {
-                Navigator.pop(ctx);
-                final hasCity = p.currentCity?.trim().isNotEmpty == true;
-                final hasPast = _pastCities.isNotEmpty;
-                final hasStyles = (p.travelStyles).isNotEmpty;
-                String? open;
-                if (!hasCity) open = 'current_city';
-                else if (!hasPast) open = 'past_cities';
-                else if (!hasStyles) open = 'travel_styles';
-                await context.push(open != null ? '/profile/stats?open=$open' : '/profile/stats');
-                if (mounted) _load();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   Future<void> _showNameEditor(String initial, void Function(String) onSave) async {
