@@ -315,34 +315,68 @@ class _SearchScreenState extends State<SearchScreen> {
     Analytics.logScreenView('search');
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.t(context, 'search')),
+        title: Text(
+          AppStrings.t(context, 'search'),
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingMd),
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              decoration: InputDecoration(
-                hintText: AppStrings.t(context, 'destination_or_keywords'),
-                prefixIcon: const Icon(Icons.search_rounded),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.clear_rounded),
-                  onPressed: () {
-                    _searchController.clear();
-                    _search();
-                  },
-                ),
+            padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingSm, AppTheme.spacingLg, AppTheme.spacingMd),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.light
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              onSubmitted: (_) {
-                _addRecentSearch(_searchController.text.trim());
-                _search();
-              },
-              onChanged: (_) {
-                _searchDebounce?.cancel();
-                _searchDebounce = Timer(const Duration(milliseconds: 400), _search);
-              },
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                decoration: InputDecoration(
+                  hintText: AppStrings.t(context, 'destination_or_keywords'),
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear_rounded),
+                    onPressed: () {
+                      _searchController.clear();
+                      _search();
+                    },
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: Theme.of(context).colorScheme.primary, width: 1.5),
+                  ),
+                  filled: false,
+                ),
+                onSubmitted: (_) {
+                  _addRecentSearch(_searchController.text.trim());
+                  _search();
+                },
+                onChanged: (_) {
+                  _searchDebounce?.cancel();
+                  _searchDebounce = Timer(const Duration(milliseconds: 400), _search);
+                },
+              ),
             ),
           ),
           Expanded(
@@ -388,8 +422,13 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingMd, AppTheme.spacingMd, AppTheme.spacingSm),
             child: Text(
-              AppStrings.t(context, 'profiles'),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              AppStrings.t(context, 'profiles').toUpperCase(),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ),
@@ -432,8 +471,13 @@ class _SearchScreenState extends State<SearchScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingSm),
             child: Text(
-              AppStrings.t(context, 'trips'),
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              AppStrings.t(context, 'trips').toUpperCase(),
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ),
@@ -563,9 +607,26 @@ class _ProfileCard extends StatelessWidget {
     final hasPlacesLine = showPlacesSummary &&
         profile.placesSummary != null &&
         profile.placesSummary!.trim().isNotEmpty;
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
-      child: InkWell(
+    final cardColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
@@ -639,6 +700,7 @@ class _ProfileCard extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
@@ -663,9 +725,26 @@ class _ItineraryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final it = itinerary;
-    return Card(
-      margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
-      child: InkWell(
+    final cardColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Padding(
@@ -675,7 +754,7 @@ class _ItineraryCard extends StatelessWidget {
             children: [
               Text(
                 it.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
               Text(
@@ -695,12 +774,12 @@ class _ItineraryCard extends StatelessWidget {
                   const SizedBox(width: 12),
                   if (it.mode != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(8),
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
+                      child: Text(it.mode!.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: Theme.of(context).colorScheme.primary)),
                     ),
                   const Spacer(),
                   if (onLike != null)
@@ -731,7 +810,14 @@ class _ItineraryCard extends StatelessWidget {
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: it.styleTags.map((s) => Chip(label: Text(s, style: const TextStyle(fontSize: 11)), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap)).toList(),
+                  children: it.styleTags.map((s) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(s, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary)),
+                  )).toList(),
                 ),
               ],
               if (it.stopsCount != null && it.stopsCount! > 0) ...[
@@ -741,6 +827,7 @@ class _ItineraryCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -540,9 +540,15 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_pageTitle(context)),
+          title: Text(
+            _pageTitle(context),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+          ),
           leading: _currentPage > 0
-              ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => _handleBack())
+              ? IconButton(icon: const Icon(Icons.arrow_back_rounded), onPressed: () => _handleBack())
               : null,
         ),
         body: _isLoadingData
@@ -579,7 +585,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
       child: ListView(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         children: [
-          Text(AppStrings.t(context, 'start_new_trip'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(AppStrings.t(context, 'start_new_trip'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
           const SizedBox(height: AppTheme.spacingLg),
           TextFormField(
             controller: _titleController,
@@ -771,14 +777,19 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text(AppStrings.t(context, 'add_destinations'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'add_destinations'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
         const SizedBox(height: AppTheme.spacingSm),
         Text(AppStrings.t(context, 'add_destinations_hint'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
         ...List.generate(_destinations.length, (i) {
           final d = _destinations[i];
-          return Card(
+          return Container(
             margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.light ? Colors.white : Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+            ),
             child: Padding(
               padding: const EdgeInsets.all(AppTheme.spacingMd),
               child: Column(
@@ -846,14 +857,19 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text(AppStrings.t(context, 'assign_days_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'assign_days_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
         const SizedBox(height: AppTheme.spacingSm),
         Text(AppStrings.t(context, 'assign_days_hint'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
         ...(_destinations.where((d) => d.name.isNotEmpty).map((d) {
           d.days ??= {};
-          return Card(
+          return Container(
             margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.light ? Colors.white : Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+            ),
             child: Padding(
               padding: const EdgeInsets.all(AppTheme.spacingMd),
               child: Column(
@@ -990,7 +1006,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text(AppStrings.t(context, 'add_transport_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'add_transport_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
         const SizedBox(height: AppTheme.spacingSm),
         Text(AppStrings.t(context, 'add_transport_how'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
@@ -1008,8 +1024,13 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
           ...segmentIndices.map((origIdx) {
           final seg = segments[origIdx]!;
           final current = _transportBetweenDestinations[origIdx] ?? TransportType.unknown;
-          return Card(
+          return Container(
             margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.light ? Colors.white : Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+            ),
             child: Padding(
               padding: const EdgeInsets.all(AppTheme.spacingMd),
               child: Column(
@@ -1147,7 +1168,7 @@ class _CreateItineraryScreenState extends State<CreateItineraryScreen> {
     return ListView(
       padding: const EdgeInsets.all(AppTheme.spacingMd),
       children: [
-        Text(AppStrings.t(context, 'add_details_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(AppStrings.t(context, 'add_details_title'), style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.5)),
         const SizedBox(height: AppTheme.spacingXs),
         Text(AppStrings.t(context, 'add_details_subtitle'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: AppTheme.spacingLg),
@@ -1356,8 +1377,12 @@ class _EditableLocationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.brightness == Brightness.light ? Colors.white : theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: theme.colorScheme.shadow.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         child: SingleChildScrollView(

@@ -37,8 +37,13 @@ class ProfileHeroCard extends StatelessWidget {
   final VoidCallback? onFollowingTap;
 
   /// Edit profile popup items and handler (reuses existing menu logic).
-  final List<PopupMenuEntry<String>> editProfileMenuItems;
-  final void Function(String?) onEditProfileSelected;
+  /// Optional – omit for author/view-profile screens.
+  final List<PopupMenuEntry<String>>? editProfileMenuItems;
+  final void Function(String?)? onEditProfileSelected;
+
+  /// Optional trailing widget shown top-right (e.g. follow pill for author view).
+  /// When set, replaces the edit profile icon.
+  final Widget? trailingAction;
 
   static const double avatarRadius = 44.0;
   static const double avatarRingWidth = 3.0;
@@ -57,8 +62,9 @@ class ProfileHeroCard extends StatelessWidget {
     this.onVisitedTap,
     this.onInspiredTap,
     this.onFollowingTap,
-    required this.editProfileMenuItems,
-    required this.onEditProfileSelected,
+    this.editProfileMenuItems,
+    this.onEditProfileSelected,
+    this.trailingAction,
   });
 
   @override
@@ -260,27 +266,34 @@ class ProfileHeroCard extends StatelessWidget {
             ),
           ),
 
-          // Edit Profile icon (top-right inside card)
-          Positioned(
-            top: 10,
-            right: 10,
-            child: PopupMenuButton<String>(
-              onSelected: onEditProfileSelected,
-              itemBuilder: (_) => editProfileMenuItems,
-              icon: Icon(
-                Icons.edit_outlined,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-              style: IconButton.styleFrom(
-                padding: const EdgeInsets.all(8),
-                minimumSize: const Size(36, 36),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          // Top-right action: edit menu, custom trailing, or nothing
+          if (trailingAction != null)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: trailingAction!,
+            )
+          else if (editProfileMenuItems != null && onEditProfileSelected != null)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: PopupMenuButton<String>(
+                onSelected: onEditProfileSelected,
+                itemBuilder: (_) => editProfileMenuItems!,
+                icon: Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: const Size(36, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

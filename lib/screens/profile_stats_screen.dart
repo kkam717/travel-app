@@ -424,37 +424,30 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              AppStrings.t(context, 'travel_profile'),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              AppStrings.t(context, 'how_you_travel_subtitle'),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w400,
-                fontSize: 12,
-              ),
-            ),
-          ],
+        title: Text(
+          AppStrings.t(context, 'travel_profile'),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
         ),
-        titleSpacing: 0,
         actions: [
           if (_isOwnProfile && !_isLoading)
-            IconButton(
-              icon: Icon(Icons.edit_outlined, size: 22, color: cs.onSurfaceVariant),
-              onPressed: () => _showEditSheet(),
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.edit_outlined, size: 20, color: cs.onSurfaceVariant),
+                onPressed: () => _showEditSheet(),
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                padding: const EdgeInsets.all(8),
+              ),
             ),
         ],
       ),
@@ -501,13 +494,17 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingXl + 80),
                     children: [
+                      // Subtitle
+                      Text(
+                        AppStrings.t(context, 'how_you_travel_subtitle'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingLg),
                       _buildBaseLocationSection(theme, cs),
                       const SizedBox(height: AppTheme.spacingLg),
-                      Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.6)),
-                      const SizedBox(height: AppTheme.spacingLg),
                       _buildPlacesLivedSection(theme, cs),
-                      const SizedBox(height: AppTheme.spacingXl),
-                      Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.6)),
                       const SizedBox(height: AppTheme.spacingLg),
                       _buildTravelStylesSection(theme, cs),
                     ],
@@ -520,207 +517,272 @@ class _ProfileStatsScreenState extends State<ProfileStatsScreen> {
     final city = _profile?.currentCity?.trim();
     final hasCity = city != null && city.isNotEmpty;
     final displayText = hasCity ? city! : AppStrings.t(context, 'not_set');
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
 
-    return InkWell(
-      onTap: hasCity
-          ? () => context.push('/city/${Uri.encodeComponent(city!)}?userId=$_effectiveUserId')
-          : (_isOwnProfile
-              ? () async {
-                  await _showCurrentCityEditor(_profile?.currentCity ?? '', (c) => _updateProfile(currentCity: c));
-                }
-              : null),
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacingSm),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            LocationFlagIcon(city: hasCity ? city : null, fontSize: 28),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    AppStrings.t(context, 'based_in'),
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: cs.onSurfaceVariant,
-                      fontWeight: FontWeight.w500,
-                    ),
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: hasCity
+              ? () => context.push('/city/${Uri.encodeComponent(city!)}?userId=$_effectiveUserId')
+              : (_isOwnProfile
+                  ? () async {
+                      await _showCurrentCityEditor(_profile?.currentCity ?? '', (c) => _updateProfile(currentCity: c));
+                    }
+                  : null),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                LocationFlagIcon(city: hasCity ? city : null, fontSize: 28),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.t(context, 'based_in'),
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.0,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        displayText,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: hasCity ? cs.onSurface : cs.onSurfaceVariant,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    displayText,
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: hasCity ? cs.onSurface : cs.onSurfaceVariant,
-                      letterSpacing: -0.3,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
+                ),
+                if (hasCity)
+                  Icon(Icons.chevron_right_rounded, size: 20, color: cs.onSurfaceVariant),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildPlacesLivedSection(ThemeData theme, ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          AppStrings.t(context, 'places_youve_lived'),
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
-        ),
-        if (_isOwnProfile)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              AppStrings.t(context, 'tap_city_for_top_5_hint'),
-              style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.t(context, 'places_youve_lived').toUpperCase(),
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+              color: cs.onSurfaceVariant,
             ),
           ),
-        const SizedBox(height: 14),
-        if (_pastCities.isEmpty && _isOwnProfile)
-          InkWell(
-            onTap: () async => await _showPastCitiesEditor(_pastCities, _load),
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(999),
+          if (_isOwnProfile)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                AppStrings.t(context, 'tap_city_for_top_5_hint'),
+                style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, size: 18, color: cs.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    AppStrings.t(context, 'add_city'),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
+            ),
+          const SizedBox(height: 16),
+          if (_pastCities.isEmpty && _isOwnProfile)
+            InkWell(
+              onTap: () async => await _showPastCitiesEditor(_pastCities, _load),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, size: 18, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      AppStrings.t(context, 'add_city'),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: _pastCities.map((c) {
+                return Material(
+                  color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(14),
+                  child: InkWell(
+                    onTap: () => context.push('/city/${Uri.encodeComponent(c.cityName)}?userId=$_effectiveUserId'),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.location_city_rounded, size: 18, color: cs.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Text(
+                            c.cityName,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w500,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+                );
+              }).toList(),
             ),
-          )
-        else
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: _pastCities.map((c) {
-              return InkWell(
-                onTap: () => context.push('/city/${Uri.encodeComponent(c.cityName)}?userId=$_effectiveUserId'),
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.location_city_rounded, size: 18, color: cs.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Text(
-                        c.cityName,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildTravelStylesSection(ThemeData theme, ColorScheme cs) {
     final styles = _profile?.travelStyles ?? [];
-    final tint = cs.primary.withValues(alpha: 0.12);
-    final fg = cs.primary;
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          AppStrings.t(context, 'how_you_like_to_travel'),
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: cs.onSurface,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
-        ),
-        const SizedBox(height: 16),
-        if (styles.isEmpty && _isOwnProfile)
-          InkWell(
-            onTap: () async => await _showStylesEditor([], (list) => _updateProfile(travelStyles: list)),
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, size: 20, color: cs.primary),
-                  const SizedBox(width: 10),
-                  Text(
-                    AppStrings.t(context, 'travel_styles'),
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
+        ],
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.t(context, 'how_you_like_to_travel').toUpperCase(),
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+              color: cs.onSurfaceVariant,
             ),
-          )
-        else
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: styles.map((s) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          const SizedBox(height: 16),
+          if (styles.isEmpty && _isOwnProfile)
+            InkWell(
+              onTap: () async => await _showStylesEditor([], (list) => _updateProfile(travelStyles: list)),
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 decoration: BoxDecoration(
-                  color: tint,
-                  borderRadius: BorderRadius.circular(16),
+                  color: cs.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(_iconForTravelStyle(s), size: 20, color: fg),
+                    Icon(Icons.add_rounded, size: 20, color: cs.primary),
                     const SizedBox(width: 10),
                     Text(
-                      s,
-                      style: theme.textTheme.titleSmall?.copyWith(
+                      AppStrings.t(context, 'travel_styles'),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: cs.primary,
                         fontWeight: FontWeight.w600,
-                        color: fg,
                       ),
                     ),
                   ],
                 ),
-              );
-            }).toList(),
-          ),
-      ],
+              ),
+            )
+          else
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: styles.map((s) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_iconForTravelStyle(s), size: 20, color: cs.primary),
+                      const SizedBox(width: 10),
+                      Text(
+                        s,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
+      ),
     );
   }
 

@@ -224,8 +224,8 @@ class _SavedScreenState extends State<SavedScreen> with SingleTickerProviderStat
           Text(
             AppStrings.t(context, 'saved'),
             style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
               color: theme.colorScheme.onSurface,
             ),
           ),
@@ -393,7 +393,7 @@ class _BookmarkedTab extends StatelessWidget {
 }
 
 class _SavedBookmarkedCard extends StatelessWidget {
-  static const double _cardRadius = 26.0;
+  static const double _cardRadius = 22.0;
   static const double _cardHeight = 140.0;
 
   final Itinerary itinerary;
@@ -450,13 +450,24 @@ class _SavedBookmarkedCard extends StatelessWidget {
       },
       child: Padding(
         padding: const EdgeInsets.only(bottom: AppTheme.spacingMd),
-        child: Material(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(_cardRadius),
-          elevation: 8,
-          shadowColor: Colors.black.withValues(alpha: 0.12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: theme.brightness == Brightness.light
+                ? Colors.white
+                : theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(_cardRadius),
+            boxShadow: [
+              BoxShadow(
+                color: theme.colorScheme.shadow.withValues(alpha: 0.06),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           clipBehavior: Clip.antiAlias,
-          child: InkWell(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(_cardRadius),
             child: SizedBox(
@@ -537,21 +548,17 @@ class _SavedBookmarkedCard extends StatelessWidget {
                               runSpacing: 2,
                               children: styleTags.map((tag) {
                                 return Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: theme.colorScheme.outline.withValues(alpha: 0.25),
-                                      width: 1,
-                                    ),
+                                    color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     tag,
                                     style: theme.textTheme.labelSmall?.copyWith(
                                       fontSize: 10,
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                      fontWeight: FontWeight.w500,
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 );
@@ -573,6 +580,7 @@ class _SavedBookmarkedCard extends StatelessWidget {
                 ],
               ),
             ),
+          ),
           ),
         ),
       ),
@@ -692,14 +700,27 @@ class _SavedPlanningCard extends StatelessWidget {
     final statusKey = _planningStatusKey(it);
     final isReady = statusKey == 'status_ready';
 
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : theme.colorScheme.surfaceContainerHighest;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spacingMd),
-      child: Material(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(_cardRadius),
-        elevation: 0,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(_cardRadius),
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.shadow.withValues(alpha: 0.06),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(_cardRadius),
+          child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(_cardRadius),
           child: Padding(
@@ -856,6 +877,7 @@ class _SavedPlanningCard extends StatelessWidget {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

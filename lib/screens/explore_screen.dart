@@ -358,7 +358,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 118,
+            height: 136,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg),
@@ -453,15 +453,20 @@ class _ExploreHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+
     return Container(
       width: double.infinity,
-      color: theme.colorScheme.surface,
+      color: cs.surface,
       child: SizedBox(
         height: _kHeroHeight + topPadding,
         width: double.infinity,
         child: Stack(
           children: [
-            // Title only (no banner, no caption)
+            // Title
             Positioned(
               top: topPadding + 24,
               left: AppTheme.spacingLg,
@@ -470,36 +475,56 @@ class _ExploreHero extends StatelessWidget {
                 AppStrings.t(context, 'explore'),
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: theme.colorScheme.onSurface,
+                  letterSpacing: -0.5,
+                  color: cs.onSurface,
                 ),
               ),
             ),
-            // Search bar
+            // Modern search bar
             Positioned(
               left: AppTheme.spacingLg,
               right: AppTheme.spacingLg,
               bottom: 24,
-              child: Material(
-              color: theme.colorScheme.surface.withValues(alpha: 0.95),
-              borderRadius: BorderRadius.circular(999),
-              elevation: 0,
-              child: TextField(
-                controller: searchController,
-                focusNode: searchFocusNode,
-                decoration: InputDecoration(
-                  hintText: AppStrings.t(context, 'explore_search_placeholder'),
-                  prefixIcon: Icon(Icons.search_rounded, size: 22, color: theme.colorScheme.onSurfaceVariant),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.tune_rounded, size: 22, color: theme.colorScheme.onSurfaceVariant),
-                    onPressed: onFilterTap,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.shadow.withValues(alpha: 0.06),
+                      blurRadius: 16,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: searchController,
+                  focusNode: searchFocusNode,
+                  decoration: InputDecoration(
+                    hintText: AppStrings.t(context, 'explore_search_placeholder'),
+                    prefixIcon: Icon(Icons.search_rounded, size: 22, color: cs.onSurfaceVariant),
+                    suffixIcon: IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHighest.withValues(alpha: 0.6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.tune_rounded, size: 18, color: cs.onSurfaceVariant),
+                      ),
+                      onPressed: onFilterTap,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    fillColor: Colors.transparent,
+                    filled: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -683,32 +708,50 @@ class _PeopleChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => context.push('/author/${profile.id}'),
         borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
+        child: Container(
           width: 90,
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundImage: profile.photoUrl != null && profile.photoUrl!.isNotEmpty
-                    ? NetworkImage(profile.photoUrl!)
-                    : null,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                child: profile.photoUrl == null || profile.photoUrl!.isEmpty
-                    ? Icon(Icons.person_rounded, color: theme.colorScheme.onSurfaceVariant, size: 28)
-                    : null,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: cs.shadow.withValues(alpha: 0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundImage: profile.photoUrl != null && profile.photoUrl!.isNotEmpty
+                      ? NetworkImage(profile.photoUrl!)
+                      : null,
+                  backgroundColor: cardColor,
+                  child: profile.photoUrl == null || profile.photoUrl!.isEmpty
+                      ? Icon(Icons.person_rounded, color: cs.onSurfaceVariant, size: 28)
+                      : null,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 profile.name ?? AppStrings.t(context, 'unknown'),
-                style: theme.textTheme.titleSmall?.copyWith(
+                style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurface,
+                  color: cs.onSurface,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -718,8 +761,9 @@ class _PeopleChip extends StatelessWidget {
               Text(
                 '${profile.tripsCount} ${AppStrings.t(context, 'trips')}',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: cs.onSurfaceVariant,
                   fontWeight: FontWeight.w400,
+                  fontSize: 11,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -802,125 +846,152 @@ class _ExploreTripCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
     final it = itinerary;
     final displayTitle = _displayTitle(it);
     final styleTags = it.styleTags.take(2).toList();
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
-      child: Material(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(_cardRadius),
-        clipBehavior: Clip.antiAlias,
-        elevation: 8,
-        shadowColor: Colors.black.withValues(alpha: 0.12),
-        child: InkWell(
-          onTap: () => context.push('/itinerary/${it.id}'),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
           borderRadius: BorderRadius.circular(_cardRadius),
-          child: SizedBox(
-            height: _cardHeight,
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(_cardRadius)),
-                  child: SizedBox(
-                    width: _cardHeight,
-                    height: _cardHeight,
-                    child: StaticMapImage(
-                      itinerary: it,
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.03),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.push('/itinerary/${it.id}'),
+            borderRadius: BorderRadius.circular(_cardRadius),
+            child: SizedBox(
+              height: _cardHeight,
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(_cardRadius)),
+                    child: SizedBox(
                       width: _cardHeight,
                       height: _cardHeight,
-                      pathColor: theme.colorScheme.primary,
+                      child: StaticMapImage(
+                        itinerary: it,
+                        width: _cardHeight,
+                        height: _cardHeight,
+                        pathColor: cs.primary,
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          displayTitle,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
-                            color: theme.colorScheme.onSurface,
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            displayTitle,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: cs.onSurface,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(Icons.calendar_today_rounded, size: 12, color: theme.colorScheme.onSurfaceVariant),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${it.daysCount} ${AppStrings.t(context, 'days')}',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            if (it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty)
-                              CircleAvatar(
-                                radius: 8,
-                                backgroundImage: NetworkImage(it.authorPhotoUrl!),
-                              )
-                            else
-                              CircleAvatar(
-                                radius: 8,
-                                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                                child: Icon(Icons.person_rounded, size: 10, color: theme.colorScheme.onSurfaceVariant),
-                              ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                it.authorName ?? AppStrings.t(context, 'unknown'),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.calendar_today_rounded, size: 12, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${it.daysCount} ${AppStrings.t(context, 'days')}',
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          ],
-                        ),
-                        if (styleTags.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 4,
-                            runSpacing: 2,
-                            children: styleTags.map((tag) {
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              const SizedBox(width: 10),
+                              Container(
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                    color: theme.colorScheme.outline.withValues(alpha: 0.25),
-                                    width: 1,
-                                  ),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: cs.shadow.withValues(alpha: 0.08),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
+                                child: it.authorPhotoUrl != null && it.authorPhotoUrl!.isNotEmpty
+                                    ? CircleAvatar(
+                                        radius: 8,
+                                        backgroundImage: NetworkImage(it.authorPhotoUrl!),
+                                      )
+                                    : CircleAvatar(
+                                        radius: 8,
+                                        backgroundColor: cs.surfaceContainerHighest,
+                                        child: Icon(Icons.person_rounded, size: 10, color: cs.onSurfaceVariant),
+                                      ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
                                 child: Text(
-                                  tag,
+                                  it.authorName ?? AppStrings.t(context, 'unknown'),
                                   style: theme.textTheme.labelSmall?.copyWith(
-                                    fontSize: 10,
-                                    color: theme.colorScheme.onSurfaceVariant,
+                                    color: cs.onSurfaceVariant,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              );
-                            }).toList(),
+                              ),
+                            ],
                           ),
+                          if (styleTags.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: styleTags.map((tag) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: cs.primary.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontSize: 10,
+                                      color: cs.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

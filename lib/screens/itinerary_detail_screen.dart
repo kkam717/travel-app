@@ -400,58 +400,31 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          leading: Container(
-            margin: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop(<String, dynamic>{'liked': _isLiked, 'likeCount': _likeCount, 'bookmarked': _isBookmarked});
-                } else {
-                  context.go('/home');
-                }
-              },
-            ),
+          leading: _FloatingCircleButton(
+            icon: Icons.arrow_back_rounded,
+            onPressed: () {
+              if (context.canPop()) {
+                context.pop(<String, dynamic>{'liked': _isLiked, 'likeCount': _likeCount, 'bookmarked': _isBookmarked});
+              } else {
+                context.go('/home');
+              }
+            },
           ),
           actions: [
-            Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.share_outlined),
-                onPressed: () => shareItineraryLink(widget.itineraryId, title: it.title),
-              ),
+            _FloatingCircleButton(
+              icon: Icons.share_outlined,
+              onPressed: () => shareItineraryLink(widget.itineraryId, title: it.title),
             ),
             if (Supabase.instance.client.auth.currentUser?.id != it.authorId)
-              Container(
-                margin: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _forkItinerary,
-                  tooltip: AppStrings.t(context, 'save_to_planning'),
-                ),
+              _FloatingCircleButton(
+                icon: Icons.add_rounded,
+                onPressed: _forkItinerary,
+                tooltip: AppStrings.t(context, 'save_to_planning'),
               ),
-            Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: Icon(_isBookmarked ? Icons.bookmark : Icons.bookmark_outline),
-                onPressed: _toggleBookmark,
-              ),
+            _FloatingCircleButton(
+              icon: _isBookmarked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+              onPressed: _toggleBookmark,
+              isActive: _isBookmarked,
             ),
           ],
         ),
@@ -475,15 +448,17 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
               minChildSize: 0.3,
               maxChildSize: 0.95,
               builder: (context, scrollController) {
+                final sheetTheme = Theme.of(context);
+                final sheetCs = sheetTheme.colorScheme;
                 return Container(
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    color: sheetCs.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, -2),
+                        color: sheetCs.shadow.withValues(alpha: 0.12),
+                        blurRadius: 20,
+                        offset: const Offset(0, -4),
                       ),
                     ],
                   ),
@@ -491,11 +466,11 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
                     children: [
                       // Drag handle
                       Container(
-                        margin: const EdgeInsets.symmetric(vertical: 12),
+                        margin: const EdgeInsets.symmetric(vertical: 14),
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                          color: sheetCs.outline.withValues(alpha: 0.25),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -693,6 +668,54 @@ class _ItineraryDetailScreenState extends State<ItineraryDetailScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Floating circle button (modern glass-style for map overlay)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FloatingCircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String? tooltip;
+  final bool isActive;
+
+  const _FloatingCircleButton({
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.isActive = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: cs.surface.withValues(alpha: 0.92),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: IconButton(
+        icon: Icon(
+          icon,
+          size: 22,
+          color: isActive ? cs.primary : cs.onSurface,
+        ),
+        onPressed: onPressed,
+        tooltip: tooltip,
+        padding: const EdgeInsets.all(10),
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
       ),
     );
   }

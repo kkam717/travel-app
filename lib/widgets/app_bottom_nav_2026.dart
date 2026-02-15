@@ -12,12 +12,12 @@ class AppBottomNav2026 extends StatelessWidget {
   static const double _barHeight = 44;
   static const double _barRadius = 22;
   static const double _barTopPadding = 8;
-  static const double _barHorizontalMargin = 12;
   static const double _createButtonSize = 36;
   static const double _iconSize = 20;
   static const double _selectedPillRadius = 14;
   static const double _pillHeight = 28;
   static const double _pillWidth = 40;
+  static const double _navCellWidth = 52.0;
 
   /// Dark gray bar background (matches reference design).
   static const Color _barBackground = Color(0xFF2B2F38);
@@ -48,10 +48,11 @@ class AppBottomNav2026 extends StatelessWidget {
       (path: '/profile', icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded),
     ];
 
+    final navWidth = items.length * _navCellWidth;
+
     return Padding(
       padding: EdgeInsets.only(bottom: safeBottom + barBottomPadding),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _barHorizontalMargin),
+      child: Center(
         child: Container(
           height: _barHeight + _barTopPadding,
           decoration: BoxDecoration(
@@ -71,9 +72,11 @@ class AppBottomNav2026 extends StatelessWidget {
               horizontal: 8,
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Expanded(
+                SizedBox(
+                  width: navWidth,
                   child: _SlidingPillNav(
                     items: items,
                     selectionColor: colorScheme.primary,

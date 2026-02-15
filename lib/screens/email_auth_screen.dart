@@ -22,6 +22,7 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
   bool _isSignUp = false;
   bool _isLoading = false;
   String? _errorMessage;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -93,69 +94,113 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppStrings.t(context, 'email')),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
+        title: const SizedBox.shrink(),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppTheme.spacingLg),
+          padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingLg),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppTheme.spacingMd),
+
+                // Header icon
+                Center(
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      _isSignUp ? Icons.person_add_rounded : Icons.login_rounded,
+                      size: 28,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingLg),
+
+                // Title
                 Text(
-                  _isSignUp ? AppStrings.t(context, 'create_account') : AppStrings.t(context, 'welcome_back'),
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                  _isSignUp
+                      ? AppStrings.t(context, 'create_account')
+                      : AppStrings.t(context, 'welcome_back'),
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: AppTheme.spacingSm),
                 Text(
-                  _isSignUp ? AppStrings.t(context, 'create_account_subtitle') : AppStrings.t(context, 'sign_in_subtitle'),
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                  _isSignUp
+                      ? AppStrings.t(context, 'create_account_subtitle')
+                      : AppStrings.t(context, 'sign_in_subtitle'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
                 ),
+
                 const SizedBox(height: AppTheme.spacingXl),
-                if (_isSignUp)
-                  TextFormField(
+
+                // Form fields
+                if (_isSignUp) ...[
+                  _ModernTextField(
                     controller: _nameController,
+                    label: AppStrings.t(context, 'name'),
+                    hint: AppStrings.t(context, 'your_name'),
+                    icon: Icons.person_outline_rounded,
                     textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      labelText: AppStrings.t(context, 'name'),
-                      hintText: AppStrings.t(context, 'your_name'),
-                      prefixIcon: Icon(Icons.person_outline_rounded),
-                    ),
-                    validator: (v) => v == null || v.trim().isEmpty ? AppStrings.t(context, 'please_enter_name') : null,
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? AppStrings.t(context, 'please_enter_name')
+                        : null,
                   ),
-                if (_isSignUp) const SizedBox(height: AppTheme.spacingMd),
-                TextFormField(
+                  const SizedBox(height: AppTheme.spacingMd),
+                ],
+                _ModernTextField(
                   controller: _emailController,
+                  label: AppStrings.t(context, 'email'),
+                  hint: AppStrings.t(context, 'you_example_email'),
+                  icon: Icons.email_outlined,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: AppStrings.t(context, 'email'),
-                    hintText: AppStrings.t(context, 'you_example_email'),
-                    prefixIcon: Icon(Icons.email_outlined),
-                  ),
-                  validator: (v) => v == null || v.isEmpty ? AppStrings.t(context, 'enter_email') : null,
+                  validator: (v) => v == null || v.isEmpty
+                      ? AppStrings.t(context, 'enter_email')
+                      : null,
                 ),
                 const SizedBox(height: AppTheme.spacingMd),
-                TextFormField(
+                _ModernTextField(
                   controller: _passwordController,
-                  obscureText: true,
+                  label: AppStrings.t(context, 'password'),
+                  hint: _isSignUp ? AppStrings.t(context, 'min_6_characters') : null,
+                  icon: Icons.lock_outline_rounded,
+                  obscureText: _obscurePassword,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _submit(),
-                  decoration: InputDecoration(
-                    labelText: AppStrings.t(context, 'password'),
-                    hintText: _isSignUp ? AppStrings.t(context, 'min_6_characters') : null,
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      size: 20,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return AppStrings.t(context, 'enter_password');
@@ -163,62 +208,166 @@ class _EmailAuthScreenState extends State<EmailAuthScreen> {
                     return null;
                   },
                 ),
+
+                // Error message
                 if (_errorMessage != null) ...[
                   const SizedBox(height: AppTheme.spacingMd),
                   Container(
-                    padding: const EdgeInsets.all(AppTheme.spacingMd),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(12),
+                      color: cs.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: cs.error.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline_rounded, size: 20, color: Theme.of(context).colorScheme.error),
+                        Icon(Icons.error_outline_rounded, size: 20, color: cs.error),
                         const SizedBox(width: AppTheme.spacingSm),
                         Expanded(
                           child: Text(
                             _errorMessage!,
-                            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.error,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ],
+
                 const SizedBox(height: AppTheme.spacingXl),
-                FilledButton(
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Theme.of(context).colorScheme.onPrimary,
+
+                // Submit button
+                SizedBox(
+                  height: 54,
+                  child: FilledButton(
+                    onPressed: _isLoading ? null : _submit,
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: cs.onPrimary,
+                            ),
+                          )
+                        : Text(
+                            _isSignUp
+                                ? AppStrings.t(context, 'create_account')
+                                : AppStrings.t(context, 'sign_in'),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: cs.onPrimary,
+                            ),
                           ),
-                        )
-                      : Text(_isSignUp ? AppStrings.t(context, 'create_account') : AppStrings.t(context, 'sign_in')),
-                ),
-                const SizedBox(height: AppTheme.spacingMd),
-                TextButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          setState(() {
-                            _isSignUp = !_isSignUp;
-                            _errorMessage = null;
-                            if (!_isSignUp) _nameController.clear();
-                          });
-                        },
-                  child: Text(
-                    _isSignUp ? AppStrings.t(context, 'already_have_account') : AppStrings.t(context, 'dont_have_account'),
                   ),
                 ),
+
+                const SizedBox(height: AppTheme.spacingMd),
+
+                // Toggle sign up / sign in
+                Center(
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            setState(() {
+                              _isSignUp = !_isSignUp;
+                              _errorMessage = null;
+                              if (!_isSignUp) _nameController.clear();
+                            });
+                          },
+                    child: Text(
+                      _isSignUp
+                          ? AppStrings.t(context, 'already_have_account')
+                          : AppStrings.t(context, 'dont_have_account'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: AppTheme.spacingXl),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modern text field with label above
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ModernTextField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final IconData icon;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final TextCapitalization textCapitalization;
+  final bool obscureText;
+  final Widget? suffixIcon;
+  final String? Function(String?)? validator;
+  final void Function(String)? onFieldSubmitted;
+
+  const _ModernTextField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    required this.icon,
+    this.keyboardType,
+    this.textInputAction,
+    this.textCapitalization = TextCapitalization.none,
+    this.obscureText = false,
+    this.suffixIcon,
+    this.validator,
+    this.onFieldSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          textInputAction: textInputAction,
+          textCapitalization: textCapitalization,
+          obscureText: obscureText,
+          onFieldSubmitted: onFieldSubmitted,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, size: 20),
+            suffixIcon: suffixIcon,
+          ),
+        ),
+      ],
     );
   }
 }

@@ -72,15 +72,25 @@ class _FollowersScreenState extends State<FollowersScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     Analytics.logScreenView(widget.showFollowing ? 'following' : 'followers');
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.showFollowing ? AppStrings.t(context, 'following') : AppStrings.t(context, 'followers')),
+        title: Text(
+          widget.showFollowing
+              ? AppStrings.t(context, 'following')
+              : AppStrings.t(context, 'followers'),
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.pop(),
         ),
       ),
@@ -94,16 +104,17 @@ class _FollowersScreenState extends State<FollowersScreen> {
                     height: 40,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Theme.of(context).colorScheme.primary,
+                      color: cs.primary,
                     ),
                   ),
                   const SizedBox(height: AppTheme.spacingLg),
                   Text(
-                    widget.showFollowing ? AppStrings.t(context, 'loading_following') : AppStrings.t(context, 'loading_followers'),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    widget.showFollowing
+                        ? AppStrings.t(context, 'loading_following')
+                        : AppStrings.t(context, 'loading_followers'),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -115,16 +126,19 @@ class _FollowersScreenState extends State<FollowersScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.people_outline,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.outline,
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(Icons.people_outline, size: 48, color: cs.outline),
                         ),
                         const SizedBox(height: AppTheme.spacingLg),
                         Text(
                           AppStrings.t(context, _error!),
                           textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge,
+                          style: theme.textTheme.bodyLarge,
                         ),
                         const SizedBox(height: AppTheme.spacingLg),
                         FilledButton.icon(
@@ -139,32 +153,36 @@ class _FollowersScreenState extends State<FollowersScreen> {
               : _profiles.isEmpty
                   ? Center(
                       child: Padding(
-                        padding: const EdgeInsets.all(AppTheme.spacingLg),
+                        padding: const EdgeInsets.all(AppTheme.spacingXl),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.people_outline,
-                              size: 64,
-                              color: Theme.of(context).colorScheme.outline,
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: cs.primary.withValues(alpha: 0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.people_outline_rounded, size: 48, color: cs.primary),
                             ),
                             const SizedBox(height: AppTheme.spacingLg),
                             Text(
-                              widget.showFollowing ? AppStrings.t(context, 'not_following_anyone') : AppStrings.t(context, 'no_followers_yet'),
-                              style: Theme.of(context).textTheme.titleMedium,
+                              widget.showFollowing
+                                  ? AppStrings.t(context, 'not_following_anyone')
+                                  : AppStrings.t(context, 'no_followers_yet'),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                             const SizedBox(height: AppTheme.spacingSm),
                             Text(
-                              widget.showFollowing ? AppStrings.t(context, 'find_people_follow') : AppStrings.t(context, 'share_trips_followers'),
+                              widget.showFollowing
+                                  ? AppStrings.t(context, 'find_people_follow')
+                                  : AppStrings.t(context, 'share_trips_followers'),
                               textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -172,40 +190,116 @@ class _FollowersScreenState extends State<FollowersScreen> {
                     )
                   : RefreshIndicator(
                       onRefresh: _load,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(AppTheme.spacingMd),
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(
+                            AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingXl),
                         itemCount: _profiles.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: AppTheme.spacingSm),
                         itemBuilder: (_, i) {
                           final p = _profiles[i];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage:
-                                    p.photoUrl != null ? NetworkImage(p.photoUrl!) : null,
-                                child: p.photoUrl == null
-                                    ? Icon(
-                                        Icons.person_outline,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                      )
-                                    : null,
-                              ),
-                              title: Text(
-                                p.name ?? AppStrings.t(context, 'unknown'),
-                                style: Theme.of(context).textTheme.titleSmall,
-                              ),
-                              trailing: Icon(
-                                Icons.chevron_right,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                              onTap: () => context.push('/author/${p.id}'),
-                            ),
-                          );
+                          return _FollowerCard(profile: p);
                         },
                       ),
                     ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Modern follower card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FollowerCard extends StatelessWidget {
+  final Profile profile;
+
+  const _FollowerCard({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final cardColor = theme.brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => context.push('/author/${profile.id}'),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.shadow.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: CircleAvatar(
+                    radius: 24,
+                    backgroundImage: profile.photoUrl != null && profile.photoUrl!.isNotEmpty
+                        ? NetworkImage(profile.photoUrl!)
+                        : null,
+                    backgroundColor: cs.surfaceContainerHighest,
+                    child: profile.photoUrl == null || profile.photoUrl!.isEmpty
+                        ? Icon(Icons.person_outline_rounded, size: 24, color: cs.onSurfaceVariant)
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        profile.name ?? AppStrings.t(context, 'unknown'),
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (profile.currentCity != null && profile.currentCity!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          profile.currentCity!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, size: 20, color: cs.onSurfaceVariant),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

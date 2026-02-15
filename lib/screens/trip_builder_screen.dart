@@ -930,7 +930,13 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                     ),
                   ),
                 ),
-                title: Text(AppStrings.t(context, 'add_trip')),
+                title: Text(
+                  AppStrings.t(context, 'add_trip'),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                ),
                 backgroundColor: Colors.transparent,
                 foregroundColor: theme.colorScheme.onSurface,
                 elevation: 0,
@@ -975,12 +981,12 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                           return Container(
                           decoration: BoxDecoration(
                             color: theme.colorScheme.surface,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.1),
-                                blurRadius: 10,
-                                offset: const Offset(0, -2),
+                                color: theme.colorScheme.shadow.withValues(alpha: 0.08),
+                                blurRadius: 20,
+                                offset: const Offset(0, -4),
                               ),
                             ],
                           ),
@@ -988,10 +994,10 @@ class _TripBuilderScreenState extends State<TripBuilderScreen> {
                             children: [
                               Container(
                                 margin: const EdgeInsets.symmetric(vertical: 12),
-                                width: 40,
+                                width: 36,
                                 height: 4,
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                                  color: theme.colorScheme.outline.withValues(alpha: 0.25),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -2697,8 +2703,14 @@ class _DestinationSection extends StatelessWidget {
       g.days.sort();
     }
 
-    return Card(
+    final cardColor = theme.brightness == Brightness.light ? Colors.white : theme.colorScheme.surfaceContainerHighest;
+    return Container(
       margin: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: theme.colorScheme.shadow.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, 4))],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         child: Column(
@@ -2706,8 +2718,8 @@ class _DestinationSection extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
-                IconButton(icon: const Icon(Icons.more_horiz), onPressed: () {}),
+                Expanded(child: Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+                IconButton(icon: const Icon(Icons.more_horiz_rounded), onPressed: () {}),
               ],
             ),
             const SizedBox(height: 8),

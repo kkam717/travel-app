@@ -97,7 +97,7 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -106,12 +106,27 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
             }
           },
         ),
-        title: Text(widget.cityName),
+        title: Text(
+          widget.cityName,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+        ),
         actions: [
           if (widget.isOwnProfile)
-            IconButton(
-              icon: const Icon(Icons.add_circle_outline),
-              onPressed: () => _addSpot(),
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.add_rounded, color: Theme.of(context).colorScheme.primary, size: 22),
+                onPressed: () => _addSpot(),
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                padding: const EdgeInsets.all(8),
+              ),
             ),
         ],
       ),
@@ -149,7 +164,10 @@ class _CityDetailScreenState extends State<CityDetailScreen> {
                     children: [
                       Text(
                         '${AppStrings.t(context, 'top_spots_in')} ${widget.cityName}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -333,40 +351,89 @@ class _CategorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final cardColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTheme.spacingLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 22, color: Theme.of(context).colorScheme.primary),
-              const SizedBox(width: 8),
-              Text(label, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-              if (spots.isNotEmpty) Text(' (${spots.length})', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              const Spacer(),
-              if (onAdd != null)
-                TextButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(AppStrings.t(context, 'add')),
+      child: Container(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: cs.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, size: 20, color: cs.primary),
                 ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.spacingSm),
-          if (spots.isEmpty && !isOwnProfile)
-            Padding(
-              padding: const EdgeInsets.only(left: 30),
-              child: Text(AppStrings.t(context, 'no_spots'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-            )
-          else
-            ...spots.map((s) => _SpotTile(
-                  spot: s,
-                  onTap: onTap != null ? () => onTap!(s) : null,
-                  onEdit: onEdit != null ? () => onEdit!(s) : null,
-                  onRemove: onRemove != null ? () => onRemove!(s) : null,
-                )),
-        ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label.toUpperCase(),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.0,
+                          color: cs.onSurfaceVariant,
+                        ),
+                      ),
+                      if (spots.isNotEmpty)
+                        Text(
+                          '${spots.length} spots',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                    ],
+                  ),
+                ),
+                if (onAdd != null)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: IconButton(
+                      onPressed: onAdd,
+                      icon: Icon(Icons.add_rounded, size: 18, color: cs.primary),
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      padding: const EdgeInsets.all(8),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (spots.isEmpty && !isOwnProfile)
+              Text(AppStrings.t(context, 'no_spots'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant))
+            else
+              ...spots.map((s) => _SpotTile(
+                    spot: s,
+                    onTap: onTap != null ? () => onTap!(s) : null,
+                    onEdit: onEdit != null ? () => onEdit!(s) : null,
+                    onRemove: onRemove != null ? () => onRemove!(s) : null,
+                  )),
+          ],
+        ),
       ),
     );
   }
@@ -382,31 +449,35 @@ class _SpotTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(left: 30, bottom: 8),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(spot.name, style: Theme.of(context).textTheme.titleSmall),
+                      Text(spot.name, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                       if (spot.description != null && spot.description!.isNotEmpty)
-                        Text(spot.description!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(spot.description!, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
                     ],
                   ),
                 ),
                 if (onEdit != null || onRemove != null)
                   PopupMenuButton<String>(
-                    icon: Icon(Icons.more_vert, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    icon: Icon(Icons.more_horiz_rounded, size: 20, color: cs.onSurfaceVariant),
                     onSelected: (v) {
                       if (v == 'edit') onEdit?.call();
                       if (v == 'remove') onRemove?.call();

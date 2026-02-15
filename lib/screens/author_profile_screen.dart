@@ -5,15 +5,16 @@ import '../core/theme.dart';
 import '../data/countries.dart';
 import '../models/itinerary.dart';
 import '../models/profile.dart';
+import '../models/recommendation.dart';
 import '../models/user_city.dart';
 import '../core/rate_limiter.dart';
 import '../services/supabase_service.dart';
 import '../l10n/app_strings.dart';
 import '../widgets/profile_hero_map.dart';
-import '../widgets/profile_insight_card.dart';
+import '../widgets/profile_hero_card.dart';
 import '../widgets/country_filter_chips.dart';
-import '../widgets/location_with_flag.dart';
 import '../widgets/profile_trip_grid_tile.dart';
+import '../widgets/recommendations_tab.dart';
 import 'expand_map_route.dart';
 
 List<String> _mergedVisitedCountries(Profile? profile, List<Itinerary> itineraries) {
@@ -26,6 +27,41 @@ List<String> _mergedVisitedCountries(Profile? profile, List<Itinerary> itinerari
   return fromProfile.toList()..sort();
 }
 
+/// Extract the "city" part from a destination like "Paris, France" → "Paris".
+String? _cityFromDestination(String destination) {
+  final parts =
+      destination.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+  return parts.isNotEmpty ? parts.first : null;
+}
+
+/// Build recommendations from itinerary stops rated 5 stars.
+List<Recommendation> _extractRecommendations(List<Itinerary> itineraries) {
+  final recs = <Recommendation>[];
+  for (final it in itineraries) {
+    final countryCodes = destinationToCountryCodes(it.destination);
+    final countryCode = countryCodes.isNotEmpty ? countryCodes.first : null;
+    final city = _cityFromDestination(it.destination);
+    for (final stop in it.stops) {
+      if (stop.rating != null && stop.rating! >= 5 && stop.isVenue) {
+        recs.add(Recommendation(
+          stopId: stop.id,
+          name: stop.name,
+          category: stop.category,
+          city: city,
+          countryCode: countryCode,
+          lat: stop.lat,
+          lng: stop.lng,
+          rating: 5.0,
+          inspiredCount: 0,
+          imageUrl: null,
+          itineraryId: it.id,
+        ));
+      }
+    }
+  }
+  return recs;
+}
+
 class AuthorProfileScreen extends StatefulWidget {
   final String authorId;
 
@@ -35,7 +71,8 @@ class AuthorProfileScreen extends StatefulWidget {
   State<AuthorProfileScreen> createState() => _AuthorProfileScreenState();
 }
 
-class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
+class _AuthorProfileScreenState extends State<AuthorProfileScreen>
+    with SingleTickerProviderStateMixin {
   Profile? _profile;
   List<Itinerary> _itineraries = [];
   List<UserPastCity> _pastCities = [];
@@ -48,6 +85,8 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   final Map<String, bool> _liked = {};
   String? _selectedCountryCode;
   final ScrollController _scrollController = ScrollController();
+
+  late TabController _tabController;
 
   bool get _isOwnProfile => Supabase.instance.client.auth.currentUser?.id == widget.authorId;
 
@@ -72,12 +111,14 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _load();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -193,283 +234,303 @@ class _AuthorProfileScreenState extends State<AuthorProfileScreen> {
         ),
       );
     }
+
     final p = _profile!;
     final currentCity = p.currentCity?.trim();
     final hasCity = currentCity != null && currentCity.isNotEmpty;
     final visitedCountries = _mergedVisitedCountries(p, _itineraries);
-    final livedCount = (hasCity ? 1 : 0) + _pastCities.length;
-    final filteredTrips = _filteredTrips();
-    final tripCountryCodes = _tripCountryCodes();
-    final theme = Theme.of(context);
+    final recommendations = _extractRecommendations(_itineraries);
 
+    const double heroCardOverlap = 40.0;
+    final double avatarRadius = ProfileHeroCard.avatarRadius;
+
+    // Follow pill for the hero card
     final followPill = _isOwnProfile
         ? null
-        : Material(
-            color: Colors.white.withValues(alpha: 0.28),
-            borderRadius: BorderRadius.circular(20),
-            child: InkWell(
-              onTap: _toggleFollow,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(_isFollowing ? Icons.person_rounded : Icons.person_add_rounded, size: 18, color: Colors.white),
-                    const SizedBox(width: 6),
-                    Text(
-                      _isFollowing ? AppStrings.t(context, 'following') : AppStrings.t(context, 'follow'),
-                      style: theme.textTheme.labelLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        : _FollowPill(
+            isFollowing: _isFollowing,
+            isMutual: _isMutualFriend,
+            onTap: _toggleFollow,
           );
 
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _load,
-        child: CustomScrollView(
+        child: NestedScrollView(
           controller: _scrollController,
-          slivers: [
-            // A) Hero: Places visited map + avatar, back button, follow/QR
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            // ── A) Hero: Map + Hero Card ──────────────────────────────
             SliverToBoxAdapter(
-              child: ProfileHeroMap(
-                visitedCountryCodes: visitedCountries,
-                photoUrl: p.photoUrl,
-                isUploadingPhoto: false,
-                onAvatarTap: null,
-                onMapControlTap: () {},
-                onMapTap: (Rect? sourceRect) async {
-                  await Navigator.of(context).push(ExpandMapRoute(
-                    codes: visitedCountries,
-                    canEdit: false,
-                    sourceRect: sourceRect,
-                  ));
-                  if (mounted) _load();
-                },
-                onQrTap: () => context.push('/author/${widget.authorId}/qr', extra: {'userName': p.name}),
-                onSettingsTap: null,
-                leadingWidget: Material(
-                  color: Colors.white.withValues(alpha: 0.28),
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded, size: 24, color: Colors.white),
-                    onPressed: () {
-                      if (context.canPop()) context.pop();
-                      else context.go('/home');
-                    },
-                    style: IconButton.styleFrom(minimumSize: const Size(44, 44), padding: EdgeInsets.zero),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Map background
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: kProfileHeroMapHeight,
+                    child: ProfileHeroMap(
+                      visitedCountryCodes: visitedCountries,
+                      photoUrl: p.photoUrl,
+                      isUploadingPhoto: false,
+                      showAvatar: false,
+                      onMapControlTap: () {},
+                      onMapTap: (Rect? sourceRect) async {
+                        await Navigator.of(context, rootNavigator: true)
+                            .push(ExpandMapRoute(
+                          codes: visitedCountries,
+                          canEdit: false,
+                          sourceRect: sourceRect,
+                        ));
+                        if (mounted) _load();
+                      },
+                      onQrTap: () => context.push('/author/${widget.authorId}/qr', extra: {'userName': p.name}),
+                      leadingWidget: Material(
+                        color: Colors.white.withValues(alpha: 0.28),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back_rounded, size: 24, color: Colors.white),
+                          onPressed: () {
+                            if (context.canPop()) context.pop();
+                            else context.go('/home');
+                          },
+                          style: IconButton.styleFrom(minimumSize: const Size(44, 44), padding: EdgeInsets.zero),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                trailingWidget: null,
+                  // Column: spacer + hero card (establishes Stack height)
+                  Column(
+                    children: [
+                      const SizedBox(height: kProfileHeroMapHeight - heroCardOverlap),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(16, avatarRadius, 16, 0),
+                        child: ProfileHeroCard(
+                          photoUrl: p.photoUrl,
+                          isUploadingPhoto: false,
+                          displayName: p.name?.trim().isNotEmpty == true
+                              ? p.name!
+                              : null,
+                          currentCity: hasCity ? currentCity : null,
+                          onCityTap: hasCity
+                              ? () => context.push(
+                                  '/city/${Uri.encodeComponent(currentCity)}?userId=${widget.authorId}')
+                              : null,
+                          visitedCount: visitedCountries.length,
+                          inspiredCount: _followersCount,
+                          followingCount: _followingCount,
+                          onVisitedTap: () => context.push(
+                              '/map/countries?codes=${visitedCountries.join(',')}'),
+                          onInspiredTap: () =>
+                              context.push('/profile/followers?userId=${widget.authorId}'),
+                          onFollowingTap: () =>
+                              context.push('/profile/following?userId=${widget.authorId}'),
+                          trailingAction: followPill,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            // B) Identity: name + follow pill (if not own), current city; then insight; then followers
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 44 + 16, AppTheme.spacingLg, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _AuthorIdentityRow(
-                      name: p.name?.trim().isNotEmpty == true ? p.name : null,
-                      currentCity: hasCity ? currentCity : null,
-                      trailing: followPill,
-                      onCityTap: hasCity
-                          ? () => context.push('/city/${Uri.encodeComponent(currentCity!)}?userId=${widget.authorId}')
-                          : null,
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
-                    ProfileInsightCardsRow(
-                      countriesCount: visitedCountries.length,
-                      placesCount: livedCount,
-                      onCountriesTap: () => context.push('/map/countries?codes=${visitedCountries.join(',')}'),
-                      onPlacesTap: () => context.push('/profile/stats?userId=${widget.authorId}'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
-                    _AuthorFollowersFollowingRow(
-                      followersCount: _followersCount,
-                      followingCount: _followingCount,
-                      youFollowEachOther: !_isOwnProfile && _isMutualFriend,
-                      onFollowersTap: () => context.push('/profile/followers?userId=${widget.authorId}'),
-                      onFollowingTap: () => context.push('/profile/following?userId=${widget.authorId}'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
-                    Text(
-                      AppStrings.t(context, 'trips'),
-                      style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, fontSize: 22),
-                    ),
-                    const SizedBox(height: 12),
-                    CountryFilterChips(
-                      countryCodes: tripCountryCodes,
-                      selectedCode: _selectedCountryCode,
-                      onSelected: (code) => setState(() => _selectedCountryCode = code),
-                      showAllChip: true,
-                    ),
-                    const SizedBox(height: 12),
+
+            // ── B) Pinned TabBar ──────────────────────────────────────
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverTabBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor:
+                      Theme.of(context).colorScheme.onSurfaceVariant,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  indicatorWeight: 2.5,
+                  labelStyle: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                  unselectedLabelStyle:
+                      Theme.of(context).textTheme.titleSmall,
+                  dividerColor: Colors.transparent,
+                  tabs: [
+                    Tab(text: AppStrings.t(context, 'trips')),
+                    Tab(text: AppStrings.t(context, 'recommendations')),
                   ],
                 ),
-              ),
-            ),
-            // C) Trip grid (2 columns) or empty state tile
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingXl + 80),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 0,
-                  crossAxisSpacing: 0,
-                  childAspectRatio: 0.82,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) {
-                    if (filteredTrips.isEmpty) {
-                      return i == 0
-                          ? ProfileTripEmptyTile(
-                              showCreateButton: _isOwnProfile,
-                              onCreateTap: _isOwnProfile ? () => context.push('/create').then((_) => _load()) : null,
-                            )
-                          : const SizedBox.shrink();
-                    }
-                    return ProfileTripGridTile(
-                      itinerary: filteredTrips[i],
-                      onRefresh: _load,
-                      canEdit: _isOwnProfile,
-                    );
-                  },
-                  childCount: filteredTrips.isEmpty ? 1 : filteredTrips.length,
-                  addRepaintBoundaries: true,
-                ),
+                backgroundColor:
+                    Theme.of(context).scaffoldBackgroundColor,
               ),
             ),
           ],
+
+          // ── C) Tab content ──────────────────────────────────────────
+          body: TabBarView(
+            controller: _tabController,
+            children: [
+              // ── Tab 1: Trips ────────────────────────────────────────
+              _buildTripsTab(visitedCountries),
+
+              // ── Tab 2: Recommendations ──────────────────────────────
+              RecommendationsTab(recommendations: recommendations),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Trips tab ────────────────────────────────────────────────────────────
+
+  Widget _buildTripsTab(List<String> visitedCountries) {
+    final filteredTrips = _filteredTrips();
+    final tripCountryCodes = _tripCountryCodes();
+
+    return CustomScrollView(
+      key: const PageStorageKey('author_trips'),
+      slivers: [
+        // Country filter chips
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+                AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CountryFilterChips(
+                  countryCodes: tripCountryCodes,
+                  selectedCode: _selectedCountryCode,
+                  onSelected: (code) =>
+                      setState(() => _selectedCountryCode = code),
+                  showAllChip: true,
+                ),
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+        ),
+        // Trip grid (2 columns) or empty state
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg,
+              AppTheme.spacingMd, AppTheme.spacingLg, AppTheme.spacingXl + 80),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 0,
+              crossAxisSpacing: 0,
+              childAspectRatio: 0.82,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, i) {
+                if (filteredTrips.isEmpty) {
+                  return i == 0
+                      ? ProfileTripEmptyTile(
+                          showCreateButton: _isOwnProfile,
+                          onCreateTap: _isOwnProfile ? () => context.push('/create').then((_) => _load()) : null,
+                        )
+                      : const SizedBox.shrink();
+                }
+                return ProfileTripGridTile(
+                  itinerary: filteredTrips[i],
+                  onRefresh: _load,
+                  canEdit: _isOwnProfile,
+                );
+              },
+              childCount: filteredTrips.isEmpty ? 1 : filteredTrips.length,
+              addRepaintBoundaries: true,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Follow pill button (styled to match hero card)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FollowPill extends StatelessWidget {
+  final bool isFollowing;
+  final bool isMutual;
+  final VoidCallback onTap;
+
+  const _FollowPill({
+    required this.isFollowing,
+    required this.isMutual,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Material(
+      color: isFollowing
+          ? cs.surfaceContainerHighest
+          : cs.primary,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isFollowing ? Icons.person_rounded : Icons.person_add_rounded,
+                size: 16,
+                color: isFollowing ? cs.onSurface : cs.onPrimary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isFollowing
+                    ? AppStrings.t(context, 'following')
+                    : AppStrings.t(context, 'follow'),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: isFollowing ? cs.onSurface : cs.onPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// Name (left), optional trailing (e.g. follow pill); current city row below. For view-profile.
-class _AuthorIdentityRow extends StatelessWidget {
-  final String? name;
-  final String? currentCity;
-  final Widget? trailing;
-  final VoidCallback? onCityTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// Pinned tab-bar delegate (same as profile_screen_2026)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _AuthorIdentityRow({
-    this.name,
-    this.currentCity,
-    this.trailing,
-    this.onCityTap,
-  });
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+  final Color backgroundColor;
+
+  _SliverTabBarDelegate(this.tabBar, {required this.backgroundColor});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                name ?? AppStrings.t(context, 'profile'),
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurface,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (trailing != null) ...[
-              const SizedBox(width: 12),
-              trailing!,
-            ],
-          ],
-        ),
-        if (currentCity != null && currentCity!.trim().isNotEmpty) ...[
-          const SizedBox(height: 8),
-          InkWell(
-            onTap: onCityTap,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LocationFlagIcon(city: currentCity, fontSize: 18),
-                  const SizedBox(width: 6),
-                  Text(
-                    currentCity!,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _AuthorFollowersFollowingRow extends StatelessWidget {
-  final int followersCount;
-  final int followingCount;
-  final bool youFollowEachOther;
-  final VoidCallback onFollowersTap;
-  final VoidCallback onFollowingTap;
-
-  const _AuthorFollowersFollowingRow({
-    required this.followersCount,
-    required this.followingCount,
-    this.youFollowEachOther = false,
-    required this.onFollowersTap,
-    required this.onFollowingTap,
-  });
+  double get minExtent => tabBar.preferredSize.height;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w400);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            InkWell(
-              onTap: onFollowersTap,
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                child: Text('$followersCount ${AppStrings.t(context, 'followers')}', style: style),
-              ),
-            ),
-            Text(' · ', style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-            InkWell(
-              onTap: onFollowingTap,
-              borderRadius: BorderRadius.circular(6),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-                child: Text('$followingCount ${AppStrings.t(context, 'following')}', style: style),
-              ),
-            ),
-          ],
-        ),
-        if (youFollowEachOther) ...[
-          const SizedBox(height: 4),
-          Text(
-            AppStrings.t(context, 'you_follow_each_other'),
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w500),
-          ),
-        ],
-      ],
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: backgroundColor,
+      child: tabBar,
     );
   }
+
+  @override
+  bool shouldRebuild(_SliverTabBarDelegate oldDelegate) =>
+      tabBar != oldDelegate.tabBar ||
+      backgroundColor != oldDelegate.backgroundColor;
 }

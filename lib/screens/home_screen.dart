@@ -468,25 +468,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                           children: [
                             TabBar(
                               controller: _tabController,
-                              labelStyle: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                              unselectedLabelStyle: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w500,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                              indicatorSize: TabBarIndicatorSize.label,
-                              indicator: UnderlineTabIndicator(
-                                borderSide: BorderSide(
-                                  width: 2,
-                                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
-                                ),
-                              ),
-                              labelPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                              labelColor: Theme.of(context).colorScheme.primary,
+                              unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                              indicatorColor: Theme.of(context).colorScheme.primary,
+                              indicatorWeight: 2.5,
+                              labelStyle: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                              unselectedLabelStyle: Theme.of(context).textTheme.titleSmall,
+                              dividerColor: Colors.transparent,
                               tabs: [
                                 Tab(text: AppStrings.t(context, 'for_you')),
                                 Tab(text: AppStrings.t(context, 'following')),
                               ],
                             ),
-                            Divider(height: 1, color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.25)),
                           ],
                         ),
                       ),
@@ -863,7 +856,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 }
 
 /// Scroll-driven header: animates with scroll via collapseT in [0, 1].
-/// "trace" word left-aligned, subtitle below; right-side Notifications + Map/Explore buttons.
+/// "trace" word left-aligned with bold modern styling; subtitle fades on scroll.
 class _DiscoverHeader extends StatelessWidget {
   final double collapseT;
 
@@ -872,20 +865,17 @@ class _DiscoverHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final surface = theme.colorScheme.surface;
-    final onSurface = theme.colorScheme.onSurface;
-    final onSurfaceVariant = theme.colorScheme.onSurfaceVariant;
+    final cs = theme.colorScheme;
     final t = collapseT.clamp(0.0, 1.0);
 
     final height = _kHeaderExpandedHeight + t * (_kHeaderCollapsedHeight - _kHeaderExpandedHeight);
-    final subtitleOpacity = (1.0 - t).clamp(0.0, 1.0);
-    // Title size: ~28–32 dp expanded, ~22 dp collapsed for smooth scale
+    final subtitleOpacity = (1.0 - t * 2).clamp(0.0, 1.0);
     final titleSize = 28.0 + (1.0 - t) * 4.0;
 
     return Container(
       height: height,
       width: double.infinity,
-      decoration: BoxDecoration(color: surface),
+      decoration: BoxDecoration(color: cs.surface),
       clipBehavior: Clip.hardEdge,
       padding: EdgeInsets.only(
         left: AppTheme.spacingLg,
@@ -893,52 +883,48 @@ class _DiscoverHeader extends StatelessWidget {
         bottom: 8 + t * 4,
         top: 12 * (1 - t),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: Alignment.bottomLeft,
-                  child: FittedBox(
-                    alignment: Alignment.bottomLeft,
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'trace',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                            fontSize: titleSize,
-                            color: onSurface,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Align(
+              alignment: Alignment.bottomLeft,
+              child: FittedBox(
+                alignment: Alignment.bottomLeft,
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'trace',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.0,
+                        fontSize: titleSize,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    if (subtitleOpacity > 0.01) ...[
+                      SizedBox(height: 4 * (1 - t)),
+                      Opacity(
+                        opacity: subtitleOpacity,
+                        child: Text(
+                          AppStrings.t(context, 'trips_from_people_with_taste'),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
-                        if (subtitleOpacity > 0.01) ...[
-                          SizedBox(height: 6 * (1 - t)),
-                          Opacity(
-                            opacity: subtitleOpacity,
-                            child: Text(
-                              AppStrings.t(context, 'trips_from_people_with_taste'),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: onSurfaceVariant,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1038,7 +1024,7 @@ class _SwipeableFeedCard extends StatelessWidget {
                   onBookmark();
                   return false;
                 },
-                child:                     useFeedCard2026
+                child: useFeedCard2026
                     ? ItineraryFeedCard2026(
                         itinerary: itinerary,
                         description: description,
@@ -1172,11 +1158,30 @@ class _FeedCardState extends State<_FeedCard> {
     final isCompact = widget.variant == _CardVariant.compact;
     final mapHeight = widget.variant == _CardVariant.tall ? 240.0 : (isCompact ? 88.0 : 200.0);
 
-    return Card(
+    final cs = Theme.of(context).colorScheme;
+    final cardColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+
+    return Container(
       margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
-      child: InkWell(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
         onTap: widget.onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             isCompact ? AppTheme.spacingSm : AppTheme.spacingMd,
@@ -1321,14 +1326,14 @@ class _FeedCardState extends State<_FeedCard> {
                   ),
                   if (it.mode != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: it.mode == 'luxury' ? Colors.purple.shade50 : Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(8),
+                        color: it.mode == 'luxury' ? Colors.purple.shade50 : Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         it.mode!.toUpperCase(),
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: it.mode == 'luxury' ? Colors.purple.shade700 : Theme.of(context).colorScheme.primary),
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5, color: it.mode == 'luxury' ? Colors.purple.shade700 : Theme.of(context).colorScheme.primary),
                       ),
                     ),
                   if (locations.isNotEmpty)
@@ -1351,6 +1356,7 @@ class _FeedCardState extends State<_FeedCard> {
           ),
         ),
       ),
+      ),
     );
   }
 
@@ -1368,8 +1374,24 @@ class _SkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mapHeight = variant == _CardVariant.tall ? 240.0 : 200.0;
-    return Card(
+    final cs = Theme.of(context).colorScheme;
+    final cardColor = Theme.of(context).brightness == Brightness.light
+        ? Colors.white
+        : cs.surfaceContainerHighest;
+    final shimmer = cs.surfaceContainerHighest;
+    return Container(
       margin: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 0, AppTheme.spacingLg, AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.spacingMd),
         child: Column(
@@ -1377,28 +1399,28 @@ class _SkeletonCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Container(width: 80, height: 14, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4))),
+                Container(width: 80, height: 14, decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(7))),
                 const Spacer(),
-                Container(width: 24, height: 24, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12))),
+                Container(width: 24, height: 24, decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(12))),
               ],
             ),
             const SizedBox(height: 12),
-            Container(width: 180, height: 20, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4))),
+            Container(width: 180, height: 20, decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 8),
-            Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4))),
+            Container(width: double.infinity, height: 14, decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(7))),
             const SizedBox(height: 16),
             Row(
               children: [
-                Container(width: 60, height: 12, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4))),
+                Container(width: 60, height: 12, decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(6))),
                 const SizedBox(width: 16),
-                Container(width: 50, height: 12, decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(4))),
+                Container(width: 50, height: 12, decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(6))),
               ],
             ),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
               height: mapHeight,
-              decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(color: shimmer, borderRadius: BorderRadius.circular(16)),
             ),
           ],
         ),
