@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -157,9 +158,8 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     );
   }
 
-  /// No labels: Carto light_nolabels (day) / dark_nolabels (night) removes all map text.
-  /// On web, use WebTileProvider to bypass CORS. On iOS simulator, disable tile cache to avoid native crash.
-  /// tileBounds restricts tiles to single world (-180..180) so underlying map doesn't spill.
+  /// Carto basemap: light_nolabels (day) / dark_nolabels (night).
+  /// On web, use WebTileProvider to bypass CORS. tileBounds restricts to single world.
   TileLayer _buildTileLayer(Brightness brightness) {
     final style = brightness == Brightness.dark ? 'dark_nolabels' : 'light_nolabels';
     final isRetina = MediaQuery.of(context).devicePixelRatio > 1.0;
@@ -195,55 +195,230 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
     } catch (_) {}
   }
 
+  /// Frosted-glass floating button used for back, edit, and compass controls.
+  Widget _buildGlassButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    String? tooltip,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Material(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.45)
+              : Colors.white.withValues(alpha: 0.75),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: Tooltip(
+              message: tooltip ?? '',
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Frosted-glass pill showing visited-country count.
+  Widget _buildCountPill(ThemeData theme) {
+    if (_selectedCodes.isEmpty) return const SizedBox.shrink();
+    final isDark = theme.brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.45)
+                : Colors.white.withValues(alpha: 0.75),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.06),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${_selectedCodes.length}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                AppStrings.t(context, 'countries_visited_short'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(AppStrings.t(context, 'countries_visited')),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
-        ),
-        actions: [
-          if (widget.canEdit)
-            IconButton(
-              icon: const Icon(Icons.edit_outlined),
-              onPressed: _showEditCountries,
-              tooltip: AppStrings.t(context, 'edit_countries'),
-            ),
-        ],
-      ),
-      body: Column(
+      body: Stack(
         children: [
-          if (_selectedCodes.isNotEmpty)
-            Container(
-              margin: const EdgeInsets.all(AppTheme.spacingMd),
-              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Theme.of(context).colorScheme.shadow.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+          // Full-bleed map
+          Positioned.fill(
+            child: _buildMapContent(context),
+          ),
+
+          // Loading / error overlays
+          if (_loading)
+            Positioned.fill(
+              child: Container(
+                color: theme.scaffoldBackgroundColor,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingLg),
+                      Text(
+                        AppStrings.t(context, 'loading_map'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      borderRadius: BorderRadius.circular(4),
+            ),
+          if (_error != null && !_loading)
+            Positioned.fill(
+              child: Container(
+                color: theme.scaffoldBackgroundColor,
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.map_outlined, size: 48, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)),
+                        const SizedBox(height: 16),
+                        Text(
+                          AppStrings.t(context, 'could_not_load_map'),
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: AppTheme.spacingSm),
-                  Text(
-                    '${_selectedCodes.length} countries visited',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
-                  ),
-                ],
+                ),
               ),
             ),
-          Expanded(
-            child: _buildMapContent(context),
+
+          // Top-left: back button
+          Positioned(
+            top: topPadding + 12,
+            left: 16,
+            child: _buildGlassButton(
+              icon: Icons.arrow_back_rounded,
+              onPressed: () => context.pop(),
+            ),
+          ),
+
+          // Top-right: action buttons (compass + edit)
+          Positioned(
+            top: topPadding + 12,
+            right: 16,
+            child: Column(
+              children: [
+                _buildGlassButton(
+                  icon: Icons.explore_outlined,
+                  tooltip: AppStrings.t(context, 'reset_north'),
+                  onPressed: () {
+                    try { _mapController.rotate(0); } catch (_) {}
+                  },
+                ),
+                if (widget.canEdit) ...[
+                  const SizedBox(height: 10),
+                  _buildGlassButton(
+                    icon: Icons.edit_outlined,
+                    tooltip: AppStrings.t(context, 'edit_countries'),
+                    onPressed: _showEditCountries,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Bottom: count pill + attribution
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: bottomPadding + 16,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _buildCountPill(theme),
+                const Spacer(),
+                Text(
+                  '© CARTO | OSM',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: theme.brightness == Brightness.dark
+                        ? Colors.grey.shade500
+                        : Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -251,127 +426,55 @@ class _VisitedCountriesMapScreenState extends State<VisitedCountriesMapScreen> {
   }
 
   Widget _buildMapContent(BuildContext context) {
-    if (_loading) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(width: 40, height: 40, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary)),
-            const SizedBox(height: AppTheme.spacingLg),
-            Text(AppStrings.t(context, 'loading_map'), style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ],
-        ),
-      );
-    }
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.grey[400]),
-              const SizedBox(height: 16),
-              Text(
-                AppStrings.t(context, 'could_not_load_map'),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.grey[700]),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-        ),
-      );
+    if (_loading || _error != null) {
+      // Return an empty container; overlays handle loading/error display
+      return const SizedBox.expand();
     }
     final brightness = Theme.of(context).brightness;
     final theme = Theme.of(context);
-    return Stack(
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: const LatLng(20, 0),
+        initialZoom: 2,
+        initialRotation: 0,
+        crs: const Epsg3857NoWrap(),
+        cameraConstraint: const CameraConstraint.containLatitude(),
+        onTap: (_, point) => _onMapTap(point),
+        onMapReady: () {
+          try { _mapController.rotate(0); } catch (_) {}
+          if (_polygons.isNotEmpty) _fitWorld();
+          // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
+          Future.delayed(const Duration(milliseconds: 200), () async {
+            if (!mounted) return;
+            try {
+              final c = _mapController.camera;
+              _mapController.move(c.center, c.zoom + 0.02);
+              await Future.delayed(const Duration(milliseconds: 80));
+              if (!mounted) return;
+              _mapController.move(c.center, c.zoom);
+              _mapController.rotate(0);
+            } catch (_) {}
+          });
+        },
+        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+      ),
       children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: const LatLng(20, 0),
-            initialZoom: 2,
-            initialRotation: 0,
-            crs: const Epsg3857NoWrap(),
-            cameraConstraint: const CameraConstraint.containLatitude(),
-            onTap: (_, point) => _onMapTap(point),
-            onMapReady: () {
-              try { _mapController.rotate(0); } catch (_) {}
-              if (_polygons.isNotEmpty) _fitWorld();
-              // Zoom wiggle forces tile redraw (flutter_map #1813 – grey until touch)
-              Future.delayed(const Duration(milliseconds: 200), () async {
-                if (!mounted) return;
-                try {
-                  final c = _mapController.camera;
-                  _mapController.move(c.center, c.zoom + 0.02);
-                  await Future.delayed(const Duration(milliseconds: 80));
-                  if (!mounted) return;
-                  _mapController.move(c.center, c.zoom);
-                  _mapController.rotate(0);
-                } catch (_) {}
-              });
-            },
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-          ),
-          children: [
-            _buildTileLayer(brightness),
-            PolylineLayer(
-              polylines: _countryBorders,
-              drawInSingleWorld: true,
-            ),
-            PolygonLayer(
-              polygons: _polygons.map((p) => Polygon(
-                points: p.points,
-                holePointsList: p.holePointsList,
-                color: theme.colorScheme.primary.withValues(alpha: 0.35),
-                borderColor: theme.colorScheme.primary.withValues(alpha: 0.6),
-                borderStrokeWidth: 1,
-              )).toList(),
-              drawInSingleWorld: true,
-              simplificationTolerance: 0,
-            ),
-            Align(
-              alignment: Alignment.bottomRight,
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 120),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.bottomRight,
-                    child: Text(
-                      '© CARTO | OSM',
-                      style: TextStyle(fontSize: 8, color: brightness == Brightness.dark ? Colors.grey.shade400 : Colors.grey.shade600),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        _buildTileLayer(brightness),
+        PolylineLayer(
+          polylines: _countryBorders,
+          drawInSingleWorld: true,
         ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Material(
-            color: theme.colorScheme.surface.withValues(alpha: 0.9),
-            shape: const CircleBorder(),
-            clipBehavior: Clip.antiAlias,
-            elevation: 1,
-            child: IconButton(
-              icon: const Icon(Icons.explore),
-              tooltip: 'Reset to north',
-              onPressed: () {
-                try {
-                  _mapController.rotate(0);
-                } catch (_) {}
-              },
-            ),
-          ),
+        PolygonLayer(
+          polygons: _polygons.map((p) => Polygon(
+            points: p.points,
+            holePointsList: p.holePointsList,
+            color: theme.colorScheme.primary.withValues(alpha: 0.35),
+            borderColor: theme.colorScheme.primary.withValues(alpha: 0.6),
+            borderStrokeWidth: 1,
+          )).toList(),
+          drawInSingleWorld: true,
+          simplificationTolerance: 0,
         ),
       ],
     );
