@@ -28,10 +28,8 @@ class AppBottomNav2026 extends StatelessWidget {
         return 0;
       case '/explore':
         return 1;
-      case '/saved':
-        return 2;
       case '/profile':
-        return 3;
+        return 2;
       default:
         return 0;
     }
@@ -47,7 +45,6 @@ class AppBottomNav2026 extends StatelessWidget {
     final items = [
       (path: '/home', icon: Icons.home_outlined, activeIcon: Icons.home_rounded),
       (path: '/explore', icon: Icons.explore_outlined, activeIcon: Icons.explore_rounded),
-      (path: '/saved', icon: Icons.bookmark_outline_rounded, activeIcon: Icons.bookmark_rounded),
       (path: '/profile', icon: Icons.person_outline_rounded, activeIcon: Icons.person_rounded),
     ];
 

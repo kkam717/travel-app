@@ -152,7 +152,7 @@ class ProfileHeroCard extends StatelessWidget {
             ),
           ),
 
-          // Avatar – centered at top, protruding above card
+          // Avatar – centered at top, protruding above card, with "+" button
           Positioned(
             top: -avatarRadius,
             left: 0,
@@ -160,60 +160,101 @@ class ProfileHeroCard extends StatelessWidget {
             child: Center(
               child: GestureDetector(
                 onTap: isUploadingPhoto ? null : onAvatarTap,
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: cardColor,
-                      width: avatarRingWidth,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.colorScheme.shadow.withValues(alpha: 0.12),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: cardColor,
+                          width: avatarRingWidth,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: theme.colorScheme.shadow.withValues(alpha: 0.12),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: avatarRadius,
-                        backgroundColor:
-                            theme.colorScheme.surfaceContainerHighest,
-                        backgroundImage:
-                            photoUrl != null && photoUrl!.isNotEmpty
-                                ? NetworkImage(photoUrl!)
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: avatarRadius,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                            backgroundImage:
+                                photoUrl != null && photoUrl!.isNotEmpty
+                                    ? NetworkImage(photoUrl!)
+                                    : null,
+                            child: photoUrl == null || photoUrl!.isEmpty
+                                ? Icon(
+                                    Icons.person_outline,
+                                    size: avatarRadius,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  )
                                 : null,
-                        child: photoUrl == null || photoUrl!.isEmpty
-                            ? Icon(
-                                Icons.person_outline,
-                                size: avatarRadius,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              )
-                            : null,
-                      ),
-                      if (isUploadingPhoto)
-                        Positioned.fill(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.black.withValues(alpha: 0.3),
-                            ),
-                            child: const Center(
-                              child: SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                          ),
+                          if (isUploadingPhoto)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withValues(alpha: 0.3),
+                                ),
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
+                        ],
+                      ),
+                    ),
+                    // Small "+" button at bottom-right of the avatar
+                    if (onAvatarTap != null)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            boxShadow: [
+                              BoxShadow(
+                                color: theme.colorScheme.shadow.withValues(alpha: 0.1),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
+                          child: isUploadingPhoto
+                              ? Padding(
+                                  padding: const EdgeInsets.all(6),
+                                  child: SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                  ),
+                                )
+                              : Icon(Icons.add,
+                                  size: 18,
+                                  color: theme.colorScheme.onSurface),
                         ),
-                    ],
-                  ),
+                      ),
+                  ],
                 ),
               ),
             ),

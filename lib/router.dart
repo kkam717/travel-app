@@ -10,7 +10,6 @@ import 'screens/home_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/explore_screen.dart';
 import 'screens/trip_builder_screen.dart';
-import 'screens/saved_screen.dart';
 import 'screens/itinerary_detail_screen.dart';
 import 'screens/author_profile_screen.dart';
 import 'screens/city_detail_screen.dart';
@@ -87,10 +86,6 @@ GoRouter createRouter() {
           GoRoute(
             path: '/create',
             pageBuilder: (_, state) => const NoTransitionPage(child: TripBuilderScreen()),
-          ),
-          GoRoute(
-            path: '/saved',
-            pageBuilder: (_, state) => const NoTransitionPage(child: SavedScreen()),
           ),
           GoRoute(
             path: '/profile',
