@@ -26,6 +26,8 @@ class ProfileHeroMap extends StatefulWidget {
   final Widget? leadingWidget;
   /// Optional trailing (e.g. follow pill); when set, replaces the default QR/Settings/Map row.
   final Widget? trailingWidget;
+  /// When false, hides the bottom-left avatar overlay (e.g. when avatar is shown in a hero card instead).
+  final bool showAvatar;
 
   const ProfileHeroMap({
     super.key,
@@ -39,6 +41,7 @@ class ProfileHeroMap extends StatefulWidget {
     this.onSettingsTap,
     this.leadingWidget,
     this.trailingWidget,
+    this.showAvatar = true,
   });
 
   @override
@@ -201,86 +204,87 @@ class _ProfileHeroMapState extends State<ProfileHeroMap> {
               ],
             ),
           ),
-          // Bottom-left: avatar with white ring + "+" button
-          Positioned(
-            left: 16,
-            bottom: -avatarSize * 0.35,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: theme.colorScheme.surface,
-                      width: avatarRingWidth,
+          // Bottom-left: avatar with white ring + "+" button (hidden when showAvatar is false)
+          if (widget.showAvatar)
+            Positioned(
+              left: 16,
+              bottom: -avatarSize * 0.35,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: theme.colorScheme.surface,
+                        width: avatarRingWidth,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.colorScheme.shadow.withValues(alpha: 0.1),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.colorScheme.shadow.withValues(alpha: 0.1),
-                        blurRadius: 12,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+                    child: CircleAvatar(
+                      radius: avatarSize / 2,
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      backgroundImage: widget.photoUrl != null && widget.photoUrl!.isNotEmpty
+                          ? NetworkImage(widget.photoUrl!)
+                          : null,
+                      child: widget.photoUrl == null || widget.photoUrl!.isEmpty
+                          ? Icon(Icons.person_outline, size: avatarSize * 0.5, color: theme.colorScheme.onSurfaceVariant)
+                          : null,
+                    ),
                   ),
-                  child: CircleAvatar(
-                    radius: avatarSize / 2,
-                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                    backgroundImage: widget.photoUrl != null && widget.photoUrl!.isNotEmpty
-                        ? NetworkImage(widget.photoUrl!)
-                        : null,
-                    child: widget.photoUrl == null || widget.photoUrl!.isEmpty
-                        ? Icon(Icons.person_outline, size: avatarSize * 0.5, color: theme.colorScheme.onSurfaceVariant)
-                        : null,
-                  ),
-                ),
-                if (widget.onAvatarTap != null)
-                  Positioned(
-                    right: -4,
-                    bottom: -4,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.shadow.withValues(alpha: 0.1),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: InkWell(
-                        onTap: widget.isUploadingPhoto ? null : widget.onAvatarTap,
-                        customBorder: const CircleBorder(),
-                        child: SizedBox(
-                          width: addButtonSize,
-                          height: addButtonSize,
-                          child: widget.isUploadingPhoto
-                              ? Padding(
-                                  padding: const EdgeInsets.all(6),
-                                  child: SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: theme.colorScheme.primary,
+                  if (widget.onAvatarTap != null)
+                    Positioned(
+                      right: -4,
+                      bottom: -4,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.shadow.withValues(alpha: 0.1),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                          onTap: widget.isUploadingPhoto ? null : widget.onAvatarTap,
+                          customBorder: const CircleBorder(),
+                          child: SizedBox(
+                            width: addButtonSize,
+                            height: addButtonSize,
+                            child: widget.isUploadingPhoto
+                                ? Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: theme.colorScheme.primary,
+                                      ),
                                     ),
-                                  ),
-                                )
-                              : Icon(Icons.add, size: 18, color: theme.colorScheme.onSurface),
+                                  )
+                                : Icon(Icons.add, size: 18, color: theme.colorScheme.onSurface),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

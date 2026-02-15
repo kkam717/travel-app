@@ -11,9 +11,8 @@ import '../models/itinerary.dart';
 import '../models/user_city.dart';
 import '../data/countries.dart';
 import '../widgets/profile_hero_map.dart';
-import '../widgets/profile_insight_card.dart';
+import '../widgets/profile_hero_card.dart';
 import '../widgets/country_filter_chips.dart';
-import '../widgets/location_with_flag.dart';
 import '../widgets/profile_trip_grid_tile.dart';
 import '../services/supabase_service.dart';
 import '../l10n/app_strings.dart';
@@ -256,9 +255,12 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
     final visitedCountries = _mergedVisitedCountries(p, _myItineraries);
     final currentCity = p.currentCity?.trim();
     final hasCity = currentCity != null && currentCity.isNotEmpty;
-    final livedCount = (hasCity ? 1 : 0) + _pastCities.length;
     final filteredTrips = _filteredTrips();
     final tripCountryCodes = _tripCountryCodes();
+
+    // Hero card overlap amount: the card starts this many px above the bottom of the map
+    const double heroCardOverlap = 40.0;
+    final double avatarRadius = ProfileHeroCard.avatarRadius;
 
     return Scaffold(
       body: RefreshIndicator(
@@ -266,109 +268,123 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            // A) Hero: Places visited world map + avatar overlay + map control, QR/Settings
+            // A) Hero: Map background + hero card overlay with avatar
             SliverToBoxAdapter(
-              child: ProfileHeroMap(
-                visitedCountryCodes: visitedCountries,
-                photoUrl: p.photoUrl,
-                isUploadingPhoto: _isUploadingPhoto,
-                onAvatarTap: _uploadPhoto,
-                onMapControlTap: () {},
-                onMapTap: (Rect? sourceRect) async {
-                  await Navigator.of(context, rootNavigator: true).push(ExpandMapRoute(
-                    codes: visitedCountries,
-                    canEdit: true,
-                    sourceRect: sourceRect,
-                  ));
-                  if (mounted) _load();
-                },
-                onQrTap: () => context.push('/profile/qr', extra: {'userId': userId, 'userName': p.name}),
-                onSettingsTap: () => context.push('/profile/settings'),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Map (painted first – acts as the background behind the hero card)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: kProfileHeroMapHeight,
+                    child: ProfileHeroMap(
+                      visitedCountryCodes: visitedCountries,
+                      photoUrl: p.photoUrl,
+                      isUploadingPhoto: _isUploadingPhoto,
+                      showAvatar: false,
+                      onMapControlTap: () {},
+                      onMapTap: (Rect? sourceRect) async {
+                        await Navigator.of(context, rootNavigator: true).push(ExpandMapRoute(
+                          codes: visitedCountries,
+                          canEdit: true,
+                          sourceRect: sourceRect,
+                        ));
+                        if (mounted) _load();
+                      },
+                      onQrTap: () => context.push('/profile/qr', extra: {'userId': userId, 'userName': p.name}),
+                      onSettingsTap: () => context.push('/profile/settings'),
+                    ),
+                  ),
+                  // Non-positioned column to establish Stack height:
+                  // map visible area + hero card (card overlaps the map by heroCardOverlap)
+                  // Painted second – avatar and card render on top of the map.
+                  Column(
+                    children: [
+                      const SizedBox(height: kProfileHeroMapHeight - heroCardOverlap),
+                      // Hero card (auto-sized, padded horizontally)
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(16, avatarRadius, 16, 0),
+                        child: ProfileHeroCard(
+                          photoUrl: p.photoUrl,
+                          isUploadingPhoto: _isUploadingPhoto,
+                          onAvatarTap: _uploadPhoto,
+                          displayName: p.name?.trim().isNotEmpty == true ? p.name! : null,
+                          currentCity: hasCity ? currentCity : null,
+                          onCityTap: hasCity
+                              ? () => context.push('/city/${Uri.encodeComponent(currentCity)}?userId=$userId')
+                              : () {
+                                  context.push('/profile/stats?open=current_city').then((_) {
+                                    if (mounted) _load();
+                                  });
+                                },
+                          visitedCount: visitedCountries.length,
+                          inspiredCount: _followersCount,
+                          followingCount: _followingCount,
+                          onVisitedTap: () async {
+                            await context.push('/map/countries?codes=${visitedCountries.join(',')}&editable=1');
+                            if (mounted) _load();
+                          },
+                          onInspiredTap: () => context.push('/profile/followers'),
+                          onFollowingTap: () => context.push('/profile/following'),
+                          editProfileMenuItems: [
+                            PopupMenuItem<String>(
+                              value: 'name',
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.person_outline, size: 20),
+                                  const SizedBox(width: 12),
+                                  Text(AppStrings.t(context, 'name')),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'travel_stats',
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.location_city_outlined, size: 20),
+                                  const SizedBox(width: 12),
+                                  Text(AppStrings.t(context, 'travel_stats')),
+                                ],
+                              ),
+                            ),
+                          ],
+                          onEditProfileSelected: (value) async {
+                            if (value == 'name') {
+                              await _showNameEditor(p.name ?? '', (name) => _updateProfile(name: name));
+                            } else if (value == 'travel_stats') {
+                              final hCity = p.currentCity?.trim().isNotEmpty == true;
+                              final hasPast = _pastCities.isNotEmpty;
+                              final hasStyles = p.travelStyles.isNotEmpty;
+                              String? open;
+                              if (!hCity) {
+                                open = 'current_city';
+                              } else if (!hasPast) {
+                                open = 'past_cities';
+                              } else if (!hasStyles) {
+                                open = 'travel_styles';
+                              }
+                              await context.push(open != null ? '/profile/stats?open=$open' : '/profile/stats');
+                            }
+                            if (mounted) _load();
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-            // B) Identity row: name + Edit Profile, current city; then insight pills; then followers/following
+            // B) Trips section – unchanged from current version
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, 44 + 16, AppTheme.spacingLg, 0),
+                padding: const EdgeInsets.fromLTRB(AppTheme.spacingLg, AppTheme.spacingLg, AppTheme.spacingLg, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ProfileIdentityRow(
-                      name: p.name?.trim().isNotEmpty == true ? p.name! : null,
-                      currentCity: hasCity ? currentCity : null,
-                      editProfileLabel: AppStrings.t(context, 'edit_profile'),
-                      editProfileMenuItems: [
-                        PopupMenuItem<String>(
-                          value: 'name',
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.person_outline, size: 20),
-                              const SizedBox(width: 12),
-                              Text(AppStrings.t(context, 'name')),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem<String>(
-                          value: 'travel_stats',
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.location_city_outlined, size: 20),
-                              const SizedBox(width: 12),
-                              Text(AppStrings.t(context, 'travel_stats')),
-                            ],
-                          ),
-                        ),
-                      ],
-                      onEditProfileSelected: (value) async {
-                        if (value == 'name') {
-                          await _showNameEditor(p.name ?? '', (name) => _updateProfile(name: name));
-                        } else if (value == 'travel_stats') {
-                          final hCity = p.currentCity?.trim().isNotEmpty == true;
-                          final hasPast = _pastCities.isNotEmpty;
-                          final hasStyles = p.travelStyles.isNotEmpty;
-                          String? open;
-                          if (!hCity) {
-                            open = 'current_city';
-                          } else if (!hasPast) {
-                            open = 'past_cities';
-                          } else if (!hasStyles) {
-                            open = 'travel_styles';
-                          }
-                          await context.push(open != null ? '/profile/stats?open=$open' : '/profile/stats');
-                        }
-                        if (mounted) _load();
-                      },
-                      onCityTap: hasCity
-                          ? () => context.push('/city/${Uri.encodeComponent(currentCity)}?userId=$userId')
-                          : () {
-                              context.push('/profile/stats?open=current_city').then((_) {
-                                if (mounted) _load();
-                              });
-                            },
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
-                    ProfileInsightCardsRow(
-                      countriesCount: visitedCountries.length,
-                      placesCount: livedCount,
-                      onCountriesTap: () async {
-                        await context.push('/map/countries?codes=${visitedCountries.join(',')}&editable=1');
-                        if (mounted) _load();
-                      },
-                      onPlacesTap: () async {
-                        await context.push('/profile/stats');
-                        if (mounted) _load();
-                      },
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
-                    _FollowersFollowingRow(
-                      followersCount: _followersCount,
-                      followingCount: _followingCount,
-                      onFollowersTap: () => context.push('/profile/followers'),
-                      onFollowingTap: () => context.push('/profile/following'),
-                    ),
-                    const SizedBox(height: AppTheme.spacingLg),
                     Text(
                       AppStrings.t(context, 'trips'),
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -493,162 +509,3 @@ class _ProfileScreen2026State extends State<ProfileScreen2026> {
   }
 }
 
-/// Name (left), Edit Profile button (right); current city row below name.
-class _ProfileIdentityRow extends StatelessWidget {
-  final String? name;
-  final String? currentCity;
-  final String editProfileLabel;
-  final List<PopupMenuEntry<String>> editProfileMenuItems;
-  final void Function(String?) onEditProfileSelected;
-  final VoidCallback? onCityTap;
-
-  const _ProfileIdentityRow({
-    this.name,
-    this.currentCity,
-    required this.editProfileLabel,
-    required this.editProfileMenuItems,
-    required this.onEditProfileSelected,
-    this.onCityTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Text(
-                name ?? AppStrings.t(context, 'profile'),
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurface,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.shadow.withValues(alpha: 0.06),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(20),
-                child: PopupMenuButton<String>(
-                onSelected: onEditProfileSelected,
-                itemBuilder: (_) => editProfileMenuItems,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.onSurface),
-                      const SizedBox(width: 6),
-                      Text(
-                        editProfileLabel,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        InkWell(
-          onTap: onCityTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                LocationFlagIcon(city: currentCity?.trim().isNotEmpty == true ? currentCity : null, fontSize: 18),
-                const SizedBox(width: 6),
-                Text(
-                  currentCity?.trim().isNotEmpty == true
-                      ? currentCity!
-                      : AppStrings.t(context, 'not_set'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Followers and following count/links, placed above Trips in the main section.
-class _FollowersFollowingRow extends StatelessWidget {
-  final int followersCount;
-  final int followingCount;
-  final VoidCallback onFollowersTap;
-  final VoidCallback onFollowingTap;
-
-  const _FollowersFollowingRow({
-    required this.followersCount,
-    required this.followingCount,
-    required this.onFollowersTap,
-    required this.onFollowingTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-      fontWeight: FontWeight.w400,
-    );
-    return Row(
-      children: [
-        InkWell(
-          onTap: onFollowersTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-            child: Text(
-              '$followersCount ${AppStrings.t(context, 'followers')}',
-              style: style,
-            ),
-          ),
-        ),
-        Text(
-          ' · ',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-        ),
-        InkWell(
-          onTap: onFollowingTap,
-          borderRadius: BorderRadius.circular(6),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-            child: Text(
-              '$followingCount ${AppStrings.t(context, 'following')}',
-              style: style,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

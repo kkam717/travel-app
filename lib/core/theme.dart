@@ -28,9 +28,14 @@ class AppTheme {
   static const Color _darkOnSurfaceVariant = Color(0xFF94A3B8);
   static const Color _darkOutline = Color(0xFF334155);
 
+  /// SF Pro Display – Apple's system font on iOS/macOS.
+  /// On Android/other platforms, Flutter falls back to the platform default (Roboto).
+  static const String _fontFamily = 'SF Pro Display';
+
   static ThemeData get light {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: _fontFamily,
       colorScheme: ColorScheme.fromSeed(
         seedColor: _primary,
         primary: _primary,
@@ -48,6 +53,7 @@ class AppTheme {
         foregroundColor: _onSurface,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
+          fontFamily: _fontFamily,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: _onSurface,
@@ -133,6 +139,7 @@ class AppTheme {
   static ThemeData get dark {
     return ThemeData(
       useMaterial3: true,
+      fontFamily: _fontFamily,
       brightness: Brightness.dark,
       colorScheme: ColorScheme.fromSeed(
         seedColor: _darkPrimary,
@@ -151,6 +158,7 @@ class AppTheme {
         foregroundColor: _darkOnSurface,
         surfaceTintColor: Colors.transparent,
         titleTextStyle: TextStyle(
+          fontFamily: _fontFamily,
           fontSize: 18,
           fontWeight: FontWeight.w600,
           color: _darkOnSurface,
